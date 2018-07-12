@@ -1,3 +1,2 @@
 - How does the parser behave when given method IDs that aren't equal to their order in the file? I think it shouldn't care, but who knows.
 - If I ever switch to using registers directly, then I need to make sure registers get flushed to the memory register file on method call and read back afterward.
-- Replace hardcoded opcodes with #defines
