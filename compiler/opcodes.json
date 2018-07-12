@@ -1,0 +1,152 @@
+[
+    {
+        "code": "0x16",
+        "mneumonic": "LOAD",
+        "params": ["register", "int"],
+        "writes": [0]
+    },
+    {
+        "code": "0x01",
+        "mneumonic": "ZERO",
+        "params": ["register"],
+        "writes": [0]
+    },
+    {
+        "code": "0x06",
+        "mneumonic": "CALL",
+        "params": ["method", "register"],
+        "writes": [1, "params"],
+        "reads": ["params"]
+    },
+    {
+        "code": "0x0e",
+        "mneumonic": "PARAM",
+        "params": ["register", "paramreg"],
+        "reads": [0]
+    },
+    {
+        "code": "0x07",
+        "mneumonic": "RETURN",
+        "params": ["register"],
+        "reads": [0]
+    },
+    {
+        "code": "0x0c",
+        "mneumonic": "GOTO",
+        "params": ["instruction"]
+    },
+    {
+        "code": "0x0d",
+        "mneumonic": "JF",
+        "params": ["register", "instruction"],
+        "reads": [0]
+    },
+    {
+        "code": "0x08",
+        "mneumonic": "EQUALS",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x17",
+        "mneumonic": "LT",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x0a",
+        "mneumonic": "LTEQ",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x0b",
+        "mneumonic": "GT",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x0f",
+        "mneumonic": "GTEQ",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x02",
+        "mneumonic": "ADD",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x03",
+        "mneumonic": "TWOCOMP",
+        "params": ["register"],
+        "reads": [0],
+        "writes": [0]
+    },
+    {
+        "code": "0x04",
+        "mneumonic": "MULT",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x05",
+        "mneumonic": "MODULO",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x10",
+        "mneumonic": "XOR",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x11",
+        "mneumonic": "AND",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x12",
+        "mneumonic": "OR",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
+        "code": "0x09",
+        "mneumonic": "INVERT",
+        "params": ["register"],
+        "reads": [0],
+        "writes": [0]
+    },
+    {
+        "code": "0x13",
+        "mneumonic": "MOV",
+        "params": ["register", "register"],
+        "reads": [0],
+        "writes": [1]
+    },
+    {
+        "code": "0x14",
+        "mneumonic": "NOP",
+        "params": []
+    },
+    {
+        "code": "0x15",
+        "mneumonic": "SEP",
+        "params": ["int"]
+    }
+]

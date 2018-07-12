@@ -1,0 +1,11 @@
+// This is an example code file. This runs fine with the interpreter.
+// You can see some more complex examples in the `test` directory, though be
+// aware that they are designed to test for corner cases in the parser and
+// compiler rather than be readable.
+fn main() {
+    // let d = 4;
+    let a = 3;
+    let b = 5;
+    let c = 10;
+    return a + b * c;
+}
