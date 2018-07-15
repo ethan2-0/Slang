@@ -114,6 +114,7 @@ void bc_parse_opcode(fr_STATE* state, it_OPCODE* opcode) {
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
+        opcode->payload = data;
     } else if(opcode_num == OPCODE_GOTO) {
         // GOTO
         it_OPCODE_DATA_GOTO* data = malloc(sizeof(it_OPCODE_DATA_GOTO));
