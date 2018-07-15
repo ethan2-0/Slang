@@ -3,9 +3,11 @@
 // aware that they are designed to test for corner cases in the parser and
 // compiler rather than be readable.
 fn main() {
-    // let d = 4;
-    let a = 3;
-    let b = 5;
-    let c = 10;
-    return a + b * c;
+    let base = 2;
+    let result = base;
+    let power = 6;
+    for(let i = 0; i < power; i++) {
+        result *= base;
+    }
+    return result;
 }

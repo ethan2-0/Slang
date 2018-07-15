@@ -232,6 +232,7 @@ it_PROGRAM* bc_parse_from_file(FILE* fp) {
     // This is the index of the start of the segments in the input bytecode
     int start_index = state->index;
     bc_PRESCAN_RESULTS* prescan = bc_prescan(state);
+    state->index = start_index;
     // typedef struct {
     //     int num_methods;
     //     uint32_t entrypoint_id;
@@ -245,7 +246,6 @@ it_PROGRAM* bc_parse_from_file(FILE* fp) {
 
     it_OPCODE* opcodes = malloc(sizeof(it_OPCODE) * state->bufflen);
     // Reset the index into the input bytecode to the beginning of the segments
-    state->index = start_index;
     int method_index = 0;
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);

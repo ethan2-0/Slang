@@ -40,12 +40,13 @@ void it_execute(it_PROGRAM* prog) {
     it_OPCODE* iptr = instruction_start;
     // TODO: Do something smarter for dispatch here
     while(1) {
+        // sleep(1);
         #if DEBUG
         for(int i = 0; i < stackptr->registerc; i++) {
             printf("%02x ", registers[i]);
         }
         printf("\n");
-        printf("Type %02x\n", iptr->type);
+        printf("Type %02x, iptr %d\n", iptr->type, iptr - instruction_start);
         #endif
         if(iptr->type == OPCODE_ZERO) {
             registers[((it_OPCODE_DATA_ZERO*) iptr->payload)->target] = 0x00000000;
@@ -74,6 +75,65 @@ void it_execute(it_PROGRAM* prog) {
             itval result = registers[((it_OPCODE_DATA_RETURN*) iptr->payload)->target];
             printf("Returned %08x\n", result);
             break;
+        } else if(iptr->type == OPCODE_EQUALS) {
+            if(registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source1] == registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source2]) {
+                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target] = 0x1;
+            } else {
+                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target] = 0x0;
+            }
+            iptr++;
+            continue;
+        } else if(iptr->type == OPCODE_INVERT) {
+            // TODO: Does the compiler bug with TWOCOMP apply here too?
+            if(registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target] == 0x0) {
+                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target] = 0x1;
+            } else {
+                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target] = 0x0;
+            }
+            iptr++;
+            continue;
+        } else if(iptr->type == OPCODE_LTEQ) {
+            if(registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source1] <= registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source2]) {
+                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target] = 0x1;
+            } else {
+                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target] = 0x0;
+            }
+            iptr++;
+            continue;
+        } else if(iptr->type == OPCODE_GT) {
+            if(registers[((it_OPCODE_DATA_GT*) iptr->payload)->source1] > registers[((it_OPCODE_DATA_GT*) iptr->payload)->source2]) {
+                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x1;
+            } else {
+                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x0;
+            }
+            iptr++;
+            continue;
+        } else if(iptr->type == OPCODE_GOTO) {
+            iptr = instruction_start + ((it_OPCODE_DATA_GOTO*) iptr->payload)->target;
+            printf("Jumping to %d\n", ((it_OPCODE_DATA_GOTO*) iptr->payload)->target);
+            // if( > registers[((it_OPCODE_DATA_GT*) iptr->payload)->source2]) {
+            //     registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x1;
+            // } else {
+            //     registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x0;
+            // }
+            continue;
+        } else if(iptr->type == OPCODE_JF) {
+            // JF stands for Jump if False.
+            if(registers[((it_OPCODE_DATA_JF*) iptr->payload)->predicate] == 0x00) {
+                printf("Jumping to %d\n", ((it_OPCODE_DATA_JF*) iptr->payload)->target);
+                iptr = instruction_start + ((it_OPCODE_DATA_JF*) iptr->payload)->target;
+            } else {
+                iptr++;
+            }
+            continue;
+        } else if(iptr->type == OPCODE_GTEQ) {
+            if(registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source1] >= registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source2]) {
+                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x1;
+            } else {
+                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x0;
+            }
+            iptr++;
+            continue;
         } else if(iptr->type == OPCODE_XOR) {
             registers[((it_OPCODE_DATA_XOR*) iptr->payload)->target] = registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source1] ^ registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source2];
             iptr++;
@@ -90,12 +150,20 @@ void it_execute(it_PROGRAM* prog) {
             registers[((it_OPCODE_DATA_MOV*) iptr->payload)->target] = registers[((it_OPCODE_DATA_MOV*) iptr->payload)->source];
             iptr++;
             continue;
+        } else if(iptr->type == OPCODE_NOP || iptr->type == OPCODE_SEP) {
+            // Do nothing
+            iptr++;
+            continue;
         } else if(iptr->type == OPCODE_LOAD) {
             registers[((it_OPCODE_DATA_LOAD*) iptr->payload)->target] = ((it_OPCODE_DATA_LOAD*) iptr->payload)->data;
             iptr++;
             continue;
-        } else if(iptr->type == OPCODE_NOP || iptr->type == OPCODE_SEP) {
-            // Do nothing
+        } else if(iptr->type == OPCODE_LT) {
+            if(registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source1] < registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source2]) {
+                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x1;
+            } else {
+                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x0;
+            }
             iptr++;
             continue;
         } else {
