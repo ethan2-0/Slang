@@ -238,8 +238,8 @@ class MethodEmitter:
         elif node.i("if"):
             result = []
             condition_register = self.scope.allocate()
-            conditional = self.emit_expr(node[0], condition_register)
-            statement = annotate(self.emit_statement(node[1]), "if condition")
+            conditional = annotate(self.emit_expr(node[0], condition_register), "if predicate")
+            statement = annotate(self.emit_statement(node[1]), "if true path")
             nop = ops["nop"].ins()
             result += conditional
             result.append(ops["jf"].ins(condition_register, nop))
@@ -306,8 +306,9 @@ class MethodSegment(Segment):
 
     def print_(self, emitter):
         Segment.print_(self, emitter)
-        for opcode in self.emit_opcodes(emitter):
-            print("    %s" % str(opcode))
+        opcodes = self.emit_opcodes(emitter)
+        for opcode, index in zip(opcodes, range(len(opcodes))):
+            print("    %2d: %s" % (index, str(opcode)))
 
     def evaluate(self, emitter):
         self.emit_opcodes(emitter)
