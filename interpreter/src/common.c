@@ -58,6 +58,8 @@ int8_t fr_getint8(fr_STATE* state) {
 uint16_t fr_getuint16(fr_STATE* state) {
     uint16_t top = fr_getchar(state);
     uint16_t bottom = fr_getchar(state);
+    bottom &= 0xff;
+    top &= 0xff;
     top <<= 8;
     return bottom + top;
 }
