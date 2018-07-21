@@ -244,7 +244,6 @@ class MethodEmitter:
             result += conditional
             result.append(ops["jf"].ins(condition_register, nop))
             result += statement
-            print("if", nop)
             result.append(nop)
             opcodes += result
         elif node.of("++", "--"):
