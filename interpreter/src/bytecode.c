@@ -190,7 +190,7 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_METHOD* result)
     uint32_t nargs = fr_getuint32(state);
     uint32_t name_length = fr_getuint32(state);
     fr_advance(state, (int) name_length);
-    uint32_t bytecode_length = length - 12 - name_length;
+    uint32_t bytecode_length = length - 16 - name_length;
     size_t end_index = state->index + bytecode_length;
     #if DEBUG
     printf("Length %d\n", length);
@@ -207,7 +207,7 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_METHOD* result)
     }
     result->registerc = registerc;
     result->id = id;
-    result->nargs = (int) nargs;
+    result->nargs = nargs;
     result->opcodec = num_opcodes;
     #if DEBUG
     printf("Sizeof: %d\n", sizeof(it_OPCODE));
