@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 void fatal(char* description);
 void fatal_with_errcode(char* description, int errcode);

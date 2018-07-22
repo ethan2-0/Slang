@@ -14,6 +14,8 @@ typedef uint64_t itval;
 typedef struct {
     itval* registers;
     int registerc;
+    int registers_allocated;
+    uint32_t returnreg;
     it_OPCODE* iptr;
     it_METHOD* method;
 } it_STACKFRAME;
@@ -21,16 +23,27 @@ void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
     stackptr->method = method;
     stackptr->iptr = stackptr->method->opcodes;
     stackptr->registerc = stackptr->method->registerc;
-    stackptr->registers = malloc(sizeof(itval) * stackptr->registerc);
+    if(stackptr->registers_allocated < stackptr->registerc) {
+        #if DEBUG
+        printf("Allocating more register space: %d < %d\n", stackptr->registers_allocated, stackptr->registerc);
+        #endif
+        free(stackptr->registers);
+        stackptr->registers = malloc(sizeof(itval) * stackptr->registerc);
+    }
+    memset(stackptr->registers, 0x00, stackptr->registerc * sizeof(itval));
 }
 void it_execute(it_PROGRAM* prog) {
     // Setup interpreter state
     it_STACKFRAME* stack = malloc(sizeof(it_STACKFRAME) * STACKSIZE);
     it_STACKFRAME* stackptr = stack;
-    it_STACKFRAME* stackend = stack + sizeof(it_STACKFRAME) * STACKSIZE;
+    it_STACKFRAME* stackend = stack + STACKSIZE;
+    for(int i = 0; i < STACKSIZE; i++) {
+        stack[i].registers_allocated = 0;
+        // Set the register file pointer to the null pointer so we can free() it.
+        stack[i].registers = 0;
+    }
     load_method(stackptr, &prog->methods[prog->entrypoint]);
     itval* registers = stackptr->registers;
-    memset(registers, 0x00, stackptr->registerc * sizeof(it_STACKFRAME));
     #if DEBUG
     printf("About to execute method %d\n", stackptr->method->id);
     #endif
@@ -38,6 +51,9 @@ void it_execute(it_PROGRAM* prog) {
     it_OPCODE* instruction_start = stackptr->iptr;
     // This is the current index into the instruction tape
     it_OPCODE* iptr = instruction_start;
+    // See the documentation for PARAM and CALL for details.
+    // Note that this is preserved globally across method calls.
+    itval params[256];
     // TODO: Do something smarter for dispatch here
     while(1) {
         // sleep(1);
@@ -48,7 +64,56 @@ void it_execute(it_PROGRAM* prog) {
         printf("\n");
         printf("Type %02x, iptr %d\n", iptr->type, iptr - instruction_start);
         #endif
-        if(iptr->type == OPCODE_ZERO) {
+        if(iptr->type == OPCODE_PARAM) {
+            params[((it_OPCODE_DATA_PARAM*) iptr->payload)->target] = registers[((it_OPCODE_DATA_PARAM*) iptr->payload)->source];
+            iptr++;
+            continue;
+        } else if(iptr->type == OPCODE_CALL) {
+            it_STACKFRAME* oldstack = stackptr;
+            stackptr++;
+            if(stackptr >= stackend) {
+                fatal("Stack overflow");
+            }
+            uint32_t callee_id = ((it_OPCODE_DATA_CALL*) iptr->payload)->callee;
+
+            #if DEBUG
+            printf("Calling %d\n", callee_id);
+            #endif
+
+            oldstack->returnreg = ((it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+            it_METHOD* callee = &prog->methods[callee_id];
+
+            #if DEBUG
+            printf("Need %d args.\n", callee->nargs);
+            for(uint32_t i = 0; i < callee->nargs; i++) {
+                printf("Argument: %02x\n", params[i]);
+            }
+            #endif
+
+            load_method(stackptr, callee);
+            registers = stackptr->registers;
+            instruction_start = stackptr->iptr;
+            oldstack->iptr = iptr;
+            iptr = instruction_start;
+            for(uint32_t i = 0; i < callee->nargs; i++) {
+                registers[i] = params[i];
+            }
+        } else if(iptr->type == OPCODE_RETURN) {
+            itval result = registers[((it_OPCODE_DATA_RETURN*) iptr->payload)->target];
+            if(stackptr <= stack) {
+                printf("Returned 0x%08x\n", result);
+                break;
+            }
+            #if DEBUG
+            printf("Returning\n");
+            #endif
+            stackptr--;
+            registers = stackptr->registers;
+            instruction_start = stackptr->method->opcodes;
+            iptr = stackptr->iptr;
+            registers[stackptr->returnreg] = result;
+            iptr++;
+        } else if(iptr->type == OPCODE_ZERO) {
             registers[((it_OPCODE_DATA_ZERO*) iptr->payload)->target] = 0x00000000;
             iptr++;
             continue;
@@ -70,11 +135,6 @@ void it_execute(it_PROGRAM* prog) {
             registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->target] = registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source1] % registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source2];
             iptr++;
             continue;
-        } else if(iptr->type == OPCODE_RETURN) {
-            // Eventually we'll do something better here, for now just print the returned value
-            itval result = registers[((it_OPCODE_DATA_RETURN*) iptr->payload)->target];
-            printf("Returned %08x\n", result);
-            break;
         } else if(iptr->type == OPCODE_EQUALS) {
             if(registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source1] == registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source2]) {
                 registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target] = 0x1;
@@ -110,17 +170,16 @@ void it_execute(it_PROGRAM* prog) {
             continue;
         } else if(iptr->type == OPCODE_GOTO) {
             iptr = instruction_start + ((it_OPCODE_DATA_GOTO*) iptr->payload)->target;
+            #if DEBUG
             printf("Jumping to %d\n", ((it_OPCODE_DATA_GOTO*) iptr->payload)->target);
-            // if( > registers[((it_OPCODE_DATA_GT*) iptr->payload)->source2]) {
-            //     registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x1;
-            // } else {
-            //     registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x0;
-            // }
+            #endif
             continue;
         } else if(iptr->type == OPCODE_JF) {
             // JF stands for Jump if False.
             if(registers[((it_OPCODE_DATA_JF*) iptr->payload)->predicate] == 0x00) {
+                #if DEBUG
                 printf("Jumping to %d\n", ((it_OPCODE_DATA_JF*) iptr->payload)->target);
+                #endif
                 iptr = instruction_start + ((it_OPCODE_DATA_JF*) iptr->payload)->target;
             } else {
                 iptr++;
@@ -159,10 +218,10 @@ void it_execute(it_PROGRAM* prog) {
             iptr++;
             continue;
         } else if(iptr->type == OPCODE_LT) {
-            if(registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source1] < registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source2]) {
-                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x1;
+            if(registers[((it_OPCODE_DATA_LT*) iptr->payload)->source1] < registers[((it_OPCODE_DATA_LT*) iptr->payload)->source2]) {
+                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target] = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x0;
+                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target] = 0x0;
             }
             iptr++;
             continue;
@@ -171,7 +230,7 @@ void it_execute(it_PROGRAM* prog) {
         }
     }
     free(stack);
-    // Explicitly discarding stackptr and stackend since they're dangling pointers at this point
+    // Explicitly not freeing stackptr and stackend since they're dangling pointers at this point
     return;
 }
 void it_RUN(it_PROGRAM* prog) {

@@ -4,9 +4,10 @@ typedef struct {
 } it_OPCODE;
 typedef struct {
     uint32_t id;
+    // This could technically be a uint8_t, but I don't think that's necessary
     int nargs;
     int opcodec;
-    int registerc;
+    uint32_t registerc;
     it_OPCODE* opcodes;
 } it_METHOD;
 typedef struct {
