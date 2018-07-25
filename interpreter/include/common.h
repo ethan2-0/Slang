@@ -27,3 +27,4 @@ uint32_t fr_getuint32(fr_STATE* state);
 int32_t fr_getint32(fr_STATE* state);
 uint64_t fr_getuint64(fr_STATE* state);
 int64_t fr_getint64(fr_STATE* state);
+char* fr_getstr(fr_STATE* state);

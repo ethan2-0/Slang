@@ -25,7 +25,9 @@ class MethodBytecodeEmitter:
             elif paramtype == "register":
                 params += struct.pack("!I", param.id)
             elif paramtype == "method":
-                params += struct.pack("!I", param.id)
+                encoding = param.name.encode("utf8")
+                params += struct.pack("!I", len(encoding))
+                params += encoding
             elif paramtype == "instruction":
                 params += struct.pack("!I", param.index)
         ret = struct.pack("!B", opcode.opcode.code) + params

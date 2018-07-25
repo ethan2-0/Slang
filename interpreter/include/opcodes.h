@@ -1,5 +1,8 @@
 #include <stdint.h>
 
+#define SEGMENT_TYPE_METHOD 0x00
+#define SEGMENT_TYPE_METADATA 0x01
+
 #define OPCODE_ZERO 0x01
 #define OPCODE_ADD 0x02
 #define OPCODE_TWOCOMP 0x03

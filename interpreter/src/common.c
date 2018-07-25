@@ -84,3 +84,13 @@ uint64_t fr_getuint64(fr_STATE* state) {
 int64_t fr_getint64(fr_STATE* state) {
     return (int64_t) fr_getuint64(state);
 }
+char* fr_getstr(fr_STATE* state) {
+    uint32_t length = fr_getuint32(state);
+    char* buff = malloc(length + 1);
+    for(uint32_t i = 0; i < length; i++) {
+        buff[i] = fr_getchar(state);
+    }
+    // Null-terminate the string
+    buff[length] = '\0';
+    return buff;
+}

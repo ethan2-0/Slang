@@ -2,10 +2,12 @@
 // You can see some more complex examples in the `test` directory, though be
 // aware that they are designed to test for corner cases in the parser and
 // compiler rather than be readable.
+fn mult(a, b) {
+    return a * b;
+}
 fn add(a, b) {
     return a + b;
 }
 fn main() {
-    for(let i = 0; i < 6000000; i = add(i, 1)) {}
-    return 2;
+    return mult(add(3, 3), 7);
 }

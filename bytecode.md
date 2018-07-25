@@ -25,11 +25,13 @@ a sequence of opcodes.
 ## Opcodes
 
 An opcode comprises a 1-byte identifier, followed by a series of arguments, each
-1, 4, or 8 bytes in size.
+1, 4, 8, or variable bytes in size. Variable-sized arguments are preceded by
+four bytes encoding their length, and are specified with a `v` in the argument
+format specifier.
 
 ### Basic
 
-**Opcode `0x14` `NOP`, accepting none***
+**Opcode `0x14` `NOP`, accepting none**
 
 Do nothing.
 
@@ -41,10 +43,11 @@ Load value x1 into register x0.
 
 Set the value in register x0 to `0x00 00 00 00`.
 
-**Opcode `0x06` `CALL`, accepting 4-4**
+**Opcode `0x06` `CALL`, accepting v-4**
 
-Calls the method with x0 using the parameters set up using the opcode `PARAM`,
-and puts the return value into register x1. Clears the list of method parameters.
+Calls the method with name x0 using the parameters set up using the opcode
+`PARAM`, and puts the return value into register x1. Clears the list of method
+parameters.
 
 **Opcode `0x0e` `PARAM`, accepting 4-1**
 

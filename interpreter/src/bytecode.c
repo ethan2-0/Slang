@@ -6,36 +6,9 @@
 #include "opcodes.h"
 #include "interpreter.h"
 
-typedef struct {
-    int num_methods;
-    uint32_t entrypoint_id;
-} bc_PRESCAN_RESULTS;
-bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
-    bc_PRESCAN_RESULTS* results = malloc(sizeof(bc_PRESCAN_RESULTS));
-    results->num_methods = 0;
-    results->entrypoint_id = 0xdeadbeef;
+uint32_t bc_resolve_name(it_PROGRAM* program, char* callee_name);
 
-    while(!fr_iseof(state)) {
-        uint8_t segment_type = fr_getuint8(state);
-
-        if(segment_type == 0x00) {
-            // Length + header + body
-            // header = ID + nargs + len(segment.signature.name) + segment.signature.name
-            uint32_t length = fr_getuint32(state);
-            fr_advance(state, (int) length);
-            results->num_methods++;
-        } else if(segment_type == 0x01) {
-            results->entrypoint_id = fr_getuint32(state);
-        }
-    }
-
-    fr_rewind(state);
-    return results;
-}
-void bc_prescan_destroy(bc_PRESCAN_RESULTS* prescan) {
-    free(prescan);
-}
-void bc_parse_opcode(fr_STATE* state, it_OPCODE* opcode) {
+void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_OPCODE* opcode) {
     uint8_t opcode_num = fr_getuint8(state);
     opcode->type = opcode_num;
     #if DEBUG
@@ -81,7 +54,8 @@ void bc_parse_opcode(fr_STATE* state, it_OPCODE* opcode) {
     } else if(opcode_num == OPCODE_CALL) {
         // CALL
         it_OPCODE_DATA_CALL* data = malloc(sizeof(it_OPCODE_DATA_CALL));
-        data->callee = fr_getuint32(state);
+        char* callee_name = fr_getstr(state);
+        data->callee = bc_resolve_name(program, callee_name);
         data->returnval = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_RETURN) {
@@ -183,7 +157,51 @@ void bc_parse_opcode(fr_STATE* state, it_OPCODE* opcode) {
         opcode->payload = data;
     }
 }
-void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_METHOD* result) {
+typedef struct {
+    int num_methods;
+    uint32_t entrypoint_id;
+} bc_PRESCAN_RESULTS;
+bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
+    bc_PRESCAN_RESULTS* results = malloc(sizeof(bc_PRESCAN_RESULTS));
+    results->num_methods = 0;
+    results->entrypoint_id = 0xdeadbeef;
+
+    if(fr_getuint32(state) != 0xcf702b56) {
+        fatal("Incorrect bytecode file magic number");
+    }
+
+    while(!fr_iseof(state)) {
+        uint8_t segment_type = fr_getuint8(state);
+
+        if(segment_type == 0x00) {
+            // Length + header + body
+            // header = ID + nargs + len(segment.signature.name) + segment.signature.name
+            uint32_t length = fr_getuint32(state);
+            fr_advance(state, (int) length);
+            results->num_methods++;
+        } else if(segment_type == 0x01) {
+            results->entrypoint_id = fr_getuint32(state);
+        }
+    }
+
+    fr_rewind(state);
+    return results;
+}
+void bc_prescan_destroy(bc_PRESCAN_RESULTS* prescan) {
+    free(prescan);
+}
+uint32_t bc_resolve_name(it_PROGRAM* program, char* name) {
+    for(int i = 0; i < program->methodc; i++) {
+        if(strcmp(name, program->methods[i].name) == 0) {
+            #if DEBUG
+            printf("Resolved %s to %d\n", name, program->methods[i].id);
+            #endif
+            return program->methods[i].id;
+        }
+    }
+    fatal("Asked to resolve unknown name");
+}
+void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* program, it_METHOD* result) {
     uint32_t length = fr_getuint32(state);
     uint32_t registerc = fr_getuint32(state);
     uint32_t id = fr_getuint32(state);
@@ -198,11 +216,12 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_METHOD* result)
     printf("Id %d\n", id);
     printf("Nargs %d\n", nargs);
     printf("Name length %d\n", name_length);
-    printf("End index %x\n", end_index);
+    printf("Name %s\n", result->name);
+    printf("End index %d\n", end_index);
     #endif
     int num_opcodes = 0;
     while(state->index < end_index) {
-        bc_parse_opcode(state, &opcode_buff[num_opcodes]);
+        bc_parse_opcode(state, program, &opcode_buff[num_opcodes]);
         num_opcodes++;
     }
     result->registerc = registerc;
@@ -224,16 +243,50 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_METHOD* result)
     printf("Done parsing method\n");
     #endif
 }
+void bc_scan_symbols(it_PROGRAM* program, fr_STATE* state) {
+    // state->methodc and state->methods are already initialized
+    #if DEBUG
+    printf("Entering bc_scan_symbols()\n");
+    #endif
+    int methodindex = 0;
+    while(!fr_iseof(state)) {
+        uint8_t segment_type = fr_getuint8(state);
+        if(segment_type == SEGMENT_TYPE_METHOD) {
+            uint32_t length = fr_getuint32(state);
+            uint32_t end_index = state->index + length;
+            it_METHOD* method = &program->methods[methodindex++];
+            method->registerc = fr_getuint32(state); // num_registers
+            method->id = fr_getuint32(state); // id
+            method->nargs = fr_getuint32(state); // nargs
+            method->name = fr_getstr(state); // name
+            #if DEBUG
+            printf("Method name is %s\n", method->name);
+            #endif
+            fr_advance(state, end_index - state->index);
+        } else if(segment_type == SEGMENT_TYPE_METADATA) {
+            #if DEBUG
+            printf("Metadata\n");
+            #endif
+            fr_getuint32(state);
+        } else {
+            #if DEBUG
+            printf("Segment type %02x\n", segment_type);
+            #endif
+            fatal("Unknown segment type");
+        }
+    }
+    #if DEBUG
+    printf("Exiting bc_scan_symbols()\n");
+    #endif
+}
 it_PROGRAM* bc_parse_from_file(FILE* fp) {
     fr_STATE* state = fr_new(fp);
-    // Check the magic number
-    if(fr_getuint32(state) != 0xcf702b56) {
-        fatal("Incorrect bytecode file magic number");
-    }
     // This is the index of the start of the segments in the input bytecode
     int start_index = state->index;
     bc_PRESCAN_RESULTS* prescan = bc_prescan(state);
-    state->index = start_index;
+    fr_rewind(state);
+    // Ignore the magic number
+    fr_getuint32(state);
     // typedef struct {
     //     int num_methods;
     //     uint32_t entrypoint_id;
@@ -245,13 +298,18 @@ it_PROGRAM* bc_parse_from_file(FILE* fp) {
     result->methodc = prescan->num_methods;
     result->methods = malloc(sizeof(it_METHOD) * result->methodc);
 
+    bc_scan_symbols(result, state);
+    fr_rewind(state);
+    // Ignore the magic number
+    fr_getuint32(state);
+
     it_OPCODE* opcodes = malloc(sizeof(it_OPCODE) * state->bufflen);
     // Reset the index into the input bytecode to the beginning of the segments
     int method_index = 0;
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
         if(segment_type == 0x00) {
-            bc_parse_method(state, opcodes, &result->methods[method_index++]);
+            bc_parse_method(state, opcodes, result, &result->methods[method_index++]);
         } else if(segment_type == 0x01) {
             // Metadata segment
             fr_getuint32(state);
