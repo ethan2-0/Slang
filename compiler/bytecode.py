@@ -56,7 +56,7 @@ class SegmentEmitterMethod(SegmentEmitter):
 
     def emit(self, segment):
         ret = SegmentEmitter.emit(self, segment)
-        header = struct.pack("!IIII", segment.num_registers, segment.signature.id, segment.signature.nargs, len(segment.signature.name)) + segment.signature.name.encode("utf8")
+        header = struct.pack("!III", segment.num_registers, segment.signature.nargs, len(segment.signature.name)) + segment.signature.name.encode("utf8")
         body = MethodBytecodeEmitter(segment.opcodes).emit()
         length = struct.pack("!I", len(header + body))
         return ret + length + header + body

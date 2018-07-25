@@ -16,6 +16,8 @@ typedef struct {
     int methodc;
     // This is the methods, in an arbitrary order
     it_METHOD* methods;
+    // This is the current method ID
+    uint32_t method_id;
     // This is the entrypoint, as an index into `methods`.
     int entrypoint;
 } it_PROGRAM;

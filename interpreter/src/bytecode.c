@@ -7,6 +7,7 @@
 #include "interpreter.h"
 
 uint32_t bc_resolve_name(it_PROGRAM* program, char* callee_name);
+uint32_t bc_assign_method_id(it_PROGRAM* program);
 
 void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_OPCODE* opcode) {
     uint8_t opcode_num = fr_getuint8(state);
@@ -187,6 +188,9 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
     fr_rewind(state);
     return results;
 }
+uint32_t bc_assign_method_id(it_PROGRAM* program) {
+    return program->method_id++;
+}
 void bc_prescan_destroy(bc_PRESCAN_RESULTS* prescan) {
     free(prescan);
 }
@@ -204,11 +208,10 @@ uint32_t bc_resolve_name(it_PROGRAM* program, char* name) {
 void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* program, it_METHOD* result) {
     uint32_t length = fr_getuint32(state);
     uint32_t registerc = fr_getuint32(state);
-    uint32_t id = fr_getuint32(state);
     uint32_t nargs = fr_getuint32(state);
-    uint32_t name_length = fr_getuint32(state);
-    fr_advance(state, (int) name_length);
-    uint32_t bytecode_length = length - 16 - name_length;
+    char* name = fr_getstr(state);
+    uint32_t id = bc_resolve_name(program, name);
+    uint32_t bytecode_length = length - 12 - strlen(name);
     size_t end_index = state->index + bytecode_length;
     #if DEBUG
     printf("Length %d\n", length);
@@ -256,7 +259,7 @@ void bc_scan_symbols(it_PROGRAM* program, fr_STATE* state) {
             uint32_t end_index = state->index + length;
             it_METHOD* method = &program->methods[methodindex++];
             method->registerc = fr_getuint32(state); // num_registers
-            method->id = fr_getuint32(state); // id
+            method->id = bc_assign_method_id(program); // id
             method->nargs = fr_getuint32(state); // nargs
             method->name = fr_getstr(state); // name
             #if DEBUG

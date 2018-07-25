@@ -9,5 +9,5 @@ fn add(a, b) {
     return a + b;
 }
 fn main() {
-    return mult(add(3, 3), 7);
+    return add(mult(3, 3), 7);
 }
