@@ -67,7 +67,7 @@ class SegmentEmitterMetadata(SegmentEmitter):
 
     def emit(self, segment):
         ret = SegmentEmitter.emit(self, segment)
-        body = struct.pack("!I", segment.entrypoint.id)
+        body = struct.pack("!I", len(segment.entrypoint.name)) + segment.entrypoint.name.encode("utf8")
         return ret + body
 
 emitters = [SegmentEmitterMetadata(), SegmentEmitterMethod()]
