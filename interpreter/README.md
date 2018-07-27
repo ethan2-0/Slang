@@ -14,10 +14,8 @@ argument.
 
 # Feature support
 
-Currently, less than half of the opcodes are supported. In particular, control
-flow and method calls aren't implemented. Return simply prints the value of the
-register that's returned to standard output. This means all you can do is
-assign variables and do arithmetic and return.
+Currently, all opcodes are supported, though I'm sure that'll change once as I
+introduce more.
 
 # Under the hood
 
