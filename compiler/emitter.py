@@ -1,4 +1,5 @@
 from opcodes import opcodes as ops
+import header
 
 class RegisterHandle:
     def __init__(self, id):
@@ -70,9 +71,10 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class MethodSignature:
-    def __init__(self, name, args):
+    def __init__(self, name, args, argnames):
         self.name = name
         self.args = args
+        self.argnames = argnames
         self.id = MethodSignature.sequential_id
         MethodSignature.sequential_id += 1
 
@@ -94,7 +96,8 @@ class MethodSignature:
         ret = []
         for method in top:
             signature = ["int"] * len(list(method[1]))
-            ret.append(MethodSignature(method[0].data, signature))
+            argnames = [arg.data for arg in method[1]]
+            ret.append(MethodSignature(method[0].data, signature, argnames))
         return ret
 MethodSignature.sequential_id = 0
 
@@ -313,9 +316,10 @@ class MethodSegment(Segment):
         self.emit_opcodes(emitter)
 
 class MetadataSegment(Segment):
-    def __init__(self, entrypoint):
+    def __init__(self, entrypoint=None, headers=header.HeaderRepresentation.HIDDEN):
         Segment.__init__(self, "metadata", 0x01)
         self.entrypoint = entrypoint
+        self.headers = headers
 
     def __str__(self):
         return "MetadataSegment(type='%s', typecode=%s, entrypoint=%s)" % (self.humantype, self.realtype, self.entrypoint)
@@ -323,9 +327,33 @@ class MetadataSegment(Segment):
     def print_(self, emitter):
         Segment.print_(self, emitter)
         print("    entrypoint=%s" % self.entrypoint)
+        print("    headers omitted for brevity")
+
+    def has_entrypoint(self):
+        return self.entrypoint is not None
 
     def evaluate(self, emitter):
         Segment.evaluate(self, emitter)
+
+class Program:
+    def __init__(self, methods):
+        self.methods = methods
+        self.segments = list(methods) # Shallow copy
+
+    def get_entrypoint(self):
+        for method in self.methods:
+            if method.signature.name == "main" and method.signature.nargs == 0:
+                return method.signature
+        return None
+
+    def get_header_representation(self):
+        return header.HeaderRepresentation.from_program(self)
+
+    def add_metadata(self, use_entrypoint):
+        if use_entrypoint:
+            self.segments.append(MetadataSegment(entrypoint=self.get_entrypoint(), headers=self.get_header_representation()))
+        else:
+            self.segments.append(MetadataSegment(headers=self.get_header_representation()))
 
 class Emitter:
     def __init__(self, top):
@@ -334,24 +362,21 @@ class Emitter:
     def emit_method(self, method):
         return MethodSegment(method, get_method_signature(method[0].data, method))
 
-    def emit_segments(self):
+    def emit_program(self):
         for method in self.top:
             method.xattrs["top"] = self.top
-        segments = []
+        methods = []
         for method in self.top:
-            segments.append(self.emit_method(method))
+            methods.append(self.emit_method(method))
 
-        entrypoint = None
-        for segment in segments:
-            if isinstance(segment, MethodSegment) and segment.signature.name == "main" and segment.signature.nargs == 0:
-                entrypoint = segment.signature
+        program = Program(methods)
+        program.add_metadata(use_entrypoint=True)
 
-        if entrypoint is None:
-            self.top.compile_error("No main()")
+        return program
 
-        segments.append(MetadataSegment(entrypoint))
-
-        return segments
+    def emit_bytes(self, program):
+        import bytecode
+        return bytecode.emit(program.segments)
 
 
 if __name__ == "__main__":
@@ -361,6 +386,7 @@ if __name__ == "__main__":
     argparser.add_argument("--ast", action="store_true", help="display AST (for debugging)")
     argparser.add_argument("--segments", action="store_true", help="display segments (for debugging)")
     argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
+    argparser.add_argument("--headers", action="store_true", help="display headers (for debugging)")
     argparser.add_argument("-o", "--output", metavar="file", help="file for bytecode output")
     args = argparser.parse_args()
 
@@ -375,17 +401,20 @@ if __name__ == "__main__":
         tree.output()
 
     emitter = Emitter(tree)
-    segments = emitter.emit_segments()
+    program = emitter.emit_program()
 
     if args.segments:
-        for segment in segments:
+        for segment in program.segments:
             segment.print_(emitter)
     else:
-        for segment in segments:
+        for segment in program.segments:
             segment.evaluate(emitter)
 
-    import bytecode
-    outbytes = bytecode.emit(segments)
+    if args.headers:
+        import json
+        print(json.dumps(program.get_header_representation().serialize(), indent=4))
+
+    outbytes = emitter.emit_bytes(program)
 
     if args.hexdump:
         import binascii

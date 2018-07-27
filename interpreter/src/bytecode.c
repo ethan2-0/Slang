@@ -183,6 +183,7 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
             // results->entrypoint_id = fr_getuint32(state);
             // Ignore the entrypoint name at this step of parsing
             fr_getstr(state);
+            fr_getstr(state);
         }
     }
 
@@ -276,6 +277,7 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state) {
                 fatal("No entrypoint found.");
             }
             program->entrypoint = bc_resolve_name(program, name);
+            fr_getstr(state);
         } else {
             #if DEBUG
             printf("Segment type %02x\n", segment_type);
@@ -320,6 +322,7 @@ it_PROGRAM* bc_parse_from_file(FILE* fp) {
             bc_parse_method(state, opcodes, result, &result->methods[method_index++]);
         } else if(segment_type == SEGMENT_TYPE_METADATA) {
             // Metadata segment
+            fr_getstr(state);
             fr_getstr(state);
         }
     }
