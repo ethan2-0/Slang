@@ -69,11 +69,11 @@ class SegmentEmitterMetadata(SegmentEmitter):
     def emit(self, segment):
         ret = SegmentEmitter.emit(self, segment)
         body = None
-        if segment.has_entrypoint:
+        if segment.has_entrypoint():
             body = struct.pack("!I", len(segment.entrypoint.name)) + segment.entrypoint.name.encode("utf8")
         else:
             body = struct.pack("!I", 0)
-        headers_serialized = json.dumps(segment.headers.serialize(), separators=(":", ","))
+        headers_serialized = json.dumps(segment.headers.serialize(), separators=(",", ":"))
         body += struct.pack("!I", len(headers_serialized)) + headers_serialized.encode("utf8")
         return ret + body
 

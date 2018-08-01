@@ -1,3 +1,6 @@
+import slbparser
+import json
+
 class HeaderMethodArgumentRepresentation:
     def __init__(self, name):
         self.name = name
@@ -15,7 +18,7 @@ class HeaderMethodArgumentRepresentation:
 
     @staticmethod
     def unserialize(input):
-        if input["type"] != "method":
+        if input["type"] != "argument":
             raise ValueError("Asked to unserialize type '%s' as argument" % input["type"])
 
         return HeaderMethodArgumentRepresentation(input["name"])
@@ -41,7 +44,8 @@ class HeaderMethodRepresentation:
         }
 
     @staticmethod
-    def from_method(method, entrypoint_id):
+    def from_method(method, program):
+        entrypoint_id = program.get_entrypoint().id if program.has_entrypoint() else None
         return HeaderMethodRepresentation(method.signature.name, [HeaderMethodArgumentRepresentation.from_argument(arg) for arg in method.signature.argnames], entrypoint_id == method.signature.id)
 
     @staticmethod
@@ -73,7 +77,7 @@ class HeaderRepresentation:
 
     @staticmethod
     def from_program(program):
-        return HeaderRepresentation([HeaderMethodRepresentation.from_method(method, program.get_entrypoint().id) for method in program.methods])
+        return HeaderRepresentation([HeaderMethodRepresentation.from_method(method, program) for method in program.methods])
 
     @staticmethod
     def unserialize(input):
@@ -86,3 +90,12 @@ class HeaderRepresentation:
         return HeaderRepresentation([HeaderMethodRepresentation.unserialize(method) for method in input["methods"]])
 
 HeaderRepresentation.HIDDEN = HeaderRepresentation([], hidden=True)
+
+def from_slb(fname):
+    file_data = None
+    with open(fname, "rb") as f:
+        file_data = slbparser.extract_headers(f.read())
+
+    print(file_data)
+
+    return HeaderRepresentation.unserialize(json.loads(file_data))

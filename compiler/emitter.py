@@ -1,12 +1,14 @@
 from opcodes import opcodes as ops
 import header
+import typesys
 
 class RegisterHandle:
-    def __init__(self, id):
+    def __init__(self, id, type):
         self.id = id
+        self.type = type
 
     def __repr__(self):
-        return "RegisterHandle(id=%s)" % self.id
+        return "RegisterHandle(id=%s, type=%s)" % (self.id, self.type)
 
     def __str__(self):
         return "$%s" % self.id
@@ -27,6 +29,7 @@ class Scopes:
     def __init__(self):
         self.locals = [dict()]
         self.register_ids = 0
+        self.registers = []
 
     def push(self):
         self.locals.append(dict())
@@ -34,8 +37,9 @@ class Scopes:
     def pop(self):
         self.locals.pop()
 
-    def allocate(self):
-        ret = RegisterHandle(self.register_ids)
+    def allocate(self, type=None):
+        ret = RegisterHandle(self.register_ids, type)
+        self.registers.append(ret)
         self.register_ids += 1
         return ret
 
@@ -103,18 +107,18 @@ MethodSignature.sequential_id = 0
 
 def get_method_signature(name, top_):
     top = top_.xattrs["top"]
-    if "signatures" not in top.xattrs:
-        top.xattrs["signatures"] = MethodSignature.scan(top)
 
     for signature in top.xattrs["signatures"]:
         if signature.name == name:
             return signature
 
 class MethodEmitter:
-    def __init__(self, top, emitter):
+    def __init__(self, top, program):
         self.top = top
         self.opcodes = []
         self.scope = Scopes()
+        self.program = program
+        self.types = program.types
 
     def emit_expr(self, node, register):
         opcodes = []
@@ -284,7 +288,7 @@ class Segment:
     def print_(self, emitter):
         print(str(self))
 
-    def evaluate(self, emitter):
+    def evaluate(self, program):
         pass
 
 class MethodSegment(Segment):
@@ -294,11 +298,13 @@ class MethodSegment(Segment):
         self.signature = signature
         self.opcodes = None
         self.num_registers=None
+        self.opcodes = None
 
-    def emit_opcodes(self, emitter):
-        emitter = MethodEmitter(self.method, emitter)
+    def emit_opcodes(self, program):
+        emitter = MethodEmitter(self.method, program)
         ret = emitter.emit()
         # TODO: This is spaghetti code
+        self.emitter = emitter
         self.num_registers = emitter.scope.register_ids
         self.opcodes = ret
         return ret
@@ -308,12 +314,12 @@ class MethodSegment(Segment):
 
     def print_(self, emitter):
         Segment.print_(self, emitter)
-        opcodes = self.emit_opcodes(emitter)
-        for opcode, index in zip(opcodes, range(len(opcodes))):
+        print("Registers:", ", ".join([repr(register) for register in self.emitter.scope.registers]))
+        for opcode, index in zip(self.opcodes, range(len(self.opcodes))):
             print("    %2d: %s" % (index, str(opcode)))
 
-    def evaluate(self, emitter):
-        self.emit_opcodes(emitter)
+    def evaluate(self, program):
+        self.opcodes = self.emit_opcodes(program)
 
 class MetadataSegment(Segment):
     def __init__(self, entrypoint=None, headers=header.HeaderRepresentation.HIDDEN):
@@ -332,13 +338,15 @@ class MetadataSegment(Segment):
     def has_entrypoint(self):
         return self.entrypoint is not None
 
-    def evaluate(self, emitter):
-        Segment.evaluate(self, emitter)
+    def evaluate(self, program):
+        Segment.evaluate(self, program)
 
 class Program:
-    def __init__(self, methods):
+    def __init__(self, methods, emitter):
         self.methods = methods
+        self.emitter = emitter
         self.segments = list(methods) # Shallow copy
+        self.types = typesys.TypeSystem()
 
     def get_entrypoint(self):
         for method in self.methods:
@@ -346,11 +354,18 @@ class Program:
                 return method.signature
         return None
 
+    def has_entrypoint(self):
+        return self.get_entrypoint() is not None
+
+    def evaluate(self):
+        for method in self.methods:
+            method.evaluate(self)
+
     def get_header_representation(self):
         return header.HeaderRepresentation.from_program(self)
 
-    def add_metadata(self, use_entrypoint):
-        if use_entrypoint:
+    def add_metadata(self):
+        if self.has_entrypoint():
             self.segments.append(MetadataSegment(entrypoint=self.get_entrypoint(), headers=self.get_header_representation()))
         else:
             self.segments.append(MetadataSegment(headers=self.get_header_representation()))
@@ -360,6 +375,7 @@ class Emitter:
         self.top = top
 
     def emit_method(self, method):
+        # method[0].data is method.name
         return MethodSegment(method, get_method_signature(method[0].data, method))
 
     def emit_program(self):
@@ -369,8 +385,8 @@ class Emitter:
         for method in self.top:
             methods.append(self.emit_method(method))
 
-        program = Program(methods)
-        program.add_metadata(use_entrypoint=True)
+        program = Program(methods, self)
+        program.add_metadata()
 
         return program
 
@@ -378,6 +394,16 @@ class Emitter:
         import bytecode
         return bytecode.emit(program.segments)
 
+def prescan_top_for_method_signatures(top):
+    top.xattrs["signatures"] = MethodSignature.scan(top)
+
+def add_include(top, headers):
+    for method in headers.methods:
+        if method.name == "main":
+            # TODO: Remove this and add support for not having a main method
+            print("Skipping main methood")
+            continue
+        top.xattrs["signatures"].append(MethodSignature(method.name, [arg.name for arg in method.args], ["int"] * len(method.args)))
 
 if __name__ == "__main__":
     import argparse
@@ -388,6 +414,7 @@ if __name__ == "__main__":
     argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
     argparser.add_argument("--headers", action="store_true", help="display headers (for debugging)")
     argparser.add_argument("-o", "--output", metavar="file", help="file for bytecode output")
+    argparser.add_argument("-i", "--include", metavar="file", action="append", help="files to link against")
     args = argparser.parse_args()
 
     if args.output is None:
@@ -400,15 +427,18 @@ if __name__ == "__main__":
     if args.ast:
         tree.output()
 
+    prescan_top_for_method_signatures(tree)
+    if args.include:
+        for include in args.include:
+            add_include(tree, header.from_slb(include))
+
     emitter = Emitter(tree)
     program = emitter.emit_program()
 
+    program.evaluate()
     if args.segments:
         for segment in program.segments:
             segment.print_(emitter)
-    else:
-        for segment in program.segments:
-            segment.evaluate(emitter)
 
     if args.headers:
         import json
