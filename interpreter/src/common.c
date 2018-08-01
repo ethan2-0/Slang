@@ -20,6 +20,7 @@ typedef struct {
 
 fr_STATE* fr_new(FILE* fp) {
     fr_STATE* state = malloc(sizeof(fr_STATE));
+    state->index = 0;
     state->fp = fp;
     fseek(fp, 0, SEEK_END);
     state->bufflen = ftell(fp);

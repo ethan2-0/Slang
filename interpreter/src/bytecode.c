@@ -206,6 +206,8 @@ uint32_t bc_resolve_name(it_PROGRAM* program, char* name) {
         }
     }
     fatal("Asked to resolve unknown name");
+    // Unreachable
+    return -1;
 }
 void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* program, it_METHOD* result) {
     uint32_t length = fr_getuint32(state);
@@ -220,7 +222,6 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     printf("Register count %d\n", registerc);
     printf("Id %d\n", id);
     printf("Nargs %d\n", nargs);
-    printf("Name length %d\n", name_length);
     printf("Name %s\n", result->name);
     printf("End index %d\n", end_index);
     #endif
@@ -248,12 +249,12 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     printf("Done parsing method\n");
     #endif
 }
-void bc_scan_methods(it_PROGRAM* program, fr_STATE* state) {
+void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
     // state->methodc and state->methods are already initialized
     #if DEBUG
     printf("Entering bc_scan_methods()\n");
     #endif
-    int methodindex = 0;
+    int methodindex = offset;
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
         if(segment_type == SEGMENT_TYPE_METHOD) {
@@ -273,10 +274,10 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state) {
             printf("Metadata\n");
             #endif
             char* name = fr_getstr(state);
-            if(strlen(name) <= 0) {
-                fatal("No entrypoint found.");
+            // A zero-length entrypoint name means no entrypoint
+            if(strlen(name) > 0) {
+                program->entrypoint = bc_resolve_name(program, name);
             }
-            program->entrypoint = bc_resolve_name(program, name);
             fr_getstr(state);
         } else {
             #if DEBUG
@@ -289,54 +290,75 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state) {
     printf("Exiting bc_scan_methods()\n");
     #endif
 }
-it_PROGRAM* bc_parse_from_file(FILE* fp) {
-    fr_STATE* state = fr_new(fp);
+it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
+    #if DEBUG
+    printf("Parsing %d files\n", fpc);
+    #endif
+    fr_STATE* state[fpc];
+    for(int i = 0; i < fpc; i++) {
+        state[i] = fr_new(fp[i]);
+    }
     // This is the index of the start of the segments in the input bytecode
-    int start_index = state->index;
-    bc_PRESCAN_RESULTS* prescan = bc_prescan(state);
-    fr_rewind(state);
-    // Ignore the magic number
-    fr_getuint32(state);
+    bc_PRESCAN_RESULTS* prescan[fpc];
+    it_PROGRAM* result = malloc(sizeof(it_PROGRAM));
+    result->method_id = 0;
+    result->methodc = 0;
+    result->entrypoint = -1;
+    for(int i = 0; i < fpc; i++) {
+        prescan[i] = bc_prescan(state[i]);
+        fr_rewind(state[i]);
+        // Ignore the magic number
+        fr_getuint32(state[i]);
+        result->methodc += prescan[i]->num_methods;
+    }
+    #if DEBUG
+    printf("%d methods\n", result->methodc);
+    #endif
+    result->methods = malloc(sizeof(it_METHOD) * result->methodc);
     // typedef struct {
     //     int num_methods;
     //     uint32_t entrypoint_id;
     // } bc_PRESCAN_RESULTS;
-    #if DEBUG
-    printf("%d methods, entrypoint is %02x\n", prescan->num_methods, prescan->entrypoint_id);
-    #endif
-    it_PROGRAM* result = malloc(sizeof(it_PROGRAM));
-    result->methodc = prescan->num_methods;
-    result->methods = malloc(sizeof(it_METHOD) * result->methodc);
 
-    bc_scan_methods(result, state);
-    fr_rewind(state);
-    // Ignore the magic number
-    fr_getuint32(state);
+    for(int i = 0, method_index = 0; i < fpc; i++) {
+        bc_scan_methods(result, state[i], method_index);
+        method_index += prescan[i]->num_methods;
+        fr_rewind(state[i]);
+        // Ignore the magic number
+        fr_getuint32(state[i]);
+    }
 
-    it_OPCODE* opcodes = malloc(sizeof(it_OPCODE) * state->bufflen);
+    if(result->entrypoint == -1) {
+        fatal("No entrypoint found");
+    }
+
     // Reset the index into the input bytecode to the beginning of the segments
     int method_index = 0;
-    while(!fr_iseof(state)) {
-        uint8_t segment_type = fr_getuint8(state);
-        if(segment_type == SEGMENT_TYPE_METHOD) {
-            bc_parse_method(state, opcodes, result, &result->methods[method_index++]);
-        } else if(segment_type == SEGMENT_TYPE_METADATA) {
-            // Metadata segment
-            fr_getstr(state);
-            fr_getstr(state);
+    int largest_bufflen = 0;
+    for(int i = 0; i < fpc; i++) {
+        if(state[i]->bufflen > largest_bufflen) {
+            largest_bufflen = state[i]->bufflen;
         }
     }
-    // Assign result->entrypoint
-    for(int i = 0; i < result->methodc; i++) {
-        if(result->methods[i].id == prescan->entrypoint_id) {
-            result->entrypoint = i;
-            break;
+    it_OPCODE* opcodes = malloc(sizeof(it_OPCODE) * largest_bufflen);
+    for(int i = 0; i < fpc; i++) {
+        while(!fr_iseof(state[i])) {
+            uint8_t segment_type = fr_getuint8(state[i]);
+            if(segment_type == SEGMENT_TYPE_METHOD) {
+                bc_parse_method(state[i], opcodes, result, &result->methods[method_index++]);
+            } else if(segment_type == SEGMENT_TYPE_METADATA) {
+                // Metadata segment
+                fr_getstr(state[i]);
+                fr_getstr(state[i]);
+            }
         }
     }
 
     free(opcodes);
-    fr_destroy(state);
-    bc_prescan_destroy(prescan);
+    for(int i = 0; i < fpc; i++) {
+        fr_destroy(state[i]);
+        bc_prescan_destroy(prescan[i]);
+    }
 
     return result;
 }

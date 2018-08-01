@@ -9,12 +9,18 @@ int main(int argc, char* argv[]) {
     if(argc < 2) {
         fatal("Not enough arguments\nInclude a bytecode file name\n");
     }
-    FILE* fp;
-    fp = fopen(argv[1], "r");
-    if(fp == NULL) {
-        fatal("Error reading file.");
+    FILE* fp[argc - 1];
+    // fp = fopen(argv[1], "r");
+    // if(fp == NULL) {
+    //     fatal("Error reading file.");
+    // }
+    for(int i = 1; i < argc; i++) {
+        fp[i - 1] = fopen(argv[i], "r");
+        if(fp[i - 1] == NULL) {
+            fatal("Error reading file.");
+        }
     }
-    it_PROGRAM* prog = bc_parse_from_file(fp);
+    it_PROGRAM* prog = bc_parse_from_files(argc - 1, fp);
     #if DEBUG
     printf("\n\nMethods: %d\n", prog->methodc);
     printf("Entrypoint: %d\n", prog->entrypoint);
