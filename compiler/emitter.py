@@ -38,6 +38,7 @@ class Scopes:
         self.locals.pop()
 
     def allocate(self, type=None):
+        print("Allocating with type %s" % type)
         ret = RegisterHandle(self.register_ids, type)
         self.registers.append(ret)
         self.register_ids += 1
@@ -128,8 +129,9 @@ class MethodEmitter:
             if nt < 0:
                 opcodes.append(ops["twocomp"].ins(register))
         elif node.of("+", "*", "^", "&", "|", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
-            opcodes += self.emit_expr(node[0], register)
-            rhs = self.scope.allocate()
+            lhs = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            opcodes += self.emit_expr(node[0], lhs)
+            rhs = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             opcodes += self.emit_expr(node[1], rhs)
             opcodes.append(ops[{
                 "+": "add",
@@ -146,32 +148,39 @@ class MethodEmitter:
                 # TODO: What happens if x0 is 0x1 and x1 is 0x2? Specifically for "and".
                 "and": "and",
                 "or": "or"
-            }[node.type]].ins(register, rhs, register))
+            }[node.type]].ins(lhs, rhs, register))
             if node.i("!="):
                 opcodes.append(ops["invert"].ins(register))
         elif node.i("not"):
+            if not register.type.is_boolean():
+                raise typesys.TypingError(node, "Operator 'not' needs boolean argument")
             opcodes += self.emit_expr(node[0], register)
             opcodes.append(ops["invert"].ins(register))
         elif node.i("~"):
+            if not register.type.is_numerical():
+                raise typesys.TypingError(node, "Operator '~' needs numerical argument")
             opcodes += self.emit_expr(node[0], register)
-            reg = self.scope.allocate()
+            reg = self.scope.allocate(self.types.int_type)
             opcodes.append(ops["load"].ins(reg, 0xffffffff))
             opcodes.append(ops["xor"].ins(reg, register, register))
         elif node.i("ident"):
             opcodes.append(annotate(ops["mov"].ins(self.scope.resolve(node.data, node), register), "access %s" % node.data))
         elif node.i("-"):
             if len(node.children) == 1:
+                if not self.types.decide_type(node[0], self.scope).is_numerical():
+                    raise typesys.TypingError(node, "Operator '-' needs numerical argument")
                 opcodes += self.emit_expr(node[0], register)
                 opcodes.append(ops["twocomp"].ins(register))
             else:
-                opcodes += self.emit_expr(node[0], register)
-                rhs = self.scope.allocate()
+                lhs = self.scope.allocate(self.typesys.decide_type(node[0], self.scope))
+                opcodes += self.emit_expr(node[0], lhs)
+                rhs = self.scope.allocate(self.types.decide_type(node[1], self.scope))
                 opcodes += self.emit_expr(node[1], rhs)
                 opcodes.append(ops["twocomp"].ins(rhs))
-                opcodes.append(ops["add"].ins(register, rhs, register))
+                opcodes.append(ops["add"].ins(lhs, rhs, register))
         elif node.i("call"):
             for param, index in zip(node.children[1:], range(len(node.children) - 1)):
-                reg = self.scope.allocate()
+                reg = self.scope.allocate(self.types.decide_type(param, self.scope))
                 opcodes += self.emit_expr(param, reg)
                 opcodes.append(ops["param"].ins(reg, index))
             signature = get_method_signature(node[0].data, self.top)
@@ -189,26 +198,36 @@ class MethodEmitter:
             for statement in node:
                 opcodes += self.emit_statement(statement)
         elif node.i("call"):
-            result = self.scope.allocate()
+            # TODO: Hardcoded type
+            result = self.scope.allocate(self.types.int_type)
             opcodes += self.emit_expr(node, result)
         elif node.i("let"):
-            reg = self.scope.allocate()
+            # Notice that a variable may have only exactly one let statement
+            # in a given scope. So we can typecheck just with that register's
+            # type, we don't have to associate with the scope directly.
+            reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             self.scope.let(node[0].data, reg, node)
             opcodes += annotate(self.emit_expr(node[1], reg), "let %s" % node[0].data)
         elif node.i("return"):
-            reg = self.scope.allocate()
+            reg = None
             if len(node.children) > 0:
+                reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
                 opcodes += self.emit_expr(node[0], reg)
             else:
+                reg = self.scope.allocate(self.types.int_type)
                 opcodes.append(ops["zero"].ins(reg))
             opcodes.append(ops["return"].ins(reg))
         elif node.i("assignment"):
             reg = self.scope.resolve(node[0].data, node[0])
+            if not reg.type.isAssignableFrom(self.types.decide_type(node[1]), self.scope):
+                raise typesys.TypingError(node, "Need RHS to be assignable to LHS")
             opcodes += self.emit_expr(node[1], reg)
         elif node.of("+=", "*=", "-="):
-            reg = self.scope.allocate()
+            reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             opcodes += self.emit_expr(node[1], reg)
             varreg = self.scope.resolve(node[0].data, node)
+            if not reg.type.is_numerical() or not varreg.type.is_numerical():
+                raise typesys.TypingError(node, "LHS and RHS of arithmetic must be numerical")
             opcodes.append(ops[{
                 "+=": "add",
                 "*=": "mult",
@@ -218,7 +237,9 @@ class MethodEmitter:
                 opcodes.append(ops["twocomp"].ins(varreg))
         elif node.i("while"):
             result = []
-            condition_register = self.scope.allocate()
+            condition_register = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            if not condition_register.type.is_boolean():
+                raise typesys.TypingError(node, "Condition of a while loop must be boolean")
             conditional = self.emit_expr(node[0], condition_register)
             statement = self.emit_statement(node[1])
             nop = ops["nop"].ins()
@@ -233,7 +254,9 @@ class MethodEmitter:
             result += annotate(self.emit_statement(node[0]), "for loop setup")
             eachtime = annotate(self.emit_statement(node[2]), "for loop each time")
             result += eachtime
-            condition_register = self.scope.allocate()
+            condition_register = self.scope.allocate(self.types.decide_type(node[1], self.scope))
+            if not condition_register.is_boolean():
+                raise typesys.TypingError(node, "Condition of a for loop must be boolean")
             conditional = annotate(self.emit_expr(node[1], condition_register), "for loop condition")
             result += conditional
             nop = ops["nop"].ins()
@@ -244,7 +267,9 @@ class MethodEmitter:
             return result
         elif node.i("if"):
             result = []
-            condition_register = self.scope.allocate()
+            condition_register = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            if not condition_register.type.is_boolean():
+                raise typesys.TypingError(node, "Condition of an if statement must be boolean")
             conditional = annotate(self.emit_expr(node[0], condition_register), "if predicate")
             statement = annotate(self.emit_statement(node[1]), "if true path")
             nop = ops["nop"].ins()
@@ -255,7 +280,9 @@ class MethodEmitter:
             opcodes += result
         elif node.of("++", "--"):
             var = self.scope.resolve(node[0].data, node)
-            reg = self.scope.allocate()
+            if not var.type.is_numerical():
+                raise typesys.TypingError(node, "Subject of increment/decrement must be numerical")
+            reg = self.scope.allocate(self.types.int_type)
             opcodes.append(ops["load"].ins(reg, 1))
             if node.i("--"):
                 opcodes.append(ops["twocomp"].ins(reg))
@@ -269,7 +296,8 @@ class MethodEmitter:
 
     def emit(self):
         for arg in self.top[1]:
-            self.scope.let(arg.data, self.scope.allocate(), arg)
+            # TODO: Hardcoded parameter type
+            self.scope.let(arg.data, self.scope.allocate(self.types.int_type), arg)
         return self.emit_statement(self.top[2])
 
 class Method:
