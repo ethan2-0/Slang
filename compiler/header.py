@@ -2,32 +2,34 @@ import slbparser
 import json
 
 class HeaderMethodArgumentRepresentation:
-    def __init__(self, name):
+    def __init__(self, name, type):
         self.name = name
+        self.type = type
 
     def serialize(self):
         return {
             "type": "argument",
             "name": self.name,
-            "argtype": "int"
+            "argtype": self.type
         }
 
     @staticmethod
-    def from_argument(argname):
-        return HeaderMethodArgumentRepresentation(argname)
+    def from_argument(argname, type):
+        return HeaderMethodArgumentRepresentation(argname, type)
 
     @staticmethod
     def unserialize(input):
         if input["type"] != "argument":
             raise ValueError("Asked to unserialize type '%s' as argument" % input["type"])
 
-        return HeaderMethodArgumentRepresentation(input["name"])
+        return HeaderMethodArgumentRepresentation(input["name"], input["argtype"])
 
 class HeaderMethodRepresentation:
-    def __init__(self, name, args, entrypoint=False):
+    def __init__(self, name, args, returntype, entrypoint=False):
         self.name = name
         self.args = args
         self.entrypoint = entrypoint
+        self.returntype = returntype
 
     @property
     def numargs(self):
@@ -39,21 +41,24 @@ class HeaderMethodRepresentation:
             "name": self.name,
             "arguments": [argument.serialize() for argument in self.args],
             "numargs": len(self.args),
-            "returns": "int",
+            "returns": self.returntype,
             "entrypoint": self.entrypoint
         }
 
     @staticmethod
     def from_method(method, program):
         entrypoint_id = program.get_entrypoint().id if program.has_entrypoint() else None
-        return HeaderMethodRepresentation(method.signature.name, [HeaderMethodArgumentRepresentation.from_argument(arg) for arg in method.signature.argnames], entrypoint_id == method.signature.id)
+        return HeaderMethodRepresentation(method.signature.name,
+            [HeaderMethodArgumentRepresentation.from_argument(arg, argtype.name) for arg, argtype in zip(method.signature.argnames, method.signature.args)],
+            method.signature.returntype.name,
+            entrypoint_id == method.signature.id)
 
     @staticmethod
     def unserialize(input):
         if input["type"] != "method":
             raise ValueError("Asked to unserialize type '%s' as method" % input["type"])
 
-        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]])
+        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"])
 
 class HeaderRepresentation:
     def __init__(self, methods, hidden=False):
@@ -95,7 +100,5 @@ def from_slb(fname):
     file_data = None
     with open(fname, "rb") as f:
         file_data = slbparser.extract_headers(f.read())
-
-    print(file_data)
 
     return HeaderRepresentation.unserialize(json.loads(file_data))

@@ -1,6 +1,7 @@
 from opcodes import opcodes as ops
 import header
 import typesys
+import parser
 
 class RegisterHandle:
     def __init__(self, id, type):
@@ -38,7 +39,6 @@ class Scopes:
         self.locals.pop()
 
     def allocate(self, type=None):
-        print("Allocating with type %s" % type)
         ret = RegisterHandle(self.register_ids, type)
         self.registers.append(ret)
         self.register_ids += 1
@@ -76,10 +76,11 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class MethodSignature:
-    def __init__(self, name, args, argnames):
+    def __init__(self, name, args, argnames, returntype):
         self.name = name
         self.args = args
         self.argnames = argnames
+        self.returntype = returntype
         self.id = MethodSignature.sequential_id
         MethodSignature.sequential_id += 1
 
@@ -97,17 +98,19 @@ class MethodSignature:
         return repr(self)
 
     @staticmethod
-    def scan(top):
+    def scan(top, types):
         ret = []
         for method in top:
-            signature = ["int"] * len(list(method[1]))
-            argnames = [arg.data for arg in method[1]]
-            ret.append(MethodSignature(method[0].data, signature, argnames))
+            signature = [types.resolve(arg[1]) for arg in method[1]]
+            argnames = [arg[0].data for arg in method[1]]
+            ret.append(MethodSignature(method[0].data, signature, argnames, types.resolve(method[2])))
         return ret
 MethodSignature.sequential_id = 0
 
-def get_method_signature(name, top_):
-    top = top_.xattrs["top"]
+def get_method_signature(name, top_, is_real_top=False):
+    top = top_
+    if not is_real_top:
+        top = top_.xattrs["top"]
 
     for signature in top.xattrs["signatures"]:
         if signature.name == name:
@@ -165,6 +168,10 @@ class MethodEmitter:
             opcodes.append(ops["xor"].ins(reg, register, register))
         elif node.i("ident"):
             opcodes.append(annotate(ops["mov"].ins(self.scope.resolve(node.data, node), register), "access %s" % node.data))
+        elif node.i("true"):
+            opcodes.append(ops["load"].ins(register, 1))
+        elif node.i("false"):
+            opcodes.append(ops["load"].ins(register, 0))
         elif node.i("-"):
             if len(node.children) == 1:
                 if not self.types.decide_type(node[0], self.scope).is_numerical():
@@ -179,11 +186,15 @@ class MethodEmitter:
                 opcodes.append(ops["twocomp"].ins(rhs))
                 opcodes.append(ops["add"].ins(lhs, rhs, register))
         elif node.i("call"):
+            signature = get_method_signature(node[0].data, self.top)
             for param, index in zip(node.children[1:], range(len(node.children) - 1)):
-                reg = self.scope.allocate(self.types.decide_type(param, self.scope))
+                inferred_type = self.types.decide_type(param, self.scope)
+                declared_type = signature.args[index]
+                if not inferred_type.is_assignable_to(declared_type):
+                    raise typesys.TypingError(node, "Invalid parameter type: '%s' is not assignable to '%s'" % (inferred_type, declared_type))
+                reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
                 opcodes.append(ops["param"].ins(reg, index))
-            signature = get_method_signature(node[0].data, self.top)
             if signature is None or signature.nargs != len(node.children) - 1:
                 node.compile_error("Invalid or nonexistent method signature '%s'" % signature)
             opcodes.append(ops["call"].ins(signature, register))
@@ -205,13 +216,32 @@ class MethodEmitter:
             # Notice that a variable may have only exactly one let statement
             # in a given scope. So we can typecheck just with that register's
             # type, we don't have to associate with the scope directly.
-            reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
+            type = None
+            if len(node) > 2:
+                type = self.types.decide_type(node[2], self.scope)
+                if not node[1].i("infer_type"):
+                    inferred_type = type
+                    # This is the declared type
+                    type = self.types.resolve(node[1])
+                    if not inferred_type.is_assignable_to(type):
+                        raise typesys.TypingError(node, "'%s' is not assignable to '%s'" % (inferred_type, type))
+            else:
+                if node[1].i("infer_type"):
+                    node.compile_error("Variables declared without assignment must be given explicit type")
+                type = self.types.resolve(node[1])
+
+            reg = self.scope.allocate(type)
             self.scope.let(node[0].data, reg, node)
-            opcodes += annotate(self.emit_expr(node[1], reg), "let %s" % node[0].data)
+
+            if len(node) > 2:
+                opcodes += annotate(self.emit_expr(node[2], reg), "let %s" % node[0].data)
         elif node.i("return"):
             reg = None
             if len(node.children) > 0:
-                reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+                stated_return_type = self.types.decide_type(node[0], self.scope)
+                if not self.return_type.is_assignable_from(stated_return_type):
+                    raise typesys.TypingError(node, "Return type mismatch")
+                reg = self.scope.allocate(stated_return_type)
                 opcodes += self.emit_expr(node[0], reg)
             else:
                 reg = self.scope.allocate(self.types.int_type)
@@ -219,7 +249,7 @@ class MethodEmitter:
             opcodes.append(ops["return"].ins(reg))
         elif node.i("assignment"):
             reg = self.scope.resolve(node[0].data, node[0])
-            if not reg.type.isAssignableFrom(self.types.decide_type(node[1]), self.scope):
+            if not reg.type.is_assignable_from(self.types.decide_type(node[1], self.scope)):
                 raise typesys.TypingError(node, "Need RHS to be assignable to LHS")
             opcodes += self.emit_expr(node[1], reg)
         elif node.of("+=", "*=", "-="):
@@ -276,7 +306,13 @@ class MethodEmitter:
             result += conditional
             result.append(ops["jf"].ins(condition_register, nop))
             result += statement
+            else_end_nop = ops["NOP"].ins()
+            if len(node) > 2:
+                result.append(ops["goto"].ins(else_end_nop)) #
             result.append(nop)
+            if len(node) > 2:
+                result += annotate(self.emit_statement(node[2]), "if false path")
+                result.append(else_end_nop)
             opcodes += result
         elif node.of("++", "--"):
             var = self.scope.resolve(node[0].data, node)
@@ -295,10 +331,10 @@ class MethodEmitter:
         pass
 
     def emit(self):
+        self.return_type = self.types.resolve(self.top[2])
         for arg in self.top[1]:
-            # TODO: Hardcoded parameter type
-            self.scope.let(arg.data, self.scope.allocate(self.types.int_type), arg)
-        return self.emit_statement(self.top[2])
+            self.scope.let(arg[0].data, self.scope.allocate(self.types.resolve(arg[1])), arg)
+        return self.emit_statement(self.top[3])
 
 class Method:
     def __init__(self, root, emitter):
@@ -370,11 +406,13 @@ class MetadataSegment(Segment):
         Segment.evaluate(self, program)
 
 class Program:
-    def __init__(self, methods, emitter):
-        self.methods = methods
+    def __init__(self, emitter):
+        self.methods = []
         self.emitter = emitter
-        self.segments = list(methods) # Shallow copy
-        self.types = typesys.TypeSystem()
+        self.top = emitter.top
+        # self.segments = list(methods) # Shallow copy
+        self.segments = []
+        self.types = typesys.TypeSystem(self)
 
     def get_entrypoint(self):
         for method in self.methods:
@@ -382,10 +420,21 @@ class Program:
                 return method.signature
         return None
 
+    def get_method_signature(self, name):
+        return get_method_signature(name, self.top, is_real_top=True)
+
     def has_entrypoint(self):
         return self.get_entrypoint() is not None
 
+    def emit_method(self, method):
+        # method[0].data is method.name
+        return MethodSegment(method, get_method_signature(method[0].data, method))
+
     def evaluate(self):
+        for method in self.top:
+            method = self.emit_method(method)
+            self.methods.append(method)
+            self.segments.append(method)
         for method in self.methods:
             method.evaluate(self)
 
@@ -398,40 +447,35 @@ class Program:
         else:
             self.segments.append(MetadataSegment(headers=self.get_header_representation()))
 
+    def prescan(self):
+        self.emitter.top.xattrs["signatures"] = MethodSignature.scan(self.emitter.top, self.types)
+        print(self.emitter.top.xattrs["signatures"])
+
+    def add_include(self, headers):
+        for method in headers.methods:
+            self.emitter.top.xattrs["signatures"].append(MethodSignature(
+                method.name,
+                [self.types.resolve(parser.parse_type(arg.type)) for arg in method.args],
+                [arg.name for arg in method.args],
+                self.types.resolve(parser.parse_type(method.returntype))
+            ))
+
 class Emitter:
     def __init__(self, top):
         self.top = top
-
-    def emit_method(self, method):
-        # method[0].data is method.name
-        return MethodSegment(method, get_method_signature(method[0].data, method))
+        self.top.xattrs["signatures"] = []
 
     def emit_program(self):
         for method in self.top:
             method.xattrs["top"] = self.top
-        methods = []
-        for method in self.top:
-            methods.append(self.emit_method(method))
 
-        program = Program(methods, self)
-        program.add_metadata()
+        program = Program(self)
 
         return program
 
     def emit_bytes(self, program):
         import bytecode
         return bytecode.emit(program.segments)
-
-def prescan_top_for_method_signatures(top):
-    top.xattrs["signatures"] = MethodSignature.scan(top)
-
-def add_include(top, headers):
-    for method in headers.methods:
-        if method.name == "main":
-            # TODO: Remove this and add support for not having a main method
-            print("Skipping main methood")
-            continue
-        top.xattrs["signatures"].append(MethodSignature(method.name, [arg.name for arg in method.args], ["int"] * len(method.args)))
 
 if __name__ == "__main__":
     import argparse
@@ -448,22 +492,23 @@ if __name__ == "__main__":
     if args.output is None:
         args.output = "%s.slb" % args.file[:-4]
 
-    import parser
     with open(args.file, "r") as f:
         tree = parser.Parser(parser.Toker("\n" + f.read())).parse()
 
     if args.ast:
         tree.output()
 
-    prescan_top_for_method_signatures(tree)
-    if args.include:
-        for include in args.include:
-            add_include(tree, header.from_slb(include))
+    # prescan_top_for_method_signatures(tree)
 
     emitter = Emitter(tree)
     program = emitter.emit_program()
-
+    program.prescan()
+    if args.include:
+        for include in args.include:
+            program.add_include(header.from_slb(include))
     program.evaluate()
+
+    program.add_metadata()
     if args.segments:
         for segment in program.segments:
             segment.print_(emitter)

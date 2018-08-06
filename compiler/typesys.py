@@ -22,6 +22,9 @@ class AbstractType:
     def is_boolean(self):
         return False
 
+    def resolves(self, node):
+        return node.i("ident") and node.data == self.name
+
     def __str__(self):
         return ":%s" % self.name
 
@@ -55,10 +58,17 @@ class BoolType(AbstractType):
         return True
 
 class TypeSystem:
-    def __init__(self):
+    def __init__(self, program):
+        self.program = program
         self.int_type = IntType()
         self.bool_type = BoolType()
         self.types = [self.int_type, self.bool_type]
+
+    def resolve(self, node):
+        for type in self.types:
+            if type.resolves(node):
+                return type
+        raise TypingError(node, "Could not resolve type: '%s'" % name)
 
     def decide_type(self, expr, scope):
         if expr.of("+", "*", "-", "^", "&", "|"):
@@ -88,6 +98,10 @@ class TypeSystem:
 
             return self.bool_type
         elif expr.of("==", "!="):
+            lhs_type = self.decide_type(expr[0], scope)
+            rhs_type = self.decide_type(expr[1], scope)
+            if not lhs_type.is_assignable_from(rhs_type) and not lhs_type.is_assignable_to(rhs_type):
+                raise TypingError(expr, "Incomparable types: '%s' and '%s'" % (lhs_type, rhs_type))
             return self.bool_type
         elif expr.i("number"):
             return self.int_type
@@ -113,5 +127,14 @@ class TypeSystem:
             return self.int_type
         elif expr.i("ident"):
             return scope.resolve(expr.data, expr).type
+        elif expr.of("true", "false"):
+            return self.bool_type
+        elif expr.i("call"):
+            # TODO: Move method call typechecking in here from emitter.py.
+            signature = self.program.get_method_signature(expr[0].data)
+            if signature is None:
+                expr.compile_error("Unknown method name '%s'" % expr[0].data)
+            return signature.returntype
         else:
+            print("Unrecognized expression getting type of None")
             return None

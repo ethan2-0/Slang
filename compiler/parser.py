@@ -16,6 +16,12 @@ class Token:
             return False
         return True
 
+    def of(self, *types):
+        for type in types:
+            if self.isn(type):
+                return True
+        return False
+
     def __repr__(self):
         return "%s(%s)" % (self.type, self.data if self.data is not None else "")
 
@@ -23,7 +29,7 @@ class Token:
         return repr(self)
 
 class Toker:
-    keywords = ["fn", "let", "and", "or", "not", "if", "else", "while", "for", "return"]
+    keywords = ["fn", "let", "and", "or", "not", "if", "else", "while", "for", "return", "true", "false"]
     def __init__(self, src):
         self.src = src
         self.ptr = 0
@@ -41,8 +47,11 @@ class Toker:
         self.ptr += num
         return self.src[self.ptr - num:self.ptr]
 
+    def is_eof(self):
+        return self.ptr >= len(self.src)
+
     def next(self):
-        if self.ptr >= len(self.src):
+        if self.is_eof():
             return Token("EOF")
 
         if self.ch(2) == "//":
@@ -51,7 +60,7 @@ class Toker:
             return self.next()
         elif self.ch() in string.ascii_letters:
             s = ""
-            while self.ch() in string.ascii_letters + string.digits + "_":
+            while self.ch() in string.ascii_letters + string.digits + "_" and not self.is_eof():
                 s += self.adv()
             if s in self.keywords:
                 return Token(s)
@@ -70,7 +79,7 @@ class Toker:
             return Token("number", s)
         elif self.ch(2) in ["<=", ">=", "==", "!=", "+=", "-=", "*=", "/=", "++", "--"]:
             return Token(self.adv(2))
-        elif self.ch() in "{}(),;=<>*/+-^|&~%":
+        elif self.ch() in "{}(),;=<>*/+-^|&~%:.":
             return Token(self.adv())
         elif self.ch() == "\n":
             self.adv()
@@ -84,7 +93,7 @@ class Toker:
                 self.adv()
             return self.next()
         else:
-            raise ValueError("Unexpected '%s'" % self.ch())
+            raise ValueError("Unexpected character '%s'" % self.ch())
 
     def throw(self, explanation):
         raise ParseError(explanation, self.line, self.chi)
@@ -179,6 +188,9 @@ class Node:
     def __iter__(self):
         return iter(self.children)
 
+    def __len__(self):
+        return len(self.children)
+
     def compile_error(self, message):
         raise ValueError("Line %s @ %s : '%s'" % (self.line, repr(self), message))
 
@@ -208,12 +220,39 @@ class Parser:
         else:
             self.toker.throw(explanation)
 
+    def parse_qualified_name(self):
+        lhs = Node(self.expect("ident"))
+        if self.isn("."):
+            self.expect(".")
+            return Node(".", self.parse_qualified_name(), lhs)
+        return lhs
+
+    def parse_type(self):
+        lhs = self.parse_qualified_name()
+        if self.isn("<"):
+            self.expect("<")
+            lhs = Node("<>", lhs)
+            while True:
+                lhs.add(self.parse_type())
+                if not self.isn(","):
+                    break
+                self.expect(",")
+            self.expect(">")
+        return lhs
+
+    def parse_type_annotation(self):
+        self.expect(":")
+        return self.parse_type()
+
     def parse_fn_params(self):
         self.expect("(")
         nod = Node("fnparams")
         should_loop = not self.isn(")")
         while should_loop:
-            nod.add(Node(self.next()))
+            param = Node("fnparam", Node(self.expect("ident")))
+            self.expect(":")
+            param.add(self.parse_type())
+            nod.add(param)
             if not self.isn(","):
                 break
             self.expect(",")
@@ -232,6 +271,8 @@ class Parser:
             return Node(self.expect("not"), self.parse_comparison())
         elif self.isn("number"):
             return Node(self.expect("number"))
+        elif self.peek().of("true", "false"):
+            return Node(self.next())
         elif self.isn("ident"):
             if self.isn("(", num=2):
                 return self.parse_fcall()
@@ -326,8 +367,16 @@ class Parser:
             return nod
         elif tok.isn("let"):
             nod = Node(self.expect("let"), Node(self.expect("ident")))
-            self.expect("=")
-            nod.add(self.parse_expr())
+            if self.isn(":"):
+                self.expect(":")
+                nod.add(self.parse_type())
+            else:
+                # This is so that the second child of a `let` node is always
+                # the type, and the third is always the value or nonpresent.
+                nod.add(Node("infer_type"))
+            if self.isn("="):
+                self.expect("=")
+                nod.add(self.parse_expr())
             while self.isn(";"):
                 self.expect(";")
             return nod
@@ -362,7 +411,7 @@ class Parser:
 
     def parse_fn(self):
         tok = self.expect("fn")
-        fn = Node("fn", Node(self.expect("ident")), self.parse_fn_params(), self.parse_statement())
+        fn = Node("fn", Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation(), self.parse_statement())
         return fn
 
     def parse(self):
@@ -373,9 +422,18 @@ class Parser:
             nod.add(self.parse_fn())
         return nod
 
+def parse_type(data):
+    return Parser(Toker(data)).parse_type()
+
 if __name__ == "__main__":
-    Parser(Toker("""
-    fn abc(abc) {
-        let a = 100;
-    }
-    """[1:])).parse().output()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename")
+    args = parser.parse_args()
+
+    data = None
+    with open(args.filename, "r") as f:
+        data = f.read()
+
+    Parser(Toker(data)).parse().output()
