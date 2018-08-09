@@ -131,7 +131,7 @@ class MethodEmitter:
             opcodes.append(ops["load"].ins(register, abs(nt)))
             if nt < 0:
                 opcodes.append(ops["twocomp"].ins(register))
-        elif node.of("+", "*", "^", "&", "|", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
+        elif node.of("+", "*", "^", "&", "|", "%", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
             lhs = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs)
             rhs = self.scope.allocate(self.types.decide_type(node[1], self.scope))
@@ -142,6 +142,7 @@ class MethodEmitter:
                 "^": "xor",
                 "&": "and",
                 "|": "or",
+                "%": "modulo",
                 "==": "equals",
                 "<": "lt",
                 ">": "gt",
@@ -179,7 +180,7 @@ class MethodEmitter:
                 opcodes += self.emit_expr(node[0], register)
                 opcodes.append(ops["twocomp"].ins(register))
             else:
-                lhs = self.scope.allocate(self.typesys.decide_type(node[0], self.scope))
+                lhs = self.scope.allocate(self.types.decide_type(node[0], self.scope))
                 opcodes += self.emit_expr(node[0], lhs)
                 rhs = self.scope.allocate(self.types.decide_type(node[1], self.scope))
                 opcodes += self.emit_expr(node[1], rhs)
@@ -187,6 +188,8 @@ class MethodEmitter:
                 opcodes.append(ops["add"].ins(lhs, rhs, register))
         elif node.i("call"):
             signature = get_method_signature(node[0].data, self.top)
+            if len(node.children) - 1 != len(signature.args):
+                node.compile_error("Expected %s arguments, got %s" % (len(signature.args), len(node.children) - 1))
             for param, index in zip(node.children[1:], range(len(node.children) - 1)):
                 inferred_type = self.types.decide_type(param, self.scope)
                 declared_type = signature.args[index]
@@ -285,7 +288,7 @@ class MethodEmitter:
             eachtime = annotate(self.emit_statement(node[2]), "for loop each time")
             result += eachtime
             condition_register = self.scope.allocate(self.types.decide_type(node[1], self.scope))
-            if not condition_register.is_boolean():
+            if not condition_register.type.is_boolean():
                 raise typesys.TypingError(node, "Condition of a for loop must be boolean")
             conditional = annotate(self.emit_expr(node[1], condition_register), "for loop condition")
             result += conditional
@@ -449,7 +452,6 @@ class Program:
 
     def prescan(self):
         self.emitter.top.xattrs["signatures"] = MethodSignature.scan(self.emitter.top, self.types)
-        print(self.emitter.top.xattrs["signatures"])
 
     def add_include(self, headers):
         for method in headers.methods:
@@ -485,6 +487,7 @@ if __name__ == "__main__":
     argparser.add_argument("--segments", action="store_true", help="display segments (for debugging)")
     argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
     argparser.add_argument("--headers", action="store_true", help="display headers (for debugging)")
+    argparser.add_argument("--signatures", action="store_true", help="display signatures (for debugging)")
     argparser.add_argument("-o", "--output", metavar="file", help="file for bytecode output")
     argparser.add_argument("-i", "--include", metavar="file", action="append", help="files to link against")
     args = argparser.parse_args()
@@ -506,6 +509,10 @@ if __name__ == "__main__":
     if args.include:
         for include in args.include:
             program.add_include(header.from_slb(include))
+    if args.signatures:
+        print("Signatures:")
+        for signature in program.top.xattrs["signatures"]:
+            print("    %s" % signature)
     program.evaluate()
 
     program.add_metadata()

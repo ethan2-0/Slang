@@ -71,7 +71,7 @@ class TypeSystem:
         raise TypingError(node, "Could not resolve type: '%s'" % name)
 
     def decide_type(self, expr, scope):
-        if expr.of("+", "*", "-", "^", "&", "|"):
+        if expr.of("+", "*", "-", "^", "&", "|", "%") and len(expr) == 2:
             lhs_type = self.decide_type(expr[0], scope)
             rhs_type = self.decide_type(expr[1], scope)
             if not lhs_type.is_numerical():
@@ -120,7 +120,7 @@ class TypeSystem:
             if not type.is_boolean():
                 raise TypingError(expr[0], "Type %s is not boolean" % type)
             return self.bool_type
-        elif expr.i("~"):
+        elif expr.of("~", "-") and len(expr) == 1:
             type = self.decide_type(expr[0], scope)
             if not type.is_numerical():
                 raise TypingError(expr[0], "Type %s is not numerical" % type)

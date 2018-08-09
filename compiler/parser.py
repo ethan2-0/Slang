@@ -55,6 +55,8 @@ class Toker:
             return Token("EOF")
 
         if self.ch(2) == "//":
+            # NOTE: If / does anything other than division and /=, then we need
+            #       to make sure // always means a comment.
             while self.ch() != "\n":
                 self.adv()
             return self.next()
