@@ -1,0 +1,12 @@
+fn lookup(isTwo: bool, isThree: bool): int {
+    if(isTwo) {
+        return 2;
+    } else if(isThree) {
+        return 3;
+    } else {
+        return 4;
+    }
+}
+fn main(): int {
+    return lookup(true, false) * 256 + lookup(false, true) * 16 + lookup(false, false);
+}

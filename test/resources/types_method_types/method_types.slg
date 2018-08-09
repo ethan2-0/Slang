@@ -1,0 +1,10 @@
+fn fun(a: int, b: int, shouldMul: bool): int {
+    if(shouldMul) {
+        return a * b;
+    } else {
+        return a | b;
+    }
+}
+fn main(): bool {
+    return fun(1, 2, true) < 5;
+}

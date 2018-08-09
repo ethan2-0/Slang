@@ -1,0 +1,7 @@
+{
+  "test_compiler.py::TestIntegrationInclude::()::test_include": true,
+  "test_compiler.py::TestInterpreterIfSemantics::()::test_ifsemantics": true,
+  "test_compiler.py::TestInterpreterMethodCall::()::test_methodcall": true,
+  "test_compiler.py::TestInterpreterMinimal::()::test_minimal": true,
+  "test_compiler.py::TestInterpreterRecursion::()::test_minimal": true
+}

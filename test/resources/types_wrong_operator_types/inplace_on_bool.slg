@@ -1,0 +1,5 @@
+fn main(): bool {
+    let b = true;
+    b += 2;
+    return b;
+}

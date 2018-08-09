@@ -1,0 +1,6 @@
+fn fun(x: int): int {
+    return x + 5;
+}
+fn main(): int {
+    return fun(true);
+}

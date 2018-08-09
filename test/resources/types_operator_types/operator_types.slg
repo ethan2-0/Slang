@@ -1,0 +1,20 @@
+fn main(): int {
+    let a: int = 1 + 1;
+    let b: int = a * a;
+    let c: int = b & b;
+    let d: int = c | c;
+    let e: int = d ^ d;
+    let f: int = e % 3;
+    let g: int = ~e;
+    let h: int = -f;
+    let i: bool = a <= b;
+    let j: bool = a < b;
+    let k: bool = a == b;
+    let l: bool = a != b;
+    let m: bool = a > b;
+    let n: bool = a >= b;
+    let o: bool = m and n;
+    let p: bool = n or o;
+    let q: bool = not p;
+    return 0;
+}
