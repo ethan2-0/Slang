@@ -2,6 +2,9 @@ import struct
 import binascii
 import json
 
+def encode_str(s):
+    return struct.pack("!I", len(s.encode("utf8"))) + s.encode("utf8")
+
 class MethodBytecodeEmitter:
     def __init__(self, opcodes):
         self.opcodes = opcodes
@@ -26,14 +29,11 @@ class MethodBytecodeEmitter:
             elif paramtype == "register":
                 params += struct.pack("!I", param.id)
             elif paramtype == "method":
-                encoding = param.name.encode("utf8")
-                params += struct.pack("!I", len(encoding))
-                params += encoding
+                params += encode_str(param.name)
             elif paramtype == "instruction":
                 params += struct.pack("!I", param.index)
         ret = struct.pack("!B", opcode.opcode.code) + params
         return ret
-
 
     def emit(self):
         ret = b""
@@ -58,7 +58,11 @@ class SegmentEmitterMethod(SegmentEmitter):
     def emit(self, segment):
         ret = SegmentEmitter.emit(self, segment)
         header = struct.pack("!III", segment.num_registers, segment.signature.nargs, len(segment.signature.name)) + segment.signature.name.encode("utf8")
-        body = MethodBytecodeEmitter(segment.opcodes).emit()
+        body_header = b""
+        body_header += encode_str(segment.signature.returntype.name)
+        for argtype in segment.signature.args:
+            body_header += encode_str(argtype.name)
+        body = body_header + MethodBytecodeEmitter(segment.opcodes).emit()
         length = struct.pack("!I", len(header + body))
         return ret + length + header + body
 
@@ -74,7 +78,7 @@ class SegmentEmitterMetadata(SegmentEmitter):
         else:
             body = struct.pack("!I", 0)
         headers_serialized = json.dumps(segment.headers.serialize(), separators=(",", ":"))
-        body += struct.pack("!I", len(headers_serialized)) + headers_serialized.encode("utf8")
+        body += encode_str(headers_serialized)
         return ret + body
 
 emitters = [SegmentEmitterMetadata(), SegmentEmitterMethod()]
