@@ -176,10 +176,10 @@ void it_execute(it_PROGRAM* prog) {
             iptr++;
             continue;
         case OPCODE_GOTO:
-            iptr = instruction_start + ((it_OPCODE_DATA_GOTO*) iptr->payload)->target;
             #if DEBUG
             printf("Jumping to %d\n", ((it_OPCODE_DATA_GOTO*) iptr->payload)->target);
             #endif
+            iptr = instruction_start + ((it_OPCODE_DATA_GOTO*) iptr->payload)->target;
             continue;
         case OPCODE_JF:
             // JF stands for Jump if False.

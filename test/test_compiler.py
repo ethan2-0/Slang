@@ -20,7 +20,7 @@ class TestInterpreterMinimal:
         assert "0x00000001" in util.interpret(path)
 
 class TestInterpreterRecursion:
-    def test_minimal(self):
+    def test_recursion(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/interpreter_recursion/recursion.slg")
         assert "0x00000001" in util.interpret(path)
