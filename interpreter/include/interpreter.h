@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include "typesys.h"
+
 typedef struct {
     uint8_t type;
     void* payload;
@@ -10,6 +13,9 @@ typedef struct {
     char* name;
     uint32_t registerc;
     it_OPCODE* opcodes;
+    ts_TYPE* returntype;
+    // This is a pointer to an array
+    ts_TYPE** argument_types;
 } it_METHOD;
 typedef struct {
     // This is the number of methods

@@ -222,9 +222,14 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     printf("Register count %d\n", registerc);
     printf("Id %d\n", id);
     printf("Nargs %d\n", nargs);
-    printf("Name %s\n", result->name);
     printf("End index %d\n", end_index);
     #endif
+    // NOTE: If we ever want to garbage-collect methods, we need to free this
+    result->argument_types = malloc(sizeof(ts_TYPE*) * nargs);
+    for(int i = 0; i < nargs; i++) {
+        result->argument_types[i] = ts_get_type(fr_getstr(state));
+    }
+    result->returntype = ts_get_type(fr_getstr(state));
     int num_opcodes = 0;
     while(state->index < end_index) {
         bc_parse_opcode(state, program, &opcode_buff[num_opcodes]);
