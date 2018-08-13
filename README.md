@@ -4,7 +4,9 @@ I've worked on it off-and-on ever since.
 
 At the moment, the language supports little more than arithmetic, loops, and
 method calls; no support for arrays or more advanced constructs like structs
-exists at the moment, though it's certainly planned.
+exists at the moment, though it's certainly planned. The language has a simple
+type system, in which everything is either an int or a bool, and never the twain
+shall meet.
 
 The language, which I call Slang, requires really clever use of recursion to
 prove turing completeness, owing to the lack of arrays at the moment, though I'm

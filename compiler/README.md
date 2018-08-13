@@ -26,6 +26,12 @@ register any time one is needed). This is really wasteful, and at some point I'd
 like to add a better register allocator, or perhaps register renaming at the
 interpreter level, though that's much lower priority than other optimizations.
 
+The implementation of the type system relies on expressions having types that
+can be determined without any of the surrounding context. This makes it very
+easy to simply decide the type of an expression and then compare it with the
+expected type. At the moment, the implementation is quite slow (from a
+time-complexity perspective), but that can be solved with dynamic programming.
+
 The compiler is written in Python because I'm mostly in this project for the
 experience writing an interpreter, so I wanted to spend as little time as
 possible writing the compiler.
