@@ -51,11 +51,18 @@ class Opcode:
                     complain_about_typechecking()
             elif param_type == "int" or param_type == "paramreg":
                 None if isinstance(arg, int) else complain_about_typechecking()
+            elif param_type == "property":
+                None if isinstance(arg, str) else complain_about_typechecking()
             elif param_type == "instruction":
                 None if isinstance(arg, OpcodeInstance) else complain_about_typechecking()
             elif param_type == "method":
                 try:
                     arg.looks_like_method_handle()
+                except:
+                    complain_about_typechecking()
+            elif param_type == "class":
+                try:
+                    arg.looks_like_class_signature()
                 except:
                     complain_about_typechecking()
             else:

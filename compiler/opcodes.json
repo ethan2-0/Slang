@@ -19,10 +19,31 @@
         "reads": ["params"]
     },
     {
+        "code": "0x18",
+        "mneumonic": "NEW",
+        "params": ["class", "register"],
+        "writes": [1, "params"]
+    },
+    {
+        "code": "0x19",
+        "mneumonic": "ACCESS",
+        "params": ["register", "property", "register"],
+        "writes": [2],
+        "reads": [0]
+    },
+    {
+        "code": "0x20",
+        "mneumonic": "ASSIGN",
+        "params": ["register", "property", "register"],
+        "writes": [2],
+        "reads": [0]
+    },
+    {
         "code": "0x0e",
         "mneumonic": "PARAM",
         "params": ["register", "paramreg"],
-        "reads": [0]
+        "reads": [0],
+        "writes": ["params"]
     },
     {
         "code": "0x07",

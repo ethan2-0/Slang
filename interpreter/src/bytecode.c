@@ -184,6 +184,9 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
             // Ignore the entrypoint name at this step of parsing
             fr_getstr(state);
             fr_getstr(state);
+        } else if(segment_type == SEGMENT_TYPE_CLASS) {
+            uint32_t length = fr_getuint32(state);
+            fr_advance(state, (int) length);
         }
     }
 
@@ -284,6 +287,9 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
                 program->entrypoint = bc_resolve_name(program, name);
             }
             fr_getstr(state);
+        } else if(segment_type == SEGMENT_TYPE_CLASS) {
+            uint32_t length = fr_getuint32(state);
+            fr_advance(state, (int) length);
         } else {
             #if DEBUG
             printf("Segment type %02x\n", segment_type);
@@ -355,6 +361,9 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
                 // Metadata segment
                 fr_getstr(state[i]);
                 fr_getstr(state[i]);
+            } else if(segment_type == SEGMENT_TYPE_CLASS) {
+                uint32_t length = fr_getuint32(state);
+                fr_advance(state, (int) length);
             }
         }
     }

@@ -30,6 +30,10 @@ class MethodBytecodeEmitter:
                 params += struct.pack("!I", param.id)
             elif paramtype == "method":
                 params += encode_str(param.name)
+            elif paramtype == "class":
+                params += encode_str(param.name)
+            elif paramtype == "property":
+                params += encode_str(param)
             elif paramtype == "instruction":
                 params += struct.pack("!I", param.index)
         ret = struct.pack("!B", opcode.opcode.code) + params
@@ -74,14 +78,27 @@ class SegmentEmitterMetadata(SegmentEmitter):
         ret = SegmentEmitter.emit(self, segment)
         body = None
         if segment.has_entrypoint():
-            body = struct.pack("!I", len(segment.entrypoint.name)) + segment.entrypoint.name.encode("utf8")
+            body = encode_str(segment.entrypoint.name)
         else:
             body = struct.pack("!I", 0)
         headers_serialized = json.dumps(segment.headers.serialize(), separators=(",", ":"))
         body += encode_str(headers_serialized)
         return ret + body
 
-emitters = [SegmentEmitterMetadata(), SegmentEmitterMethod()]
+class SegmentEmitterClazz(SegmentEmitter):
+    def __init__(self):
+        SegmentEmitter.__init__(self, "class")
+
+    def emit(self, segment):
+        ret = SegmentEmitter.emit(self, segment)
+        body = encode_str(segment.name)
+        body += struct.pack("!I", len(segment.fields))
+        for field in segment.fields:
+            body += encode_str(field.name)
+            body += encode_str(field.type.name)
+        return ret + struct.pack("!I", len(body)) + body
+
+emitters = [SegmentEmitterMetadata(), SegmentEmitterMethod(), SegmentEmitterClazz()]
 
 def emit(segments):
     ret = binascii.unhexlify(b"cf702b56")

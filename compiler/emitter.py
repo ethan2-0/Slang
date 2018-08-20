@@ -101,6 +101,8 @@ class MethodSignature:
     def scan(top, types):
         ret = []
         for method in top:
+            if not method.i("fn"):
+                continue
             signature = [types.resolve(arg[1]) for arg in method[1]]
             argnames = [arg[0].data for arg in method[1]]
             ret.append(MethodSignature(method[0].data, signature, argnames, types.resolve(method[2])))
@@ -201,6 +203,18 @@ class MethodEmitter:
             if signature is None or signature.nargs != len(node.children) - 1:
                 node.compile_error("Invalid or nonexistent method signature '%s'" % signature)
             opcodes.append(ops["call"].ins(signature, register))
+        elif node.i("new"):
+            signature = self.program.get_clazz_signature(node[0].data)
+            opcodes.append(ops["new"].ins(signature, register))
+        elif node.i("."):
+            lhs_reg = None
+            if node[0].i("ident"):
+                lhs_reg = self.scope.resolve(node[0].data, node[0])
+            else:
+                # node, register
+                lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+                opcodes += self.emit_expr(node[0], lhs_reg)
+            opcodes.append(ops["access"].ins(lhs_reg, node[1].data, register))
         else:
             node.compile_error("Unexpected")
         return opcodes
@@ -251,10 +265,44 @@ class MethodEmitter:
                 opcodes.append(ops["zero"].ins(reg))
             opcodes.append(ops["return"].ins(reg))
         elif node.i("assignment"):
-            reg = self.scope.resolve(node[0].data, node[0])
-            if not reg.type.is_assignable_from(self.types.decide_type(node[1], self.scope)):
+            rhs_type = self.types.decide_type(node[1], self.scope)
+            resultreg = self.scope.allocate(rhs_type)
+            opcodes += self.emit_expr(node[1], resultreg)
+            current_node = node[0]
+            result_type = None
+            if current_node.i("ident"):
+                resreg = self.scope.resolve(current_node.data, current_node)
+                opcodes += ops["mov"].ins(resultreg, resreg)
+                result_type = resreg.type
+            current_reg = None
+            while True:
+                if not current_node[0].i("ident"):
+                    current_node[0].compile_error()
+                if current_node[1].i("ident"):
+                    if current_reg is None:
+                        current_reg = self.scope.resolve(current_node[0].data, current_node[0])
+                    else:
+                        new_reg = self.scope.allocate(current_reg.type.type_of_property(current_node[0].data))
+                        opcodes.append(ops["access"].ins(current_reg, current_node[0].data, new_reg))
+                        current_reg = new_reg
+                    opcodes.append(ops["assign"].ins(current_reg, current_node[1].data, resultreg))
+                    result_type = current_reg.type.type_of_property(current_node[1].data, current_node[1])
+                    break
+                elif current_node[1].i("."):
+                    if current_reg is None:
+                        current_reg = self.scope.resolve(current_node[0].data, current_node[0])
+                    else:
+                        # TODO: typecheck that it has such a property
+                        new_reg = self.scope.allocate(current_reg.type.type_of_property(current_node[0].data, current_node[0]))
+                        opcodes.append(ops["access"].ins(current_reg, current_node[0].data, new_reg))
+                        current_reg = new_reg
+                    current_node = current_node[1]
+                else:
+                    current_node[1].compile_error()
+
+            if not result_type.is_assignable_from(rhs_type):
+                print(current_reg.type, rhs_type)
                 raise typesys.TypingError(node, "Need RHS to be assignable to LHS")
-            opcodes += self.emit_expr(node[1], reg)
         elif node.of("+=", "*=", "-="):
             reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             opcodes += self.emit_expr(node[1], reg)
@@ -408,14 +456,68 @@ class MetadataSegment(Segment):
     def evaluate(self, program):
         Segment.evaluate(self, program)
 
+class ClazzField:
+    def __init__(self, name, type):
+        self.name = name
+        self.type = type
+
+class ClazzSignature:
+    def __init__(self, name, fields):
+        self.name = name
+        self.fields = fields
+
+    def looks_like_class_signature(self):
+        pass
+
+class ClazzSegment(Segment):
+    def __init__(self, emitter):
+        Segment.__init__(self, "class", 0x02)
+        self.emitter = emitter
+        self.signature = emitter.signature
+        self.name = self.signature.name
+        self.fields = self.signature.fields
+
+    def __str__(self):
+        # TODO
+        return "ClazzSegment(type='%s', typecode=%s, name=%s, nfields=%s)" % (self.humantype, self.realtype, self.name, len(self.fields))
+
+    def print_(self, emitter):
+        Segment.print_(self, emitter)
+        print(str(self))
+        for field in self.fields:
+            print("    %s: %s" % (field.name, field.type.name))
+
+    def evaluate(self, program):
+        Segment.evaluate(self, program)
+
+class ClazzEmitter:
+    def __init__(self, top, program):
+        self.top = top
+        self.program = program
+
+    def _emit_field(self, node):
+        return ClazzField(node[0].data, self.program.types.resolve(node[1]))
+
+    def emit_signature_no_fields(self):
+        return ClazzSignature(self.top[0].data, [])
+
+    def emit(self):
+        self.name = self.top[0].data
+        self.fields = []
+        for field in self.top[1]:
+            self.fields.append(self._emit_field(field))
+        self.signature = ClazzSignature(self.name, self.fields)
+        return ClazzSegment(self)
+
 class Program:
     def __init__(self, emitter):
         self.methods = []
         self.emitter = emitter
         self.top = emitter.top
-        # self.segments = list(methods) # Shallow copy
         self.segments = []
         self.types = typesys.TypeSystem(self)
+        self.clazzes = []
+        self.clazz_signatures = []
 
     def get_entrypoint(self):
         for method in self.methods:
@@ -426,6 +528,11 @@ class Program:
     def get_method_signature(self, name):
         return get_method_signature(name, self.top, is_real_top=True)
 
+    def get_clazz_signature(self, name):
+        for signature in self.clazz_signatures:
+            if signature.name == name:
+                return signature
+
     def has_entrypoint(self):
         return self.get_entrypoint() is not None
 
@@ -434,10 +541,11 @@ class Program:
         return MethodSegment(method, get_method_signature(method[0].data, method))
 
     def evaluate(self):
-        for method in self.top:
-            method = self.emit_method(method)
-            self.methods.append(method)
-            self.segments.append(method)
+        for toplevel in self.top:
+            if toplevel.i("fn"):
+                method = self.emit_method(toplevel)
+                self.methods.append(method)
+                self.segments.append(method)
         for method in self.methods:
             method.evaluate(self)
 
@@ -451,6 +559,21 @@ class Program:
             self.segments.append(MetadataSegment(headers=self.get_header_representation()))
 
     def prescan(self):
+        clazz_emitters = []
+        for toplevel in self.top:
+            if not toplevel.i("class"):
+                continue
+            clazz_emitters.append(ClazzEmitter(toplevel, self))
+        for emitter in clazz_emitters:
+            signature = emitter.emit_signature_no_fields()
+            self.clazz_signatures.append(signature)
+            self.types.accept_skeleton_clazz(signature)
+        for emitter, index in zip(clazz_emitters, range(len(clazz_emitters))):
+            segment = emitter.emit()
+            self.types.accept_fleshed_out_clazz(segment)
+            self.clazzes.append(segment)
+            self.segments.append(segment)
+            self.clazz_signatures[index] = segment.signature
         self.emitter.top.xattrs["signatures"] = MethodSignature.scan(self.emitter.top, self.types)
 
     def add_include(self, headers):

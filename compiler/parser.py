@@ -2,7 +2,7 @@ import string
 
 class ParseError(ValueError):
     def __init__(self, explanation, line, chr):
-        ValueError.__init__(self, "%s (near line %s, char %s)" % (explanation, line + 1, chr))
+        ValueError.__init__(self, "%s (near line %s, char %s)" % (explanation, line, chr))
 
 class Token:
     def __init__(self, type, data=None):
@@ -29,7 +29,7 @@ class Token:
         return repr(self)
 
 class Toker:
-    keywords = ["fn", "let", "and", "or", "not", "if", "else", "while", "for", "return", "true", "false"]
+    keywords = ["fn", "class", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not"]
     def __init__(self, src):
         self.src = src
         self.ptr = 0
@@ -100,16 +100,18 @@ class Toker:
     def throw(self, explanation):
         raise ParseError(explanation, self.line, self.chi)
 
+    def get_state(self):
+        return (self.ptr, self.line, self.chn)
+
+    def set_state(self, state):
+        self.ptr, self.line, self.chn = state
+
     def peek(self, num=1):
-        ptr = self.ptr
-        line = self.line
-        chn = self.chn
+        state = self.get_state()
         ret = None
         for i in range(num):
             ret = self.next()
-        self.ptr = ptr
-        self.line = line
-        self.chn = chn
+        self.set_state(state)
         return ret
 
     def isn(self, type, data=None, num=1):
@@ -226,7 +228,7 @@ class Parser:
         lhs = Node(self.expect("ident"))
         if self.isn("."):
             self.expect(".")
-            return Node(".", self.parse_qualified_name(), lhs)
+            return Node(".", lhs, self.parse_qualified_name())
         return lhs
 
     def parse_type(self):
@@ -275,11 +277,17 @@ class Parser:
             return Node(self.expect("number"))
         elif self.peek().of("true", "false"):
             return Node(self.next())
+        elif self.isn("new"):
+            # For now, no parentheses on new: `new Object`, not `new Object()`
+            return Node(self.next(), Node(self.expect("ident")))
         elif self.isn("ident"):
             if self.isn("(", num=2):
                 return self.parse_fcall()
             else:
-                return Node(self.expect("ident"))
+                ret = Node(self.expect("ident"))
+                while self.isn("."):
+                    ret = Node(self.expect("."), ret, Node(self.expect("ident")))
+                return ret
         else:
             self.throw(self.next())
 
@@ -383,14 +391,18 @@ class Parser:
                 self.expect(";")
             return nod
         elif tok.isn("ident"):
+            state = self.toker.get_state()
+            self.parse_qualified_name()
+            token_after_chain = self.next()
+            self.toker.set_state(state)
             ident = self.peek()
-            if self.isn("=", num=2):
-                self.next()
-                self.next()
+            if token_after_chain.isn("="):
+                qualified = self.parse_qualified_name()
+                self.expect("=")
                 expr = self.parse_expr()
                 while self.isn(";"):
                     self.expect(";")
-                return Node("assignment", Node(ident), expr)
+                return Node("assignment", qualified, expr)
             elif self.isn("(", num=2):
                 return self.parse_fcall()
             elif self.peek(num=2).type in ["+=", "-=", "*=", "/="]:
@@ -412,16 +424,31 @@ class Parser:
             self.throw(tok)
 
     def parse_fn(self):
-        tok = self.expect("fn")
-        fn = Node("fn", Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation(), self.parse_statement())
+        fn = Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation(), self.parse_statement())
         return fn
+
+    def parse_class(self):
+        nod = Node(self.expect("class"), Node(self.expect("ident")))
+        body = Node("classbody")
+        nod.add(body)
+        self.expect("{")
+        while not self.isn("}"):
+            body.add(Node("classprop", Node(self.expect("ident")), self.parse_type_annotation()))
+            self.expect(";")
+        self.expect("}")
+        return nod
 
     def parse(self):
         global last_parser
         last_parser = self
         nod = Node("top")
         while not self.isn("EOF"):
-            nod.add(self.parse_fn())
+            if self.isn("fn"):
+                nod.add(self.parse_fn())
+            elif self.isn("class"):
+                nod.add(self.parse_class())
+            else:
+                self.throw(self.next())
         return nod
 
 def parse_type(data):

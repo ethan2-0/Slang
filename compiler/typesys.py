@@ -22,6 +22,9 @@ class AbstractType:
     def is_boolean(self):
         return False
 
+    def is_clazz(self):
+        return False
+
     def resolves(self, node):
         return node.i("ident") and node.data == self.name
 
@@ -57,18 +60,54 @@ class BoolType(AbstractType):
     def is_boolean(self):
         return True
 
+class ClazzType(AbstractType):
+    def __init__(self, signature):
+        AbstractType.__init__(self, signature.name)
+        self.signature = signature
+
+    def is_assignable_to(self, other):
+        return isinstance(other, ClazzType) and other.name == self.name
+
+    def is_assignable_from(self, other):
+        return isinstance(other, ClazzType) and other.name == self.name
+
+    def type_of_property(self, name, node=None):
+        for field in self.signature.fields:
+            if field.name == name:
+                return field.type
+        if node is not None:
+            node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
+
+    def is_clazz(self):
+        return True
+
 class TypeSystem:
     def __init__(self, program):
         self.program = program
         self.int_type = IntType()
         self.bool_type = BoolType()
         self.types = [self.int_type, self.bool_type]
+        self.clazz_signatures = []
 
-    def resolve(self, node):
+    def resolve(self, node, fail_silent=False):
         for type in self.types:
             if type.resolves(node):
                 return type
-        raise TypingError(node, "Could not resolve type: '%s'" % name)
+        if not fail_silent:
+            raise TypingError(node, "Could not resolve type: '%s'" % name)
+
+    def accept_skeleton_clazz(self, signature):
+        self.clazz_signatures.append(signature)
+        self.types.append(ClazzType(signature))
+
+    def accept_fleshed_out_clazz(self, signature):
+        # TODO: This makes class resolution n^2
+        for i in range(len(self.clazz_signatures)):
+            if self.clazz_signatures[i].name == signature.name:
+                self.clazz_signatures[i] = signature
+        for type in self.types:
+            if isinstance(type, ClazzType) and type.name == signature.name:
+                type.signature = signature
 
     def decide_type(self, expr, scope):
         if expr.of("+", "*", "-", "^", "&", "|", "%") and len(expr) == 2:
@@ -135,6 +174,15 @@ class TypeSystem:
             if signature is None:
                 expr.compile_error("Unknown method name '%s'" % expr[0].data)
             return signature.returntype
+        elif expr.i("new"):
+            return self.resolve(expr[0])
+        elif expr.i("."):
+            lhs_type = None
+            if expr[0].i("ident"):
+                lhs_type = scope.resolve(expr[0].data, expr[0]).type
+            else:
+                lhs_type = self.decide_type(expr[0], scope)
+            return lhs_type.type_of_property(expr[1].data)
         else:
-            print("Unrecognized expression getting type of None")
+            print("Unrecognized expression getting type of None", expr)
             return None
