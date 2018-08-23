@@ -1,0 +1,9 @@
+class Point {
+    x: int;
+    y: int;
+}
+fn main(): int {
+    let pt = new Point;
+    pt.x = 5;
+    return pt.x;
+}

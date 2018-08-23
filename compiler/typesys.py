@@ -175,7 +175,10 @@ class TypeSystem:
                 expr.compile_error("Unknown method name '%s'" % expr[0].data)
             return signature.returntype
         elif expr.i("new"):
-            return self.resolve(expr[0])
+            ret = self.resolve(expr[0])
+            if not ret.is_clazz():
+                raise TypingError(expr[0], "Type %s is not a class" % ret)
+            return ret
         elif expr.i("."):
             lhs_type = None
             if expr[0].i("ident"):

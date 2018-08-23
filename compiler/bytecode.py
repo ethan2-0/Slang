@@ -61,11 +61,11 @@ class SegmentEmitterMethod(SegmentEmitter):
 
     def emit(self, segment):
         ret = SegmentEmitter.emit(self, segment)
-        header = struct.pack("!III", segment.num_registers, segment.signature.nargs, len(segment.signature.name)) + segment.signature.name.encode("utf8")
+        header = struct.pack("!II", segment.num_registers, segment.signature.nargs) + encode_str(segment.signature.name)
         body_header = b""
         body_header += encode_str(segment.signature.returntype.name)
-        for argtype in segment.signature.args:
-            body_header += encode_str(argtype.name)
+        for register in segment.scope.registers:
+            body_header += encode_str(register.type.name)
         body = body_header + MethodBytecodeEmitter(segment.opcodes).emit()
         length = struct.pack("!I", len(header + body))
         return ret + length + header + body

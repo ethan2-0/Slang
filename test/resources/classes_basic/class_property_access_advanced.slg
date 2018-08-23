@@ -1,0 +1,21 @@
+class Point {
+    x: int;
+    y: int;
+}
+class Rectangle {
+    topleft: Point;
+    width: int;
+    height: int;
+}
+fn rect_right(rect: Rectangle): int {
+    return rect.topleft.x + rect.width;
+}
+fn main(): int {
+    let rect = new Rectangle;
+    rect.topleft = new Point;
+    rect.topleft.x = 23;
+    rect.topleft.y = 29;
+    rect.width = 31;
+    rect.height = 37;
+    return rect_right(rect);
+}

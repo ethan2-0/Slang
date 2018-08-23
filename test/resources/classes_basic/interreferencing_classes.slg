@@ -1,0 +1,11 @@
+class Rectangle {
+    topleft: Point;
+    bottomright: Point;
+}
+class Point {
+    x: int;
+    y: int;
+}
+fn main(): bool {
+    return true;
+}

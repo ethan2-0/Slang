@@ -1,4 +1,8 @@
 #include <stdint.h>
+#include "typesys.h"
+
+#ifndef OPCODES_H
+#define OPCODES_H
 
 #define SEGMENT_TYPE_METHOD 0x00
 #define SEGMENT_TYPE_METADATA 0x01
@@ -27,6 +31,9 @@
 #define OPCODE_SEP 0x15
 #define OPCODE_LOAD 0x16
 #define OPCODE_LT 0x17
+#define OPCODE_NEW 0x18
+#define OPCODE_ACCESS 0x19
+#define OPCODE_ASSIGN 0x1a
 
 typedef struct {
     uint32_t target;
@@ -118,3 +125,19 @@ typedef struct {
     uint32_t source2;
     uint32_t target;
 } it_OPCODE_DATA_LT;
+typedef struct {
+    ts_TYPE_CLAZZ* clazz;
+    uint32_t dest;
+} it_OPCODE_DATA_NEW;
+typedef struct {
+    uint32_t clazzreg;
+    uint32_t property_index;
+    uint32_t destination;
+} it_OPCODE_DATA_ACCESS;
+typedef struct {
+    uint32_t clazzreg;
+    uint32_t property_index;
+    uint32_t source;
+} it_OPCODE_DATA_ASSIGN;
+
+#endif

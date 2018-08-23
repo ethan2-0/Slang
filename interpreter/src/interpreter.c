@@ -9,8 +9,6 @@
 
 #define STACKSIZE 1024
 
-typedef uint64_t itval;
-
 typedef struct {
     itval* registers;
     int registerc;
@@ -54,6 +52,7 @@ void it_execute(it_PROGRAM* prog) {
     // See the documentation for PARAM and CALL for details.
     // Note that this is preserved globally across method calls.
     itval params[256];
+    memset(params, 0, sizeof(itval) * 256);
 
     // TODO: Do something smarter for dispatch here
     while(1) {
@@ -121,57 +120,59 @@ void it_execute(it_PROGRAM* prog) {
             iptr++;
             continue;
         case OPCODE_ZERO:
-            registers[((it_OPCODE_DATA_ZERO*) iptr->payload)->target] = 0x00000000;
+            registers[((it_OPCODE_DATA_ZERO*) iptr->payload)->target].number = 0x00000000;
             iptr++;
             continue;
         case OPCODE_ADD:
-            registers[((it_OPCODE_DATA_ADD*) iptr->payload)->target] = registers[((it_OPCODE_DATA_ADD*) iptr->payload)->source1] + registers[((it_OPCODE_DATA_ADD*) iptr->payload)->source2];
+            registers[((it_OPCODE_DATA_ADD*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_ADD*) iptr->payload)->source1].number + registers[((it_OPCODE_DATA_ADD*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_TWOCOMP:
             // TODO: There's a compiler bug to do with TWOCOMP and the fact it's an inplace operation.
             //       I should change TWOCOMP to use a source and a destination like with other instructions like MOV.
-            registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target] = -registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target];
+            registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number = -registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number;
             iptr++;
             continue;
         case OPCODE_MULT:
-            registers[((it_OPCODE_DATA_MULT*) iptr->payload)->target] = registers[((it_OPCODE_DATA_MULT*) iptr->payload)->source1] * registers[((it_OPCODE_DATA_MULT*) iptr->payload)->source2];
+            registers[((it_OPCODE_DATA_MULT*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_MULT*) iptr->payload)->source1].number * registers[((it_OPCODE_DATA_MULT*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_MODULO:
-            registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->target] = registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source1] % registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source2];
+            registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number % registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_EQUALS:
-            if(registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source1] == registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source2]) {
-                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target] = 0x1;
+            // TODO: Make this work on systems where sizeof(itval.number) != sizeof(itval.itval)
+            //       This probably involves a specialized EQUALS opcode, either in the compiler or
+            //       just specializing in bytecode.c.
+            if(registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source1].number == registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source2].number) {
+                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target] = 0x0;
+                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_INVERT:
-            // TODO: Does the compiler bug with TWOCOMP apply here too?
-            if(registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target] == 0x0) {
-                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target] = 0x1;
+            if(registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target].number == 0x0) {
+                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target] = 0x0;
+                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_LTEQ:
-            if(registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source1] <= registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source2]) {
-                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target] = 0x1;
+            if(registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source1].number <= registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source2].number) {
+                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target] = 0x0;
+                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_GT:
-            if(registers[((it_OPCODE_DATA_GT*) iptr->payload)->source1] > registers[((it_OPCODE_DATA_GT*) iptr->payload)->source2]) {
-                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x1;
+            if(registers[((it_OPCODE_DATA_GT*) iptr->payload)->source1].number > registers[((it_OPCODE_DATA_GT*) iptr->payload)->source2].number) {
+                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target] = 0x0;
+                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
@@ -183,7 +184,7 @@ void it_execute(it_PROGRAM* prog) {
             continue;
         case OPCODE_JF:
             // JF stands for Jump if False.
-            if(registers[((it_OPCODE_DATA_JF*) iptr->payload)->predicate] == 0x00) {
+            if(registers[((it_OPCODE_DATA_JF*) iptr->payload)->predicate].number == 0x00) {
                 #if DEBUG
                 printf("Jumping to %d\n", ((it_OPCODE_DATA_JF*) iptr->payload)->target);
                 #endif
@@ -193,23 +194,23 @@ void it_execute(it_PROGRAM* prog) {
             }
             continue;
         case OPCODE_GTEQ:
-            if(registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source1] >= registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source2]) {
-                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x1;
+            if(registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source1].number >= registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source2].number) {
+                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target] = 0x0;
+                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_XOR:
-            registers[((it_OPCODE_DATA_XOR*) iptr->payload)->target] = registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source1] ^ registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source2];
+            registers[((it_OPCODE_DATA_XOR*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source1].number ^ registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_AND:
-            registers[((it_OPCODE_DATA_AND*) iptr->payload)->target] = registers[((it_OPCODE_DATA_AND*) iptr->payload)->source1] & registers[((it_OPCODE_DATA_AND*) iptr->payload)->source2];
+            registers[((it_OPCODE_DATA_AND*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_AND*) iptr->payload)->source1].number & registers[((it_OPCODE_DATA_AND*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_OR:
-            registers[((it_OPCODE_DATA_OR*) iptr->payload)->target] = registers[((it_OPCODE_DATA_OR*) iptr->payload)->source1] | registers[((it_OPCODE_DATA_OR*) iptr->payload)->source2];
+            registers[((it_OPCODE_DATA_OR*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_OR*) iptr->payload)->source1].number | registers[((it_OPCODE_DATA_OR*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_MOV:
@@ -224,15 +225,40 @@ void it_execute(it_PROGRAM* prog) {
             iptr++;
             continue;
         case OPCODE_LOAD:
-            registers[((it_OPCODE_DATA_LOAD*) iptr->payload)->target] = ((it_OPCODE_DATA_LOAD*) iptr->payload)->data;
+            registers[((it_OPCODE_DATA_LOAD*) iptr->payload)->target].number = ((it_OPCODE_DATA_LOAD*) iptr->payload)->data;
             iptr++;
             continue;
         case OPCODE_LT:
-            if(registers[((it_OPCODE_DATA_LT*) iptr->payload)->source1] < registers[((it_OPCODE_DATA_LT*) iptr->payload)->source2]) {
-                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target] = 0x1;
+            if(registers[((it_OPCODE_DATA_LT*) iptr->payload)->source1].number < registers[((it_OPCODE_DATA_LT*) iptr->payload)->source2].number) {
+                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target] = 0x0;
+                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x0;
             }
+            iptr++;
+            continue;
+        case OPCODE_NEW:
+            ;
+            it_OPCODE_DATA_NEW* opcode_new_data = (it_OPCODE_DATA_NEW*) iptr->payload;
+            registers[opcode_new_data->dest].itval = malloc(sizeof(itval) * opcode_new_data->clazz->nfields);
+            memset(registers[opcode_new_data->dest].itval, 0, sizeof(itval) * opcode_new_data->clazz->nfields);
+            iptr++;
+            continue;
+        case OPCODE_ACCESS:
+            ;
+            it_OPCODE_DATA_ACCESS* opcode_access_data = (it_OPCODE_DATA_ACCESS*) iptr->payload;
+            if(registers[opcode_access_data->clazzreg].itval == NULL) {
+                fatal("Null pointer on access");
+            }
+            registers[opcode_access_data->destination] = registers[opcode_access_data->clazzreg].itval[opcode_access_data->property_index];
+            iptr++;
+            continue;
+        case OPCODE_ASSIGN:
+            ;
+            it_OPCODE_DATA_ASSIGN* opcode_assign_data = (it_OPCODE_DATA_ASSIGN*) iptr->payload;
+            if(registers[opcode_assign_data->clazzreg].itval == NULL) {
+                fatal("Null pointer on access");
+            }
+            registers[opcode_assign_data->clazzreg].itval[opcode_assign_data->property_index] = registers[opcode_assign_data->source];
             iptr++;
             continue;
         default:

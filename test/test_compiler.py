@@ -1,4 +1,3 @@
-# These tests are for tests that don't ever touch the interpreter.
 import util
 
 class TestInterpreterIfSemantics:
@@ -36,6 +35,54 @@ class TestIntegrationKitchenSink:
     def test_kitchensink(self):
         util.clean_tmp()
         util.assert_compile_succeeds("resources/integration_kitchensink/kitchensink.slg")
+
+class TestClazzesBasic:
+    def test_clazz(self):
+        util.clean_tmp()
+        util.assert_compile_succeeds("resources/classes_basic/class.slg")
+
+    def test_clazz_interpreter(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_basic/class.slg")
+        util.interpret(path)
+
+    def test_clazz_new_unknown_type(self):
+        util.clean_tmp()
+        util.assert_compile_fails("resources/classes_basic/class_new_unknown_type.slg")
+
+    def test_clazz_new_primitive_type(self):
+        util.clean_tmp()
+        util.assert_compile_fails("resources/classes_basic/class_new_primitive_type.slg", message="Type :bool is not a class")
+
+    def test_interreferencing_clazzes(self):
+        util.clean_tmp()
+        util.assert_compile_succeeds("resources/classes_basic/interreferencing_classes.slg")
+
+    def test_interreferencing_clazzes_interpreter(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_basic/interreferencing_classes.slg")
+        util.interpret(path)
+
+    def test_property_access(self):
+        util.clean_tmp()
+        util.assert_compile_succeeds("resources/classes_basic/class_property_access.slg")
+
+    def test_property_access_interpreter(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_basic/class_property_access.slg")
+        util.interpret(path)
+
+    def test_property_access_advanced(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_basic/class_property_access_advanced.slg")
+        util.interpret(path)
+
+    def test_clazz_nullptr(self):
+        # This isn't permanent behavior by any stretch, but I'll codify it anyway.
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_basic/class_nullptr.slg")
+        assert "Null pointer" in util.interpret(path, expect_fail=True)
+
 
 class TestMethodTypes:
     def test_method_types(self):

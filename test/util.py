@@ -17,7 +17,7 @@ def do_compile(filename, outfile, include=[]):
     if not isinstance(include, list):
         include = [include]
     include_specifiers = list(itertools.chain.from_iterable([["--include", incl] for incl in include]))
-    return subprocess.run(["python3", resolve_filename("../compiler/emitter.py"), "-o", outfile,] + include_specifiers + [resolve_filename(filename)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return subprocess.run(["python3", resolve_filename("../compiler/emitter.py"), "-o", outfile,] + include_specifiers + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 def assert_compile_succeeds(filename, message="", include=[]):
     outfile = resolve_temp_path(os.path.split(filename)[1])
@@ -38,9 +38,9 @@ def assert_compile_fails(filename, message="", include=[]):
         assert False
     return outfile
 
-def interpret(*filenames):
+def interpret(*filenames, expect_fail=False):
     result = subprocess.run(["../interpreter/builddir/interpreter"] + list(filenames), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    assert result.returncode == 0
+    assert (result.returncode == 0) ^ expect_fail
     return result.stdout.decode("utf8")
 
 def clean_tmp():

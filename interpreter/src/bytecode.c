@@ -5,11 +5,12 @@
 #include "common.h"
 #include "opcodes.h"
 #include "interpreter.h"
+#include "typesys.h"
 
 uint32_t bc_resolve_name(it_PROGRAM* program, char* callee_name);
 uint32_t bc_assign_method_id(it_PROGRAM* program);
 
-void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_OPCODE* opcode) {
+void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it_OPCODE* opcode) {
     uint8_t opcode_num = fr_getuint8(state);
     opcode->type = opcode_num;
     #if DEBUG
@@ -156,6 +157,36 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_OPCODE* opcode) {
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
+    } else if(opcode_num == OPCODE_NEW) {
+        it_OPCODE_DATA_NEW* data = malloc(sizeof(it_OPCODE_DATA_NEW));
+        data->clazz = (ts_TYPE_CLAZZ*) ts_get_type(fr_getstr(state));
+        if(data->clazz->category != ts_CATEGORY_CLAZZ) {
+            fatal("Attempt to instantiate something that isn't a class");
+        }
+        data->dest = fr_getuint32(state);
+        opcode->payload = data;
+    } else if(opcode_num == OPCODE_ACCESS) {
+        it_OPCODE_DATA_ACCESS* data = malloc(sizeof(it_OPCODE_DATA_ACCESS));
+        data->clazzreg = fr_getuint32(state);
+        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->clazzreg];
+        if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
+            fatal("Attempt to access something that isn't a class");
+        }
+        data->property_index = ts_get_field_index(clazzreg_type, fr_getstr(state));
+        data->destination = fr_getuint32(state);
+        opcode->payload = data;
+    } else if(opcode_num == OPCODE_ASSIGN) {
+        it_OPCODE_DATA_ASSIGN* data = malloc(sizeof(it_OPCODE_DATA_ASSIGN));
+        data->clazzreg = fr_getuint32(state);
+        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->clazzreg];
+        if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
+            fatal("Attempt to assign to a property of something that isn't a class");
+        }
+        data->property_index = ts_get_field_index(clazzreg_type, fr_getstr(state));
+        data->source = fr_getuint32(state);
+        opcode->payload = data;
+    } else {
+        fatal("Unrecognized opcode");
     }
 }
 typedef struct {
@@ -163,6 +194,9 @@ typedef struct {
     uint32_t entrypoint_id;
 } bc_PRESCAN_RESULTS;
 bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
+    #if DEBUG
+    printf("Entering bc_prescan\n");
+    #endif
     bc_PRESCAN_RESULTS* results = malloc(sizeof(bc_PRESCAN_RESULTS));
     results->num_methods = 0;
 
@@ -191,6 +225,9 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
     }
 
     fr_rewind(state);
+    #if DEBUG
+    printf("Exiting bc_prescan\n");
+    #endif
     return results;
 }
 uint32_t bc_assign_method_id(it_PROGRAM* program) {
@@ -228,14 +265,18 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     printf("End index %d\n", end_index);
     #endif
     // NOTE: If we ever want to garbage-collect methods, we need to free this
-    result->argument_types = malloc(sizeof(ts_TYPE*) * nargs);
-    for(int i = 0; i < nargs; i++) {
-        result->argument_types[i] = ts_get_type(fr_getstr(state));
-    }
     result->returntype = ts_get_type(fr_getstr(state));
+    result->argument_types = malloc(sizeof(ts_TYPE*) * registerc);
+    for(int i = 0; i < registerc; i++) {
+        char* typename = fr_getstr(state);
+        #if DEBUG
+        printf("Got register type '%s'\n", typename);
+        #endif
+        result->argument_types[i] = ts_get_type(typename);
+    }
     int num_opcodes = 0;
     while(state->index < end_index) {
-        bc_parse_opcode(state, program, &opcode_buff[num_opcodes]);
+        bc_parse_opcode(state, program, result, &opcode_buff[num_opcodes]);
         num_opcodes++;
     }
     result->registerc = registerc;
@@ -256,6 +297,62 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     #if DEBUG
     printf("Done parsing method\n");
     #endif
+}
+void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* state) {
+    while(!fr_iseof(state)) {
+        uint8_t segment_type = fr_getuint8(state);
+        if(segment_type == SEGMENT_TYPE_METHOD) {
+            fr_advance(state, fr_getuint32(state));
+        } else if(segment_type == SEGMENT_TYPE_METADATA) {
+            fr_getstr(state);
+            fr_getstr(state);
+        } else if(segment_type == SEGMENT_TYPE_CLASS) {
+            fr_getuint32(state); // length
+            char* clazzname = fr_getstr(state);
+            #if DEBUG
+            printf("Prescanning class '%s'\n", clazzname);
+            #endif
+            uint32_t numfields = fr_getuint32(state);
+            for(uint32_t i = 0; i < numfields; i++) {
+                fr_getstr(state);
+                fr_getstr(state);
+            }
+            ts_TYPE_CLAZZ* clazz = malloc(sizeof(ts_TYPE_CLAZZ));
+            clazz->category = ts_CATEGORY_CLAZZ;
+            clazz->id = ts_allocate_type_id();
+            clazz->heirarchy_len = 1;
+            clazz->heirarchy = malloc(sizeof(ts_TYPE*));
+            clazz->heirarchy[0] = (ts_TYPE*) clazz;
+            clazz->nfields = -1;
+            clazz->fields = NULL;
+            ts_register_type((ts_TYPE*) clazz, clazzname);
+        }
+    }
+    fr_rewind(state);
+    fr_getuint32(state); // magic number
+    while(!fr_iseof(state)) {
+        uint8_t segment_type = fr_getuint8(state);
+        if(segment_type == SEGMENT_TYPE_METHOD) {
+            fr_advance(state, fr_getuint32(state));
+        } else if(segment_type == SEGMENT_TYPE_METADATA) {
+            fr_getstr(state);
+            fr_getstr(state);
+        } else if(segment_type == SEGMENT_TYPE_CLASS) {
+            fr_getuint32(state);
+            char* clazzname = fr_getstr(state);
+            #if DEBUG
+            printf("Scanning class '%s'\n", clazzname);
+            #endif
+            uint32_t numfields = fr_getuint32(state);
+            ts_TYPE_CLAZZ* clazz = (ts_TYPE_CLAZZ*) ts_get_type(clazzname);
+            clazz->nfields = numfields;
+            clazz->fields = malloc(sizeof(ts_CLAZZ_FIELD) * numfields);
+            for(uint32_t i = 0; i < numfields; i++) {
+                clazz->fields[i].name = fr_getstr(state);
+                clazz->fields[i].type = ts_get_type(fr_getstr(state));
+            }
+        }
+    }
 }
 void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
     // state->methodc and state->methods are already initialized
@@ -330,7 +427,12 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     //     int num_methods;
     //     uint32_t entrypoint_id;
     // } bc_PRESCAN_RESULTS;
-
+    for(int i = 0; i < fpc; i++) {
+        bc_scan_types(result, prescan[i], state[i]);
+        fr_rewind(state[i]);
+        // Ignore the magic number
+        fr_getuint32(state[i]);
+    }
     for(int i = 0, method_index = 0; i < fpc; i++) {
         bc_scan_methods(result, state[i], method_index);
         method_index += prescan[i]->num_methods;
@@ -362,8 +464,8 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
                 fr_getstr(state[i]);
                 fr_getstr(state[i]);
             } else if(segment_type == SEGMENT_TYPE_CLASS) {
-                uint32_t length = fr_getuint32(state);
-                fr_advance(state, (int) length);
+                uint32_t length = fr_getuint32(state[i]);
+                fr_advance(state[i], (int) length);
             }
         }
     }

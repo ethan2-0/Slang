@@ -1,6 +1,17 @@
 #include <stdint.h>
 #include "typesys.h"
 
+#ifndef INTERPRETER_H
+#define INTERPRETER_H
+
+union itval {
+    uint64_t number;
+    // This is a pointer to an array of itval
+    union itval* itval;
+};
+
+typedef union itval itval;
+
 typedef struct {
     uint8_t type;
     void* payload;
@@ -29,3 +40,5 @@ typedef struct {
 } it_PROGRAM;
 
 void it_RUN(it_PROGRAM* prog);
+
+#endif

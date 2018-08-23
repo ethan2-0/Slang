@@ -412,7 +412,8 @@ class MethodSegment(Segment):
         self.method = method
         self.signature = signature
         self.opcodes = None
-        self.num_registers=None
+        self.num_registers = None
+        self.scope = None
         self.opcodes = None
 
     def emit_opcodes(self, program):
@@ -421,6 +422,7 @@ class MethodSegment(Segment):
         # TODO: This is spaghetti code
         self.emitter = emitter
         self.num_registers = emitter.scope.register_ids
+        self.scope = emitter.scope
         self.opcodes = ret
         return ret
 

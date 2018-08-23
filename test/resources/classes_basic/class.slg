@@ -1,0 +1,7 @@
+class Clazz {
+    width: int;
+    height: int;
+}
+fn main(): bool {
+    return true;
+}

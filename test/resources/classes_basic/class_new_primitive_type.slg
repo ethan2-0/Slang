@@ -1,0 +1,3 @@
+fn main(): bool {
+    return new bool == new bool;
+}
