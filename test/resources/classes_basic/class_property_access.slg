@@ -1,9 +1,10 @@
 class Point {
     x: int;
     y: int;
+    ctor() {}
 }
 fn main(): int {
-    let pt = new Point;
+    let pt = new Point();
     pt.x = 5;
     return pt.x;
 }

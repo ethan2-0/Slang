@@ -13,15 +13,15 @@ tmpdir = resolve_filename("tmp")
 def resolve_temp_path(temp_path):
     return os.path.join(tmpdir, temp_path)
 
-def do_compile(filename, outfile, include=[]):
+def do_compile(filename, outfile, include=[], parse_only=False):
     if not isinstance(include, list):
         include = [include]
     include_specifiers = list(itertools.chain.from_iterable([["--include", incl] for incl in include]))
-    return subprocess.run(["python3", resolve_filename("../compiler/emitter.py"), "-o", outfile,] + include_specifiers + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return subprocess.run(["python3", resolve_filename("../compiler/emitter.py"), "-o", outfile,] + include_specifiers + (["--parse-only"] if parse_only else []) + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-def assert_compile_succeeds(filename, message="", include=[]):
+def assert_compile_succeeds(filename, message="", include=[], parse_only=False):
     outfile = resolve_temp_path(os.path.split(filename)[1])
-    completed_process = do_compile(filename, outfile, include)
+    completed_process = do_compile(filename, outfile, include, parse_only=parse_only)
     # I know, I shouldn't just coerce to utf8...
     stdout = completed_process.stdout.decode("utf8")
     if completed_process.returncode != 0 or message not in stdout:

@@ -1,16 +1,17 @@
 fn pow(base: int, power: int): int {
-    for let i = 0 i < 50 i++ base *= power return base
+    let result = base for let i = 0 i < power i++ result *= base return result
 }
-fn getFalse(): bool {
-    return false
-}
+fn getFalse(): bool return false
 fn loop(n: int): int {
+    let k = 0;
     while n > 0 {
         if not getFalse() n--
+        k += 2
     }
-    return n
+    return k
 }
 fn main(): int {
-    let result = pow((1 + 2) & (3 + 4) - ((3 ^ ~6) * (7 & 8 | 9)), 2)
-    return loop(result) + result
+    let intermediate = ((1 + 2) & (3 + 4) - ((3 ^ ~6) * (7 & 8 | 9)) + 1) & 15;
+    intermediate = loop(intermediate);
+    return pow(2, intermediate);
 }

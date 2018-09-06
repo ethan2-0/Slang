@@ -34,7 +34,8 @@ class TestIntegrationInclude:
 class TestIntegrationKitchenSink:
     def test_kitchensink(self):
         util.clean_tmp()
-        util.assert_compile_succeeds("resources/integration_kitchensink/kitchensink.slg")
+        path = util.assert_compile_succeeds("resources/integration_kitchensink/kitchensink.slg")
+        assert "0x00100000" in util.interpret(path)
 
 class TestClazzesBasic:
     def test_clazz(self):
@@ -83,6 +84,11 @@ class TestClazzesBasic:
         path = util.assert_compile_succeeds("resources/classes_basic/class_nullptr.slg")
         assert "Null pointer" in util.interpret(path, expect_fail=True)
 
+class TestClassesMethods:
+    def test_classes_method(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_methods/class_method.slg", parse_only=True)
+        util.interpret(path)
 
 class TestMethodTypes:
     def test_method_types(self):
