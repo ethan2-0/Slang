@@ -78,6 +78,13 @@ class ClazzType(AbstractType):
         if node is not None:
             node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
 
+    def method_signature(self, name, node=None):
+        for method in self.signature.method_signatures:
+            if method.name == name:
+                return method
+        if node is not None:
+            node.compile_error("Invalid class method name '%s' for type '%s'" % (name, self.type))
+
     def is_clazz(self):
         return True
 
@@ -94,20 +101,35 @@ class TypeSystem:
             if type.resolves(node):
                 return type
         if not fail_silent:
-            raise TypingError(node, "Could not resolve type: '%s'" % name)
+            raise TypingError(node, "Could not resolve type: '%s'" % node)
 
     def accept_skeleton_clazz(self, signature):
         self.clazz_signatures.append(signature)
         self.types.append(ClazzType(signature))
 
-    def accept_fleshed_out_clazz(self, signature):
+    def update_signature(self, signature):
         # TODO: This makes class resolution n^2
+        found = False
         for i in range(len(self.clazz_signatures)):
             if self.clazz_signatures[i].name == signature.name:
                 self.clazz_signatures[i] = signature
+                found = True
+        if not found:
+            raise KeyError()
+
+        found = False
         for type in self.types:
             if isinstance(type, ClazzType) and type.name == signature.name:
                 type.signature = signature
+                found = True
+        if not found:
+            raise KeyError()
+
+    def get_clazz_type_by_signature(self, signature):
+        for type in self.types:
+            if isinstance(type, ClazzType) and type.signature == signature:
+                return type
+        raise KeyError()
 
     def decide_type(self, expr, scope):
         if expr.of("+", "*", "-", "^", "&", "|", "%") and len(expr) == 2:
@@ -170,7 +192,15 @@ class TypeSystem:
             return self.bool_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.
-            signature = self.program.get_method_signature(expr[0].data)
+            signature = None
+            if expr[0].i("."):
+                dot_node = expr[0]
+                lhs_type = self.decide_type(dot_node[0], scope)
+                if not lhs_type.is_clazz():
+                    raise TypingError(dot_node[1], "Attempt to call a method on non-class type '%s'" % lhs_type)
+                signature = lhs_type.method_signature(dot_node[1].data)
+            else:
+                signature = self.program.get_method_signature(expr[0].data)
             if signature is None:
                 expr.compile_error("Unknown method name '%s'" % expr[0].data)
             return signature.returntype

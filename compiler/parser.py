@@ -29,7 +29,7 @@ class Token:
         return repr(self)
 
 class Toker:
-    keywords = ["fn", "class", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not"]
+    keywords = ["class", "fn", "ctor", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not"]
     def __init__(self, src):
         self.src = src
         self.ptr = 0
@@ -231,6 +231,22 @@ class Parser:
             return Node(".", lhs, self.parse_qualified_name())
         return lhs
 
+    def parse_chain(self):
+        ret = Node("chain")
+        ret.add(Node(self.expect("ident")))
+        while self.isn(".") or self.isn("("):
+            if self.isn("."):
+                self.expect(".")
+                if self.isn("(", num=2):
+                    ret.add(Node("call", Node(self.expect("ident")), *self.parse_fcall_params()))
+                else:
+                    ret.add(Node(".", Node(self.expect("ident"))))
+            else:
+                self.throw("Couldn't parse property chain")
+            # elif self.isn("("):
+            #     ret.add(Node("call", *self.parse_fcall_params()))
+        return ret
+
     def parse_type(self):
         lhs = self.parse_qualified_name()
         if self.isn("<"):
@@ -278,16 +294,15 @@ class Parser:
         elif self.peek().of("true", "false"):
             return Node(self.next())
         elif self.isn("new"):
-            # For now, no parentheses on new: `new Object`, not `new Object()`
-            return Node(self.next(), Node(self.expect("ident")))
+            return Node(self.next(), Node(self.expect("ident")), *self.parse_fcall_params())
         elif self.isn("ident"):
-            if self.isn("(", num=2):
-                return self.parse_fcall()
-            else:
-                ret = Node(self.expect("ident"))
-                while self.isn("."):
+            ret = Node(self.expect("ident"))
+            while self.isn(".") or self.isn("("):
+                if self.isn("."):
                     ret = Node(self.expect("."), ret, Node(self.expect("ident")))
-                return ret
+                elif self.isn("("):
+                    ret = Node("call", ret, *self.parse_fcall_params())
+            return ret
         else:
             self.throw(self.next())
 
@@ -324,14 +339,18 @@ class Parser:
     def parse_expr(self):
         return self.parse_logical()
 
-    def parse_fcall(self):
-        nod = Node("call", Node(self.expect("ident")))
+    def parse_fcall_params(self):
+        ret = []
         self.expect("(")
         while not self.isn(")"):
-            nod.add(self.parse_expr())
+            ret.append(self.parse_expr())
             if self.isn(","):
                 self.next()
         self.expect(")")
+        return ret
+
+    def parse_fcall(self):
+        nod = Node("call", Node(self.expect("ident")), *self.parse_fcall_params())
 
         while self.isn(";"):
             self.expect(";")
@@ -392,22 +411,20 @@ class Parser:
             return nod
         elif tok.isn("ident"):
             state = self.toker.get_state()
-            self.parse_qualified_name()
+            peek_chain = self.parse_chain()
             token_after_chain = self.next()
             self.toker.set_state(state)
-            ident = self.peek()
             if token_after_chain.isn("="):
-                qualified = self.parse_qualified_name()
+                chain = self.parse_chain()
                 self.expect("=")
                 expr = self.parse_expr()
                 while self.isn(";"):
                     self.expect(";")
-                return Node("assignment", qualified, expr)
-            elif self.isn("(", num=2):
-                return self.parse_fcall()
-            elif self.peek(num=2).type in ["+=", "-=", "*=", "/="]:
-                ident = self.next()
-                nod = Node(self.next(), Node(ident), self.parse_expr())
+                return Node("assignment", chain, expr)
+            elif token_after_chain.of("+=", "-=", "*=", "/="):
+                # ident = self.next()
+                chain = self.parse_chain()
+                nod = Node(self.next(), chain, self.parse_expr())
                 while self.isn(";"):
                     self.expect(";")
                 return nod
@@ -417,6 +434,11 @@ class Parser:
                 while self.isn(";"):
                     self.expect(";")
                 return nod
+            elif peek_chain[-1].i("call"):
+                ret = self.parse_chain()
+                while self.isn(";"):
+                    self.expect(";")
+                return ret
             else:
                 self.next()
                 self.throw(self.next())
@@ -424,8 +446,10 @@ class Parser:
             self.throw(tok)
 
     def parse_fn(self):
-        fn = Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation(), self.parse_statement())
-        return fn
+        return Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation(), self.parse_statement())
+
+    def parse_ctor(self):
+        return Node(self.expect("ctor"), self.parse_fn_params(), self.parse_statement())
 
     def parse_class(self):
         nod = Node(self.expect("class"), Node(self.expect("ident")))
@@ -433,8 +457,13 @@ class Parser:
         nod.add(body)
         self.expect("{")
         while not self.isn("}"):
-            body.add(Node("classprop", Node(self.expect("ident")), self.parse_type_annotation()))
-            self.expect(";")
+            if self.isn("ident"):
+                body.add(Node("classprop", Node(self.expect("ident")), self.parse_type_annotation()))
+                self.expect(";")
+            elif self.isn("fn"):
+                body.add(self.parse_fn())
+            elif self.isn("ctor"):
+                body.add(self.parse_ctor())
         self.expect("}")
         return nod
 

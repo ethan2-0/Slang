@@ -12,6 +12,13 @@
         "writes": [0]
     },
     {
+        "code": "0x1b",
+        "mneumonic": "CLASSCALL",
+        "params": ["register", "method", "register"],
+        "writes": [2, "params"],
+        "reads": [0, "params"]
+    },
+    {
         "code": "0x06",
         "mneumonic": "CALL",
         "params": ["method", "register"],
@@ -35,8 +42,8 @@
         "code": "0x1a",
         "mneumonic": "ASSIGN",
         "params": ["register", "property", "register"],
-        "writes": [2],
-        "reads": [0]
+        "writes": [0],
+        "reads": [2]
     },
     {
         "code": "0x0e",

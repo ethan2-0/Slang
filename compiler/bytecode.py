@@ -63,6 +63,7 @@ class SegmentEmitterMethod(SegmentEmitter):
         ret = SegmentEmitter.emit(self, segment)
         header = struct.pack("!II", segment.num_registers, segment.signature.nargs) + encode_str(segment.signature.name)
         body_header = b""
+        body_header += encode_str("" if segment.signature.containing_class is None else segment.signature.containing_class.name)
         body_header += encode_str(segment.signature.returntype.name)
         for register in segment.scope.registers:
             body_header += encode_str(register.type.name)
