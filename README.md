@@ -2,11 +2,9 @@ This is a programming language that I've created from start to finish to learn
 about language design. This dates back since around February of this year, and
 I've worked on it off-and-on ever since.
 
-At the moment, the language supports little more than arithmetic, loops, and
-method calls; no support for arrays or more advanced constructs like structs
-exists at the moment, though it's certainly planned. The language has a simple
-type system, in which everything is either an int or a bool, and never the twain
-shall meet.
+At the moment, the language supports methods, simple types, and simple classes
+with methods but without inheritance. It's complete enough that I've
+implemented a simple linked list class in it with no trouble.
 
 The language, which I call Slang, requires really clever use of recursion to
 prove turing completeness, owing to the lack of arrays at the moment, though I'm

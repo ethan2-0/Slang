@@ -6,13 +6,21 @@ compiler are the spec, but I hope to improve that at some point.
 Given an input file, run:
 
 ~~~sh
-python3 emitter.py <infile>
+python3 emitter.py <infile>.slg
 ~~~
+
+This will produce an output file named `<infile>.slb`.
 
 There are additional flags you can see by running:
 
 ~~~sh
 python3 emitter.py --help
+~~~
+
+Then, run the interpreter on the resulting bytecode file:
+
+~~~sh
+./path/to/interpreter path/to/slb/file
 ~~~
 
 # Under the hood
@@ -31,7 +39,3 @@ can be determined without any of the surrounding context. This makes it very
 easy to simply decide the type of an expression and then compare it with the
 expected type. At the moment, the implementation is quite slow (from a
 time-complexity perspective), but that can be solved with dynamic programming.
-
-The compiler is written in Python because I'm mostly in this project for the
-experience writing an interpreter, so I wanted to spend as little time as
-possible writing the compiler.
