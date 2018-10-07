@@ -46,14 +46,22 @@ typedef enum ts_CATEGORY ts_CATEGORY;
 
 ts_TYPE* ts_get_type(char* name);
 int ts_get_field_index(ts_TYPE_CLAZZ* clazz, char* name);
+int ts_get_method_index(ts_TYPE_CLAZZ* clazz, char* name);
 void ts_register_type(ts_TYPE* type, char* name);
 uint32_t ts_allocate_type_id();
 
+struct it_CLAZZ_DATA;
 
 union itval {
     uint64_t number;
     // This is a pointer to an array of itval
-    union itval* itval;
+    // union itval* itval;
+    struct it_CLAZZ_DATA* clazz_data;
+};
+
+struct it_CLAZZ_DATA {
+    ts_TYPE_CLAZZ* phi_table;
+    union itval itval[1];
 };
 
 typedef union itval itval;
@@ -62,7 +70,7 @@ typedef struct {
     uint8_t type;
     void* payload;
 } it_OPCODE;
-typedef struct {
+struct it_METHOD {
     uint32_t id;
     // This could technically be a uint8_t, but ehh
     int nargs;
@@ -74,20 +82,22 @@ typedef struct {
     // This is a pointer to an array
     ts_TYPE** argument_types;
     ts_TYPE_CLAZZ* containing_clazz;
-} it_METHOD;
+};
 typedef struct {
     // This is the number of methods
     int methodc;
     // This is the methods, in an arbitrary order
-    it_METHOD* methods;
+    struct it_METHOD* methods;
     // This is the current method ID
     uint32_t method_id;
     // This is the entrypoint, as an index into `methods`.
     int entrypoint;
+    int clazzesc;
     // This is a pointer to an array of pointers of classes
     ts_TYPE_CLAZZ** clazzes;
-    int clazzesc;
 } it_PROGRAM;
+
+typedef struct it_METHOD it_METHOD;
 
 void it_RUN(it_PROGRAM* prog);
 

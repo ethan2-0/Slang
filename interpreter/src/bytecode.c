@@ -188,8 +188,13 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
     } else if(opcode_num == OPCODE_CLASSCALL) {
         it_OPCODE_DATA_CLASSCALL* data = malloc(sizeof(it_OPCODE_DATA_CLASSCALL));
         data->targetreg = fr_getuint32(state);
+        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->targetreg];
+        if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
+            fatal("Attempt to call a method of something that isn't a class");
+        }
         char* callee_name = fr_getstr(state);
-        data->callee = bc_resolve_name(program, callee_name);
+        // data->callee = bc_resolve_name(program, callee_name);
+        data->callee_index = ts_get_method_index(clazzreg_type, callee_name);
         free(callee_name);
         data->returnreg = fr_getuint32(state);
         opcode->payload = data;
@@ -255,6 +260,9 @@ uint32_t bc_resolve_name(it_PROGRAM* program, char* name) {
             return program->methods[i].id;
         }
     }
+    #if DEBUG
+    printf("Name: %s\n", name);
+    #endif
     fatal("Asked to resolve unknown name");
     // Unreachable
     return -1;
@@ -467,6 +475,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     printf("%d methods\n", result->methodc);
     #endif
     result->methods = malloc(sizeof(it_METHOD) * result->methodc);
+    result->clazzes = malloc(sizeof(ts_TYPE_CLAZZ*) * result->clazzesc);
     // typedef struct {
     //     int num_methods;
     //     uint32_t entrypoint_id;
@@ -477,6 +486,9 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
         // Ignore the magic number
         fr_getuint32(state[i]);
     }
+    #if DEBUG
+    printf("Again, %d methods\n", result->methodc);
+    #endif
     for(int i = 0, method_index = 0; i < fpc; i++) {
         bc_scan_methods(result, state[i], method_index);
         method_index += prescan[i]->num_methods;

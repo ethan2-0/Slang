@@ -60,6 +60,15 @@ int ts_get_field_index(ts_TYPE_CLAZZ* clazz, char* name) {
     fatal("Unable to find field");
     return -1; // Unreachable
 }
+int ts_get_method_index(ts_TYPE_CLAZZ* clazz, char* name) {
+    for(int i = 0; i < clazz->methodc; i++) {
+        if(strcmp(clazz->methods[i]->name, name) == 0) {
+            return i;
+        }
+    }
+    fatal("Unable to find class method");
+    return -1; // Unreachable
+}
 ts_TYPE* ts_get_type(char* name) {
     #if DEBUG
     printf("Searching for type '%s'\n", name);

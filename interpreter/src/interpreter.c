@@ -109,23 +109,21 @@ void it_execute(it_PROGRAM* prog) {
                 fatal("Stack overflow");
             }
 
-            uint32_t classcall_callee_id = ((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->callee;
-
-            #if DEBUG
-            printf("Class-calling %d\n", classcall_callee_id);
-            #endif
+            uint32_t classcall_callee_index = ((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->callee_index;
 
             classcall_oldstack->returnreg = ((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->returnreg;
-            it_METHOD* classcall_callee = &prog->methods[classcall_callee_id];
             itval thiz = registers[((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->targetreg];
+            it_METHOD* classcall_callee = thiz.clazz_data->phi_table->methods[classcall_callee_index];
 
             #if DEBUG
+            printf("Class-calling %s\n", classcall_callee->name);
             printf("Need %d args, incl this.\n", classcall_callee->nargs);
             printf("This: %02x\n", thiz);
             for(uint8_t i = 0; i < classcall_callee->nargs - 1; i++) {
                 printf("Argument: %02x\n", params[i]);
             }
             #endif
+
             load_method(stackptr, classcall_callee);
             registers = stackptr->registers;
             instruction_start = stackptr->iptr;
@@ -274,26 +272,27 @@ void it_execute(it_PROGRAM* prog) {
         case OPCODE_NEW:
             ;
             it_OPCODE_DATA_NEW* opcode_new_data = (it_OPCODE_DATA_NEW*) iptr->payload;
-            registers[opcode_new_data->dest].itval = malloc(sizeof(itval) * opcode_new_data->clazz->nfields);
-            memset(registers[opcode_new_data->dest].itval, 0, sizeof(itval) * opcode_new_data->clazz->nfields);
+            registers[opcode_new_data->dest].clazz_data = malloc(sizeof(ts_TYPE_CLAZZ*) + sizeof(itval) * opcode_new_data->clazz->nfields);
+            memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(itval) * opcode_new_data->clazz->nfields);
+            registers[opcode_new_data->dest].clazz_data->phi_table = opcode_new_data->clazz;
             iptr++;
             continue;
         case OPCODE_ACCESS:
             ;
             it_OPCODE_DATA_ACCESS* opcode_access_data = (it_OPCODE_DATA_ACCESS*) iptr->payload;
-            if(registers[opcode_access_data->clazzreg].itval == NULL) {
+            if(registers[opcode_access_data->clazzreg].clazz_data == NULL) {
                 fatal("Null pointer on access");
             }
-            registers[opcode_access_data->destination] = registers[opcode_access_data->clazzreg].itval[opcode_access_data->property_index];
+            registers[opcode_access_data->destination] = registers[opcode_access_data->clazzreg].clazz_data->itval[opcode_access_data->property_index];
             iptr++;
             continue;
         case OPCODE_ASSIGN:
             ;
             it_OPCODE_DATA_ASSIGN* opcode_assign_data = (it_OPCODE_DATA_ASSIGN*) iptr->payload;
-            if(registers[opcode_assign_data->clazzreg].itval == NULL) {
+            if(registers[opcode_assign_data->clazzreg].clazz_data == NULL) {
                 fatal("Null pointer on access");
             }
-            registers[opcode_assign_data->clazzreg].itval[opcode_assign_data->property_index] = registers[opcode_assign_data->source];
+            registers[opcode_assign_data->clazzreg].clazz_data->itval[opcode_assign_data->property_index] = registers[opcode_assign_data->source];
             iptr++;
             continue;
         default:

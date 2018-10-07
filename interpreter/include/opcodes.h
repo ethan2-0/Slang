@@ -142,7 +142,7 @@ typedef struct {
 } it_OPCODE_DATA_ASSIGN;
 typedef struct {
     uint32_t targetreg;
-    uint32_t callee;
+    uint32_t callee_index;
     uint32_t returnreg;
 } it_OPCODE_DATA_CLASSCALL;
 

@@ -1,4 +1,8 @@
 import util
+import os
+import os.path
+
+os.chdir(os.path.dirname(__file__))
 
 class TestInterpreterIfSemantics:
     def test_ifsemantics(self):
