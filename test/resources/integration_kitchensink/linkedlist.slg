@@ -1,0 +1,60 @@
+class LinkedListElement {
+    value: int;
+    previous: LinkedListElement;
+    next: LinkedListElement;
+    ctor(value: int, previous: LinkedListElement) {
+        this.value = value;
+        this.previous = previous;
+        let null: LinkedListElement;
+        this.next = null;
+        return;
+    }
+    fn setNext(next: LinkedListElement): bool {
+        this.next = next;
+        return true;
+    }
+}
+class LinkedList {
+    head: LinkedListElement;
+    tail: LinkedListElement;
+    ctor() {
+        let null: LinkedListElement;
+        this.head = null;
+        this.tail = null;
+        return;
+    }
+    fn addElement(value: int): bool {
+        let null: LinkedListElement;
+        let newElement = new LinkedListElement(value, this.tail);
+        if(this.head == null) {
+            this.head = newElement;
+        }
+        if(this.tail != null) {
+            this.tail.setNext(newElement);
+        }
+        this.tail = newElement;
+        return true;
+    }
+    fn sum(): int {
+        let null: LinkedListElement;
+        let currentElm = this.head;
+        if(currentElm == null) {
+            return 0;
+        }
+        let sum = 0;
+        while(currentElm.next != null) {
+            sum += currentElm.value;
+            currentElm = currentElm.next;
+        }
+        sum += currentElm.value;
+        return sum;
+    }
+}
+fn main(): int {
+    let list = new LinkedList();
+    list.addElement(1);
+    list.addElement(2);
+    list.addElement(3);
+    list.addElement(4);
+    return list.sum();
+}

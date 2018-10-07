@@ -1,13 +1,13 @@
 class Point {
     x: int;
     y: int;
-    ctor() {}
+    ctor() {return;}
 }
 class Rectangle {
     topleft: Point;
     width: int;
     height: int;
-    ctor() {}
+    ctor() {return;}
 }
 fn rect_right(rect: Rectangle): int {
     return rect.topleft.x + rect.width;

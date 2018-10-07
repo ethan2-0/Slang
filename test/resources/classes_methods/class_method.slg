@@ -1,0 +1,19 @@
+class Cls {
+    prop: int;
+    ctor(prop: int) {
+        this.prop = prop;
+        return;
+    }
+    fn getProp(): int {
+        return this.prop;
+    }
+    fn addToProp(operand: int): bool {
+        this.prop += operand;
+        return true;
+    }
+}
+fn main(): int {
+    let cls = new Cls(3);
+    cls.addToProp(5);
+    return cls.getProp();
+}

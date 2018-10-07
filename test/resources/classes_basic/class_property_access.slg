@@ -1,7 +1,7 @@
 class Point {
     x: int;
     y: int;
-    ctor() {}
+    ctor() {return;}
 }
 fn main(): int {
     let pt = new Point();

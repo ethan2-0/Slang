@@ -101,6 +101,41 @@ void it_execute(it_PROGRAM* prog) {
                 registers[i] = params[i];
             }
             continue;
+        case OPCODE_CLASSCALL:
+            ;
+            it_STACKFRAME* classcall_oldstack = stackptr;
+            stackptr++;
+            if(stackptr >= stackend) {
+                fatal("Stack overflow");
+            }
+
+            uint32_t classcall_callee_id = ((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->callee;
+
+            #if DEBUG
+            printf("Class-calling %d\n", classcall_callee_id);
+            #endif
+
+            classcall_oldstack->returnreg = ((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->returnreg;
+            it_METHOD* classcall_callee = &prog->methods[classcall_callee_id];
+            itval thiz = registers[((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->targetreg];
+
+            #if DEBUG
+            printf("Need %d args, incl this.\n", classcall_callee->nargs);
+            printf("This: %02x\n", thiz);
+            for(uint8_t i = 0; i < classcall_callee->nargs - 1; i++) {
+                printf("Argument: %02x\n", params[i]);
+            }
+            #endif
+            load_method(stackptr, classcall_callee);
+            registers = stackptr->registers;
+            instruction_start = stackptr->iptr;
+            classcall_oldstack->iptr = iptr;
+            iptr = instruction_start;
+            registers[0] = thiz;
+            for(uint32_t i = 0; i < classcall_callee->nargs - 1; i++) {
+                registers[i + 1] = params[i];
+            }
+            continue;
         case OPCODE_RETURN:
             ; // Labels can't be immediately followed by declarations, because
               // C is a barbaric language

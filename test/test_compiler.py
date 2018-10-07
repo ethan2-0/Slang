@@ -37,6 +37,11 @@ class TestIntegrationKitchenSink:
         path = util.assert_compile_succeeds("resources/integration_kitchensink/kitchensink.slg")
         assert "0x00100000" in util.interpret(path)
 
+    def test_linkedlist(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/integration_kitchensink/linkedlist.slg")
+        assert "0x0000000a" in util.interpret(path)
+
 class TestClazzesBasic:
     def test_clazz(self):
         util.clean_tmp()
@@ -87,7 +92,7 @@ class TestClazzesBasic:
 class TestClassesMethods:
     def test_classes_method(self):
         util.clean_tmp()
-        path = util.assert_compile_succeeds("resources/classes_methods/class_method.slg", parse_only=True)
+        path = util.assert_compile_succeeds("resources/classes_methods/class_method.slg")
         util.interpret(path)
 
 class TestMethodTypes:

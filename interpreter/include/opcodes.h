@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include "typesys.h"
+#include "interpreter.h"
 
 #ifndef OPCODES_H
 #define OPCODES_H
@@ -34,6 +34,7 @@
 #define OPCODE_NEW 0x18
 #define OPCODE_ACCESS 0x19
 #define OPCODE_ASSIGN 0x1a
+#define OPCODE_CLASSCALL 0x1b
 
 typedef struct {
     uint32_t target;
@@ -139,5 +140,10 @@ typedef struct {
     uint32_t property_index;
     uint32_t source;
 } it_OPCODE_DATA_ASSIGN;
+typedef struct {
+    uint32_t targetreg;
+    uint32_t callee;
+    uint32_t returnreg;
+} it_OPCODE_DATA_CLASSCALL;
 
 #endif

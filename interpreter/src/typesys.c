@@ -1,6 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
-#include "typesys.h"
+#include "interpreter.h"
 #include "common.h"
 
 typedef struct ts_TYPE_REGISTRY {
@@ -58,8 +58,12 @@ int ts_get_field_index(ts_TYPE_CLAZZ* clazz, char* name) {
         }
     }
     fatal("Unable to find field");
+    return -1; // Unreachable
 }
 ts_TYPE* ts_get_type(char* name) {
+    #if DEBUG
+    printf("Searching for type '%s'\n", name);
+    #endif
     if(global_registry == NULL) {
         ts_init_global_registry();
     }
@@ -71,4 +75,5 @@ ts_TYPE* ts_get_type(char* name) {
         registry = registry->next;
     }
     fatal("Unable to find type");
+    return NULL; // Unreachable
 }
