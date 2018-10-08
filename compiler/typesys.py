@@ -14,7 +14,7 @@ class AbstractType:
 
     def is_assignable_from(self, other):
         # Exception isAssignableFrom RuntimeException
-        pass
+        return other.is_assignable_to(self)
 
     def is_numerical(self):
         return False
@@ -41,9 +41,6 @@ class IntType(AbstractType):
     def is_assignable_to(self, other):
         return isinstance(other, IntType)
 
-    def is_assignable_from(self, other):
-        return isinstance(other, IntType)
-
     def is_numerical(self):
         return True
 
@@ -54,10 +51,14 @@ class BoolType(AbstractType):
     def is_assignable_to(self, other):
         return isinstance(other, BoolType)
 
-    def is_assignable_from(self, other):
-        return isinstance(other, BoolType)
-
     def is_boolean(self):
+        return True
+
+class VoidType(AbstractType):
+    def __init__(self):
+        AbstractType.__init__(self, "void")
+
+    def is_assignable_to(self, other):
         return True
 
 class ClazzType(AbstractType):
@@ -66,9 +67,6 @@ class ClazzType(AbstractType):
         self.signature = signature
 
     def is_assignable_to(self, other):
-        return isinstance(other, ClazzType) and other.name == self.name
-
-    def is_assignable_from(self, other):
         return isinstance(other, ClazzType) and other.name == self.name
 
     def type_of_property(self, name, node=None):
@@ -93,7 +91,8 @@ class TypeSystem:
         self.program = program
         self.int_type = IntType()
         self.bool_type = BoolType()
-        self.types = [self.int_type, self.bool_type]
+        self.void_type = VoidType()
+        self.types = [self.int_type, self.bool_type, self.void_type]
         self.clazz_signatures = []
 
     def resolve(self, node, fail_silent=False):
@@ -161,7 +160,7 @@ class TypeSystem:
         elif expr.of("==", "!="):
             lhs_type = self.decide_type(expr[0], scope)
             rhs_type = self.decide_type(expr[1], scope)
-            if not lhs_type.is_assignable_from(rhs_type) and not lhs_type.is_assignable_to(rhs_type):
+            if not lhs_type.is_assignable_to(rhs_type) and not rhs_type.is_assignable_to(lhs_type):
                 raise TypingError(expr, "Incomparable types: '%s' and '%s'" % (lhs_type, rhs_type))
             return self.bool_type
         elif expr.i("number"):
@@ -190,6 +189,8 @@ class TypeSystem:
             return scope.resolve(expr.data, expr).type
         elif expr.of("true", "false"):
             return self.bool_type
+        elif expr.i("null"):
+            return self.void_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.
             signature = None

@@ -111,6 +111,19 @@ class TestMethodTypes:
     def test_wrong_return_type(self):
         util.clean_tmp()
         util.assert_compile_fails("resources/types_method_types/wrong_return_type.slg", "Return type mismatch")
+    
+    def test_return_nothing_on_nonvoid(self):
+        util.clean_tmp()
+        util.assert_compile_fails("resources/types_method_types/return_nothing_on_nonvoid.slg", "Can't return nothing from a method unless the method returns void")
+
+    def test_return_null_on_nonvoid(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/types_method_types/return_null_on_nonvoid.slg")
+        assert "0x00000000" in util.interpret(path)
+    
+    def test_return_something_on_void(self):
+        util.clean_tmp()
+        util.assert_compile_fails("resources/types_method_types/return_something_on_void.slg", "Return type mismatch")
 
 class TestOperatorTypes:
     def test_operator_types(self):
@@ -125,6 +138,12 @@ class TestWrongExplicitType:
     def test_int_as_bool(self):
         util.clean_tmp()
         util.assert_compile_fails("resources/types_wrong_explicit_type/bool_as_int.slg", "not assignable")
+
+class TestTypesNull:
+    def test_types_null(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/types_null/types_null.slg")
+        util.interpret(path)
 
 class TestTypesWrongOperatorTypes:
     def test_arithmetic_needs_int(self):

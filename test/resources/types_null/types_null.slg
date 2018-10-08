@@ -1,0 +1,6 @@
+class Cls {}
+fn main(): void {
+    let cls: Cls = null;
+    let bl = cls == null;
+    return;
+}

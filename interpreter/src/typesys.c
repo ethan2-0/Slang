@@ -33,6 +33,17 @@ void ts_init_global_registry() {
     bool_type->heirarchy = malloc(sizeof(ts_TYPE_BAREBONES*));
     bool_type->heirarchy[0] = (ts_TYPE*) bool_type;
     bool_type->category = ts_CATEGORY_PRIMITIVE;
+
+    global_registry->next->next = malloc(sizeof(ts_TYPE_REGISTRY));
+    global_registry->next->next->next = NULL;
+    global_registry->next->next->name = strdup("void");
+    global_registry->next->next->type = malloc(sizeof(ts_TYPE));
+    ts_TYPE_BAREBONES* void_type = (ts_TYPE_BAREBONES*) global_registry->next->next->type;
+    void_type->id = 2;
+    void_type->heirarchy_len = 1;
+    void_type->heirarchy = malloc(sizeof(ts_TYPE_BAREBONES*));
+    void_type->heirarchy[0] = (ts_TYPE*) void_type;
+    void_type->category = ts_CATEGORY_PRIMITIVE;
 }
 uint32_t ts_allocate_type_id() {
     return type_id++;

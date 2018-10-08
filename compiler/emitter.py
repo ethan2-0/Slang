@@ -111,7 +111,7 @@ class MethodSignature:
             signature = [this_type] + [types.resolve(arg[1]) for arg in method[0]]
             argnames = ["this"] + [arg[0].data for arg in method[0]]
             assert type(containing_class.name) is str
-            return MethodSignature("@@%s.ctor" % containing_class.name, signature, argnames, types.bool_type, containing_class)
+            return MethodSignature("@@%s.ctor" % containing_class.name, signature, argnames, types.void_type, containing_class)
 
     @staticmethod
     def scan(top, types):
@@ -190,6 +190,8 @@ class MethodEmitter:
             opcodes.append(ops["load"].ins(register, 1))
         elif node.i("false"):
             opcodes.append(ops["load"].ins(register, 0))
+        elif node.i("null"):
+            opcodes.append(ops["zero"].ins(register))
         elif node.i("-"):
             if len(node.children) == 1:
                 if not self.types.decide_type(node[0], self.scope).is_numerical():
@@ -306,6 +308,8 @@ class MethodEmitter:
                 reg = self.scope.allocate(stated_return_type)
                 opcodes += self.emit_expr(node[0], reg)
             else:
+                if not self.return_type.is_assignable_to(self.types.void_type):
+                    raise typesys.TypingError(node, "Can't return nothing from a method unless the method returns void")
                 reg = self.scope.allocate(self.types.int_type)
                 opcodes.append(ops["zero"].ins(reg))
             opcodes.append(ops["return"].ins(reg))
@@ -318,7 +322,7 @@ class MethodEmitter:
             chain = Chain(node[0], self.scope, ops)
             lhs_type = chain.decide_type()
             if not lhs_type.is_assignable_from(rhs_type):
-                raise typesys.TypingError("Need RHS to be assignable to LHS")
+                raise typesys.TypingError(node, "Need RHS to be assignable to LHS")
             opcodes += chain.assign(rhs_reg)
         elif node.of("+=", "*=", "-="):
             # TODO: This does the first (n - 1) parts of the chain twice

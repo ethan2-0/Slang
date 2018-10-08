@@ -29,7 +29,7 @@ class Token:
         return repr(self)
 
 class Toker:
-    keywords = ["class", "fn", "ctor", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not"]
+    keywords = ["class", "fn", "ctor", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
     def __init__(self, src):
         self.src = src
         self.ptr = 0
@@ -291,7 +291,7 @@ class Parser:
             return Node(self.expect("not"), self.parse_comparison())
         elif self.isn("number"):
             return Node(self.expect("number"))
-        elif self.peek().of("true", "false"):
+        elif self.peek().of("true", "false", "null"):
             return Node(self.next())
         elif self.isn("new"):
             return Node(self.next(), Node(self.expect("ident")), *self.parse_fcall_params())
@@ -446,7 +446,7 @@ class Parser:
             self.throw(tok)
 
     def parse_fn(self):
-        return Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation(), self.parse_statement())
+        return Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation() if self.isn(":") else Node("ident", data="void"), self.parse_statement())
 
     def parse_ctor(self):
         return Node(self.expect("ctor"), self.parse_fn_params(), self.parse_statement())
