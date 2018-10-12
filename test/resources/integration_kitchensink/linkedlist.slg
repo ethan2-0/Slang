@@ -5,26 +5,23 @@ class LinkedListElement {
     ctor(value: int, previous: LinkedListElement) {
         this.value = value;
         this.previous = previous;
-        let null: LinkedListElement;
         this.next = null;
         return;
     }
-    fn setNext(next: LinkedListElement): bool {
+    fn setNext(next: LinkedListElement) {
         this.next = next;
-        return true;
+        return;
     }
 }
 class LinkedList {
     head: LinkedListElement;
     tail: LinkedListElement;
     ctor() {
-        let null: LinkedListElement;
         this.head = null;
         this.tail = null;
         return;
     }
-    fn addElement(value: int): bool {
-        let null: LinkedListElement;
+    fn addElement(value: int) {
         let newElement = new LinkedListElement(value, this.tail);
         if(this.head == null) {
             this.head = newElement;
@@ -33,10 +30,9 @@ class LinkedList {
             this.tail.setNext(newElement);
         }
         this.tail = newElement;
-        return true;
+        return;
     }
     fn sum(): int {
-        let null: LinkedListElement;
         let currentElm = this.head;
         if(currentElm == null) {
             return 0;
@@ -49,6 +45,28 @@ class LinkedList {
         sum += currentElm.value;
         return sum;
     }
+    fn iterator(): LinkedListIterator {
+        return new LinkedListIterator(this);
+    }
+}
+class LinkedListIterator {
+    currentElm: LinkedListElement;
+    list: LinkedList;
+    ctor(list: LinkedList) {
+        this.list = list;
+        this.currentElm = this.list.head;
+        return;
+    }
+    fn next(): LinkedListElement {
+        let ret = this.currentElm;
+        if(this.currentElm != null) {
+            this.currentElm = this.currentElm.next;
+        }
+        return ret;
+    }
+    fn hasNext(): bool {
+        return this.currentElm != null;
+    }
 }
 fn main(): int {
     let list = new LinkedList();
@@ -56,5 +74,10 @@ fn main(): int {
     list.addElement(2);
     list.addElement(3);
     list.addElement(4);
-    return list.sum();
+    let iterator = list.iterator();
+    let sum = 0;
+    while(iterator.hasNext()) {
+        sum += iterator.next().value;
+    }
+    return sum;
 }
