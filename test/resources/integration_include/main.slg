@@ -1,3 +1,4 @@
 fn main(): int {
-    return add(1, 2);
+    let num = new AtomicInteger(0);
+    return add(num.incrementValue(), 2);
 }

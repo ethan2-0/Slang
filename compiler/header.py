@@ -25,11 +25,13 @@ class HeaderMethodArgumentRepresentation:
         return HeaderMethodArgumentRepresentation(input["name"], input["argtype"])
 
 class HeaderMethodRepresentation:
-    def __init__(self, name, args, returntype, entrypoint=False):
+    def __init__(self, name, args, returntype, containing_clazz, is_ctor, entrypoint=False):
         self.name = name
         self.args = args
-        self.entrypoint = entrypoint
         self.returntype = returntype
+        self.containing_clazz = containing_clazz
+        self.is_ctor = is_ctor
+        self.entrypoint = entrypoint
 
     @property
     def numargs(self):
@@ -42,7 +44,9 @@ class HeaderMethodRepresentation:
             "arguments": [argument.serialize() for argument in self.args],
             "numargs": len(self.args),
             "returns": self.returntype,
-            "entrypoint": self.entrypoint
+            "containingclass": self.containing_clazz,
+            "entrypoint": self.entrypoint,
+            "ctor": self.is_ctor
         }
 
     @staticmethod
@@ -51,18 +55,98 @@ class HeaderMethodRepresentation:
         return HeaderMethodRepresentation(method.signature.name,
             [HeaderMethodArgumentRepresentation.from_argument(arg, argtype.name) for arg, argtype in zip(method.signature.argnames, method.signature.args)],
             method.signature.returntype.name,
-            entrypoint_id == method.signature.id)
+            method.signature.containing_class.name if method.signature.containing_class is not None else None,
+            is_ctor=method.signature.is_ctor,
+            # is_ctor=False,
+            entrypoint=entrypoint_id == method.signature.id)
 
     @staticmethod
     def unserialize(input):
         if input["type"] != "method":
             raise ValueError("Asked to unserialize type '%s' as method" % input["type"])
 
-        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"])
+        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"], input["containingclass"], is_ctor=input["ctor"], entrypoint=False)
+
+class HeaderClazzFieldRepresentation:
+    def __init__(self, name, type):
+        self.name = name
+        self.type = type
+
+    def serialize(self):
+        return {
+            "type": "field",
+            "name": self.name,
+            "fieldtype": self.type.name
+        }
+
+    @staticmethod
+    def from_field(field):
+        return HeaderClazzFieldRepresentation(field.name, field.type)
+
+    @staticmethod
+    def unserialize(input):
+        if input["type"] != "field":
+            raise ValueError("Asked to unserialize type '%s' as field" % input["type"])
+
+        return HeaderClazzFieldRepresentation(input["name"], input["fieldtype"])
+
+class HeaderClazzMethodRepresentation:
+    def __init__(self, name):
+        self.name = name
+
+    def serialize(self):
+        return {
+            "type": "classmethod",
+            "name": self.name
+        }
+
+    @staticmethod
+    def unserialize(input):
+        if input["type"] != "classmethod":
+            raise ValueError("Asked to unserialize type '%s' as a classmethod" % input["type"])
+        return HeaderClazzMethodRepresentation(input["name"])
+
+class HeaderClazzRepresentation:
+    def __init__(self, name, fields, methods, ctors):
+        self.name = name
+        self.fields = fields
+        self.methods = methods
+        self.ctors = ctors
+
+    def serialize(self):
+        return {
+            "type": "class",
+            "name": self.name,
+            "fields": [field.serialize() for field in self.fields],
+            "methods": [method.serialize() for method in self.methods],
+            "ctors": [method.serialize() for method in self.ctors]
+        }
+
+    @staticmethod
+    def from_clazz_signature(signature):
+        return HeaderClazzRepresentation(
+            signature.name,
+            [HeaderClazzFieldRepresentation.from_field(field) for field in signature.fields],
+            [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.method_signatures],
+            [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures]
+        )
+
+    @staticmethod
+    def unserialize(input):
+        if input["type"] != "class":
+            raise ValueError("Asked to unserialize type '%s' as a class" % input["type"])
+        return HeaderClazzRepresentation(
+            input["name"],
+            [HeaderClazzFieldRepresentation.unserialize(field) for field in input["fields"]],
+            [HeaderClazzMethodRepresentation.unserialize(method) for method in input["methods"]],
+            [HeaderClazzMethodRepresentation.unserialize(method) for method in input["ctors"]]
+        )
+
 
 class HeaderRepresentation:
-    def __init__(self, methods, hidden=False):
+    def __init__(self, methods, clazzes, hidden=False):
         self.methods = methods
+        self.clazzes = clazzes
         self.hidden = hidden
 
     def serialize(self):
@@ -71,18 +155,18 @@ class HeaderRepresentation:
                 "hidden": True
             }
 
-        methods = []
-        for method in self.methods:
-            methods.append(method.serialize())
-
         return {
-            "methods": methods,
+            "methods": [method.serialize() for method in self.methods],
+            "classes": [clazz.serialize() for clazz in self.clazzes],
             "type": "metadata"
         }
 
     @staticmethod
     def from_program(program):
-        return HeaderRepresentation([HeaderMethodRepresentation.from_method(method, program) for method in program.methods])
+        return HeaderRepresentation(
+            [HeaderMethodRepresentation.from_method(method, program) for method in program.methods],
+            [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures]
+        )
 
     @staticmethod
     def unserialize(input):
@@ -92,9 +176,12 @@ class HeaderRepresentation:
         if input["type"] != "metadata":
             raise ValueError("Asked to unserialize type '%s' as metadata" % input["type"])
 
-        return HeaderRepresentation([HeaderMethodRepresentation.unserialize(method) for method in input["methods"]])
+        return HeaderRepresentation(
+            [HeaderMethodRepresentation.unserialize(method) for method in input["methods"]],
+            [HeaderClazzRepresentation.unserialize(clazz) for clazz in input["classes"]]
+        )
 
-HeaderRepresentation.HIDDEN = HeaderRepresentation([], hidden=True)
+HeaderRepresentation.HIDDEN = HeaderRepresentation([], [], hidden=True)
 
 def from_slb(fname):
     file_data = None

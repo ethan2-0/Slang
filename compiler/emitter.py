@@ -77,11 +77,13 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class MethodSignature:
-    def __init__(self, name, args, argnames, returntype, containing_class=None):
+    def __init__(self, name, args, argnames, returntype, is_ctor=False, containing_class=None):
+        assert type(is_ctor) is type(False)
         self.name = name
         self.args = args
         self.argnames = argnames
         self.returntype = returntype
+        self.is_ctor = is_ctor
         self.id = MethodSignature.sequential_id
         self.containing_class = containing_class
         MethodSignature.sequential_id += 1
@@ -99,6 +101,8 @@ class MethodSignature:
     def __str__(self):
         args_str = ", ".join(["%s: %s" % (name, typ.name) for typ, name in zip(self.args, self.argnames)])
         prefix = "%s." % self.containing_class.name if self.containing_class is not None else ""
+        if self.is_ctor:
+            return "%sctor(%s)" % (prefix, args_str)
         return "fn %s%s(%s): %s" % (prefix, self.name, args_str, self.returntype.name)
 
     @staticmethod
@@ -106,12 +110,12 @@ class MethodSignature:
         if method.i("fn"):
             signature = ([] if this_type is None else [this_type]) + [types.resolve(arg[1]) for arg in method[1]]
             argnames = ([] if this_type is None else ["this"]) + [arg[0].data for arg in method[1]]
-            return MethodSignature(method[0].data, signature, argnames, types.resolve(method[2]), containing_class)
+            return MethodSignature(method[0].data, signature, argnames, types.resolve(method[2]), is_ctor=False, containing_class=containing_class)
         elif method.i("ctor"):
             signature = [this_type] + [types.resolve(arg[1]) for arg in method[0]]
             argnames = ["this"] + [arg[0].data for arg in method[0]]
             assert type(containing_class.name) is str
-            return MethodSignature("@@%s.ctor" % containing_class.name, signature, argnames, types.void_type, containing_class)
+            return MethodSignature("@@ctor", signature, argnames, types.void_type, is_ctor=True, containing_class=containing_class)
 
     @staticmethod
     def scan(top, types):
@@ -332,7 +336,7 @@ class MethodEmitter:
             resultreg = self.scope.allocate(chain.decide_type())
             opcodes += chain.access(resultreg, self)
             if not resultreg.type.is_numerical() or not rhs_reg.type.is_numerical():
-                raise typesys.TypingError(node, "LHS and RHS of arithmetic must be numerical")
+                raise typesys.TypingError(node, "LHS and RHS of arithmetic must be numerical, not '%s' and '%s'" % (resultreg.type.name, rhs_reg.type.name))
             if node.i("-="):
                 opcodes.append(ops["twocomp"].ins(rhs_reg))
             opcodes.append(ops[{
@@ -667,6 +671,8 @@ class Program:
         self.emitter.top.xattrs["signatures"] = MethodSignature.scan(self.emitter.top, self.types)
 
     def add_include(self, headers):
+        for clazz in headers.clazzes:
+            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], []))
         for method in headers.methods:
             self.emitter.top.xattrs["signatures"].append(MethodSignature(
                 method.name,
@@ -674,6 +680,19 @@ class Program:
                 [arg.name for arg in method.args],
                 self.types.resolve(parser.parse_type(method.returntype))
             ))
+        for clazz in headers.clazzes:
+            methods = []
+            for method in clazz.methods:
+                methods.append(get_method_signature(method.name, self.top, is_real_top=True))
+            ctors = []
+            for ctor in clazz.ctors:
+                ctors.append(get_method_signature(ctor.name, self.top, is_real_top=True))
+            fields = []
+            for field in clazz.fields:
+                fields.append(ClazzField(field.name, self.types.resolve(parser.parse_type(field.type))))
+            clazz = ClazzSignature(clazz.name, fields, methods, ctors)
+            self.clazz_signatures.append(clazz)
+            self.types.update_signature(clazz)
 
 class Emitter:
     def __init__(self, top):
@@ -696,6 +715,7 @@ if __name__ == "__main__":
     import argparse
     argparser = argparse.ArgumentParser()
     argparser.add_argument("file")
+    argparser.add_argument("--no-metadata", action="store_true", help="don't include metadata")
     argparser.add_argument("--ast", action="store_true", help="display AST (for debugging)")
     argparser.add_argument("--segments", action="store_true", help="display segments (for debugging)")
     argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
@@ -731,7 +751,8 @@ if __name__ == "__main__":
             print("    %s" % signature)
     program.evaluate()
 
-    program.add_metadata()
+    if not args.no_metadata:
+        program.add_metadata()
     if args.segments:
         for segment in program.segments:
             segment.print_(emitter)

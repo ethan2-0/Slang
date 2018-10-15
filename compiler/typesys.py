@@ -2,7 +2,7 @@
 
 class TypingError(Exception):
     def __init__(self, node, error):
-        Exception.__init__(self, "At line %s: %s" % (node.line, error))
+        Exception.__init__(self, "Near line %s: %s" % (node.line, error))
 
 class AbstractType:
     def __init__(self, name):
