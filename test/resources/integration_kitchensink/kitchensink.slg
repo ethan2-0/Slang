@@ -1,5 +1,5 @@
 fn pow(base: int, power: int): int {
-    let result = base for let i = 0 i < power i++ result *= base return result
+    let result = 1 for let i = 0 i < power i++ result *= base return result
 }
 fn getFalse(): bool return false
 fn loop(n: int): int {

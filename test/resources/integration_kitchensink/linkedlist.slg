@@ -6,11 +6,9 @@ class LinkedListElement {
         this.value = value;
         this.previous = previous;
         this.next = null;
-        return;
     }
     fn setNext(next: LinkedListElement) {
         this.next = next;
-        return;
     }
 }
 class LinkedList {
@@ -19,7 +17,6 @@ class LinkedList {
     ctor() {
         this.head = null;
         this.tail = null;
-        return;
     }
     fn addElement(value: int) {
         let newElement = new LinkedListElement(value, this.tail);
@@ -30,7 +27,6 @@ class LinkedList {
             this.tail.setNext(newElement);
         }
         this.tail = newElement;
-        return;
     }
     fn sum(): int {
         let currentElm = this.head;
@@ -55,7 +51,6 @@ class LinkedListIterator {
     ctor(list: LinkedList) {
         this.list = list;
         this.currentElm = this.list.head;
-        return;
     }
     fn next(): LinkedListElement {
         let ret = this.currentElm;
@@ -63,6 +58,13 @@ class LinkedListIterator {
             this.currentElm = this.currentElm.next;
         }
         return ret;
+    }
+    fn sum(): int {
+        let result = 0;
+        while(this.hasNext()) {
+            result += this.next().value;
+        }
+        return result + 1;
     }
     fn hasNext(): bool {
         return this.currentElm != null;

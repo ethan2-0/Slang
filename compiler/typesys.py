@@ -22,6 +22,9 @@ class AbstractType:
     def is_boolean(self):
         return False
 
+    def is_void(self):
+        return False
+
     def is_clazz(self):
         return False
 
@@ -57,6 +60,9 @@ class BoolType(AbstractType):
 class VoidType(AbstractType):
     def __init__(self):
         AbstractType.__init__(self, "void")
+
+    def is_void(self):
+        return True
 
     def is_assignable_to(self, other):
         return True

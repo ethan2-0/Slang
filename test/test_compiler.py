@@ -45,6 +45,16 @@ class TestIntegrationKitchenSink:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/linkedlist.slg")
         assert "0x0000000a" in util.interpret(path)
+    
+    def test_forloop(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/integration_kitchensink/forloop.slg")
+        assert "0x0000000a" in util.interpret(path)
+
+    def test_whileloop(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/integration_kitchensink/whileloop.slg")
+        assert "0x00000032" in util.interpret(path)
 
 class TestClazzesBasic:
     def test_clazz(self):
@@ -120,10 +130,19 @@ class TestMethodTypes:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/types_method_types/return_null_on_nonvoid.slg")
         assert "0x00000000" in util.interpret(path)
-    
+
     def test_return_something_on_void(self):
         util.clean_tmp()
         util.assert_compile_fails("resources/types_method_types/return_something_on_void.slg", "Return type mismatch")
+
+    def test_no_return_on_void(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/types_method_types/no_return_on_void.slg")
+        assert "0x00000000" in util.interpret(path)
+
+    def test_no_return_on_nonvoid(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/types_method_types/no_return_on_nonvoid.slg", "Non-void method might not return")
 
 class TestOperatorTypes:
     def test_operator_types(self):

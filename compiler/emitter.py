@@ -2,6 +2,7 @@ from opcodes import opcodes as ops
 import header
 import typesys
 import parser
+import claims as clms
 from chain import Chain
 
 class RegisterHandle:
@@ -272,12 +273,14 @@ class MethodEmitter:
 
     def emit_statement(self, node):
         opcodes = []
+        claims = clms.ClaimSpace()
         if node.i("statements"):
             self.scope.push()
             for statement in node:
-                opcodes += self.emit_statement(statement)
+                new_opcodes, new_claim_space = self.emit_statement(statement)
+                opcodes += new_opcodes
+                claims.add_claims_conservative(*new_claim_space.claims)
         elif node.i("call"):
-            # TODO: Hardcoded type
             result = self.scope.allocate(self.types.decide_type(node))
             opcodes += self.emit_expr(node, result)
         elif node.i("let"):
@@ -316,6 +319,7 @@ class MethodEmitter:
                     raise typesys.TypingError(node, "Can't return nothing from a method unless the method returns void")
                 reg = self.scope.allocate(self.types.int_type)
                 opcodes.append(ops["zero"].ins(reg))
+            claims.add_claims(clms.ClaimReturns())
             opcodes.append(ops["return"].ins(reg))
         elif node.i("chain"):
             opcodes += Chain(node, self.scope, ops).access(None, self, no_output=True)
@@ -351,7 +355,8 @@ class MethodEmitter:
             if not condition_register.type.is_boolean():
                 raise typesys.TypingError(node, "Condition of a while loop must be boolean")
             conditional = self.emit_expr(node[0], condition_register)
-            statement = self.emit_statement(node[1])
+            # For now, we can't be sure whether the content of a while loop is ever run
+            statement, _unused_claims = self.emit_statement(node[1])
             nop = ops["nop"].ins()
             result += conditional
             result.append(ops["jf"].ins(condition_register, nop))
@@ -361,27 +366,39 @@ class MethodEmitter:
             opcodes += result
         elif node.i("for"):
             result = []
-            result += annotate(self.emit_statement(node[0]), "for loop setup")
-            eachtime = annotate(self.emit_statement(node[2]), "for loop each time")
-            result += eachtime
+            setup_statement, setup_claim_space = self.emit_statement(node[0])
+            result += annotate(setup_statement, "for loop setup")
+            claims.add_claims_conservative(*setup_claim_space.claims)
+
             condition_register = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             if not condition_register.type.is_boolean():
                 raise typesys.TypingError(node, "Condition of a for loop must be boolean")
             conditional = annotate(self.emit_expr(node[1], condition_register), "for loop condition")
             result += conditional
-            nop = ops["nop"].ins()
-            result.append(ops["jf"].ins(condition_register, nop))
-            result += annotate(self.emit_statement(node[3]), "for loop body")
-            result.append(annotate(ops["goto"].ins(eachtime[0]), "for loop loop"))
-            result.append(nop)
-            return result
+            end_nop = ops["nop"].ins()
+            result.append(ops["jf"].ins(condition_register, end_nop))
+
+            # For now, we don't know whether the body of a for loop will ever be run
+            body_statement, _unused_body_claim_space = self.emit_statement(node[3])
+            result += annotate(body_statement, "for loop body")
+
+            # For now, we don't know whether the each-time part of a for loop will ever be run
+            each_time_statement, _unused_setup_claim_space = self.emit_statement(node[2])
+            eachtime = annotate(each_time_statement, "for loop each time")
+            result += eachtime
+
+            result.append(annotate(ops["goto"].ins(conditional[0]), "for loop loop"))
+            result.append(end_nop)
+
+            opcodes += result
         elif node.i("if"):
             result = []
             condition_register = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             if not condition_register.type.is_boolean():
                 raise typesys.TypingError(node, "Condition of an if statement must be boolean")
             conditional = annotate(self.emit_expr(node[0], condition_register), "if predicate")
-            statement = annotate(self.emit_statement(node[1]), "if true path")
+            true_path_statement, true_path_claims = self.emit_statement(node[1])
+            statement = annotate(true_path_statement, "if true path")
             nop = ops["nop"].ins()
             result += conditional
             result.append(ops["jf"].ins(condition_register, nop))
@@ -391,8 +408,12 @@ class MethodEmitter:
                 result.append(ops["goto"].ins(else_end_nop)) #
             result.append(nop)
             if len(node) > 2:
-                result += annotate(self.emit_statement(node[2]), "if false path")
+                false_path_statement, false_path_claims = self.emit_statement(node[2])
+                result += annotate(false_path_statement, "if false path")
                 result.append(else_end_nop)
+                # We know that the intersection of the claims of the true and
+                # false path will always be true.
+                claims.add_claims_conservative(*true_path_claims.intersection(false_path_claims).claims)
             opcodes += result
         elif node.of("++", "--"):
             var = self.scope.resolve(node[0].data, node)
@@ -404,8 +425,9 @@ class MethodEmitter:
                 opcodes.append(ops["twocomp"].ins(reg))
             opcodes.append(ops["add"].ins(var, reg, var))
         else:
-            node.compile_error("Unexpected")
-        return opcodes
+            node.compile_error("Unexpected (this is a compiler bug)")
+        node.xattrs["claims"] = claims
+        return opcodes, claims
 
     def encode(self, opcodes):
         pass
@@ -417,7 +439,15 @@ class MethodEmitter:
         assert self.top.i("fn") or self.top.i("ctor")
         for argtype, argname in zip(self.signature.args, self.signature.argnames):
             self.scope.let(argname, self.scope.allocate(argtype), self.top[1] if self.top.i("fn") else self.top[0])
-        return self.emit_statement(self.top[3] if self.top.i("fn") else self.top[1])
+        opcodes, claims = self.emit_statement(self.top[3] if self.top.i("fn") else self.top[1])
+        if not claims.contains_equivalent(clms.ClaimReturns()):
+            if self.signature.returntype.is_void():
+                zeroreg = self.scope.allocate(self.types.int_type)
+                opcodes.append(ops["zero"].ins(zeroreg))
+                opcodes.append(ops["return"].ins(zeroreg))
+            else:
+                self.top[3].compile_error("Non-void method might not return")
+        return opcodes
 
 class Method:
     def __init__(self, root, emitter):
@@ -717,6 +747,7 @@ if __name__ == "__main__":
     argparser.add_argument("file")
     argparser.add_argument("--no-metadata", action="store_true", help="don't include metadata")
     argparser.add_argument("--ast", action="store_true", help="display AST (for debugging)")
+    argparser.add_argument("--ast-after", action="store_true", help="display AST after bytecode generation (for debugging)")
     argparser.add_argument("--segments", action="store_true", help="display segments (for debugging)")
     argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
     argparser.add_argument("--headers", action="store_true", help="display headers (for debugging)")
@@ -760,6 +791,9 @@ if __name__ == "__main__":
     if args.headers:
         import json
         print(json.dumps(program.get_header_representation().serialize(), indent=4))
+    
+    if args.ast_after:
+        tree.output()
 
     outbytes = emitter.emit_bytes(program)
 

@@ -1,0 +1,7 @@
+fn main(): int {
+    let n = 0;
+    while(n < 50) {
+        n++;
+    }
+    return n;
+}
