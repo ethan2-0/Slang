@@ -6,6 +6,27 @@
         "writes": [0]
     },
     {
+        "code": "0x1c",
+        "mneumonic": "ARRALLOC",
+        "params": ["register", "register"],
+        "writes": [0],
+        "reads": [1]
+    },
+    {
+        "code": "0x1d",
+        "mneumonic": "ARRACCESS",
+        "params": ["register", "register", "register"],
+        "writes": [0, 2],
+        "reads": [1]
+    },
+    {
+        "code": "0x1e",
+        "mneumonic": "ARRASSIGN",
+        "params": ["register", "register", "register"],
+        "writes": [0],
+        "reads": [1, 2]
+    },
+    {
         "code": "0x01",
         "mneumonic": "ZERO",
         "params": ["register"],

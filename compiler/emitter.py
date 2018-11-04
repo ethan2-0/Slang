@@ -256,8 +256,32 @@ class MethodEmitter:
                 reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
                 opcodes.append(ops["param"].ins(reg, index))
-            # TODO: Support no return type for constructors
             opcodes.append(ops["classcall"].ins(register, ctor_signature, self.scope.allocate(self.types.bool_type)))
+        elif node.i("["):
+            if not register.type.is_array():
+                raise typesys.TypingError(node, "Cannot assign an array to something that isn't an array")
+            arrlen_reg = self.scope.allocate(self.types.int_type)
+            opcodes.append(annotate(ops["load"].ins(arrlen_reg, len(node)), "array instantiation length"))
+            opcodes.append(ops["arralloc"].ins(register, arrlen_reg))
+            index_reg = self.scope.allocate(self.types.int_type)
+            for i, elm in zip(range(len(node)), node):
+                opcodes.append(annotate(ops["load"].ins(index_reg, i), "array instantiation index"))
+                element_reg = self.scope.allocate(self.types.decide_type(elm, self.scope))
+                opcodes += self.emit_expr(elm, element_reg)
+                opcodes.append(ops["arrassign"].ins(register, index_reg, element_reg))
+        elif node.i("access"):
+            lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            opcodes += self.emit_expr(node[0], lhs_reg)
+            if not lhs_reg.type.is_array():
+                raise typesys.TypingError(node[0], "Cannot do array access on something that isn't an array")
+            if not lhs_reg.type.parent_type.is_assignable_to(register.type):
+                # This should have already been caught by typechecking further up
+                raise ValueError("This is a compiler bug")
+            index_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
+            if not index_reg.type.is_numerical():
+                raise typesys.TypingError(child, "Index to array access must be numerical")
+            opcodes += self.emit_expr(node[1], index_reg)
+            opcodes.append(ops["arraccess"].ins(lhs_reg, index_reg, register))
         elif node.i("."):
             lhs_reg = None
             if node[0].i("ident"):
@@ -331,7 +355,7 @@ class MethodEmitter:
             lhs_type = chain.decide_type()
             if not lhs_type.is_assignable_from(rhs_type):
                 raise typesys.TypingError(node, "Need RHS to be assignable to LHS")
-            opcodes += chain.assign(rhs_reg)
+            opcodes += chain.assign(rhs_reg, self)
         elif node.of("+=", "*=", "-="):
             # TODO: This does the first (n - 1) parts of the chain twice
             rhs_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
@@ -348,7 +372,7 @@ class MethodEmitter:
                 "*=": "mult",
                 "-=": "add"
             }[node.type]].ins(resultreg, rhs_reg, resultreg))
-            opcodes += chain.assign(resultreg)
+            opcodes += chain.assign(resultreg, self)
         elif node.i("while"):
             result = []
             condition_register = self.scope.allocate(self.types.decide_type(node[0], self.scope))
@@ -426,7 +450,6 @@ class MethodEmitter:
             opcodes.append(ops["add"].ins(var, reg, var))
         else:
             node.compile_error("Unexpected (this is a compiler bug)")
-        node.xattrs["claims"] = claims
         return opcodes, claims
 
     def encode(self, opcodes):
@@ -791,7 +814,6 @@ if __name__ == "__main__":
     if args.headers:
         import json
         print(json.dumps(program.get_header_representation().serialize(), indent=4))
-    
     if args.ast_after:
         tree.output()
 

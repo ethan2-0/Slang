@@ -81,7 +81,7 @@ class Toker:
             return Token("number", s)
         elif self.ch(2) in ["<=", ">=", "==", "!=", "+=", "-=", "*=", "/=", "++", "--"]:
             return Token(self.adv(2))
-        elif self.ch() in "{}(),;=<>*/+-^|&~%:.":
+        elif self.ch() in "[]{}(),;=<>*/+-^|&~%:.":
             return Token(self.adv())
         elif self.ch() == "\n":
             self.adv()
@@ -234,13 +234,17 @@ class Parser:
     def parse_chain(self):
         ret = Node("chain")
         ret.add(Node(self.expect("ident")))
-        while self.isn(".") or self.isn("("):
+        while self.isn(".") or self.isn("(") or self.isn("["):
             if self.isn("."):
                 self.expect(".")
                 if self.isn("(", num=2):
                     ret.add(Node("call", Node(self.expect("ident")), *self.parse_fcall_params()))
                 else:
                     ret.add(Node(".", Node(self.expect("ident"))))
+            elif self.isn("["):
+                self.expect("[")
+                ret.add(Node("access", self.parse_expr()))
+                self.expect("]")
             else:
                 self.throw("Couldn't parse property chain")
             # elif self.isn("("):
@@ -248,6 +252,11 @@ class Parser:
         return ret
 
     def parse_type(self):
+        if self.isn("["):
+            self.expect("[")
+            lhs = Node("[", self.parse_type())
+            self.expect("]")
+            return lhs
         lhs = self.parse_qualified_name()
         if self.isn("<"):
             self.expect("<")
@@ -297,11 +306,23 @@ class Parser:
             return Node(self.next(), Node(self.expect("ident")), *self.parse_fcall_params())
         elif self.isn("ident"):
             ret = Node(self.expect("ident"))
-            while self.isn(".") or self.isn("("):
+            while self.isn(".") or self.isn("(") or self.isn("["):
                 if self.isn("."):
                     ret = Node(self.expect("."), ret, Node(self.expect("ident")))
                 elif self.isn("("):
                     ret = Node("call", ret, *self.parse_fcall_params())
+                elif self.isn("["):
+                    self.expect("[")
+                    ret = Node("access", ret, self.parse_expr())
+                    self.expect("]")
+            return ret
+        elif self.isn("["):
+            ret = Node(self.expect("["))
+            while not self.isn("]"):
+                ret.add(self.parse_expr())
+                if not self.isn("]"):
+                    self.expect(",")
+            self.expect("]")
             return ret
         else:
             self.throw(self.next())

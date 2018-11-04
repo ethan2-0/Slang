@@ -28,6 +28,9 @@ class AbstractType:
     def is_clazz(self):
         return False
 
+    def is_array(self):
+        return False
+
     def resolves(self, node):
         return node.i("ident") and node.data == self.name
 
@@ -92,6 +95,20 @@ class ClazzType(AbstractType):
     def is_clazz(self):
         return True
 
+class ArrayType(AbstractType):
+    def __init__(self, parent_type):
+        AbstractType.__init__(self, "[%s]" % parent_type.name)
+        self.parent_type = parent_type
+
+    def is_assignable_to(self, other):
+        return isinstance(other, ArrayType) and other.parent_type == self.parent_type
+
+    def resolves(self, node):
+        return node.i("[]") and self.parent_type.resolves(node[0])
+
+    def is_array(self):
+        return True
+
 class TypeSystem:
     def __init__(self, program):
         self.program = program
@@ -99,12 +116,15 @@ class TypeSystem:
         self.bool_type = BoolType()
         self.void_type = VoidType()
         self.types = [self.int_type, self.bool_type, self.void_type]
+        self.array_types = []
         self.clazz_signatures = []
 
     def resolve(self, node, fail_silent=False):
         for type in self.types:
             if type.resolves(node):
                 return type
+        if node.i("["):
+            return self.get_array_type(self.resolve(node[0]))
         if not fail_silent:
             raise TypingError(node, "Could not resolve type: '%s'" % node)
 
@@ -135,6 +155,15 @@ class TypeSystem:
             if isinstance(type, ClazzType) and type.signature == signature:
                 return type
         raise KeyError()
+
+    def get_array_type(self, parent_type):
+        for typ in self.array_types:
+            if typ.parent_type == parent_type:
+                return typ
+        typ = ArrayType(parent_type)
+        self.types.append(typ)
+        self.array_types.append(typ)
+        return typ
 
     def decide_type(self, expr, scope):
         if expr.of("+", "*", "-", "^", "&", "|", "%") and len(expr) == 2:
@@ -197,6 +226,24 @@ class TypeSystem:
             return self.bool_type
         elif expr.i("null"):
             return self.void_type
+        elif expr.i("["):
+            # For now, everything must be the same type, except for nulls
+            # interspersed. Later this will change.
+            current_type = None
+            for child in expr:
+                current_child_type = self.decide_type(child, scope)
+                if current_type is None:
+                    current_type = current_child_type
+
+                if not current_child_type.is_assignable_to(current_type):
+                    raise TypingError(child, "Incompatible types for array: %s and %s" % (current_type, current_child_type))
+
+            return self.get_array_type(current_type)
+        elif expr.i("access"):
+            lhs_type = self.decide_type(expr[0], scope)
+            if not lhs_type.is_array():
+                raise TypingError(child, "Attempt to access element of something that isn't an array")
+            return lhs_type.parent_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.
             signature = None
