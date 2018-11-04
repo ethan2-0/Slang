@@ -198,6 +198,23 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         free(callee_name);
         data->returnreg = fr_getuint32(state);
         opcode->payload = data;
+    } else if(opcode_num == OPCODE_ARRALLOC) {
+        it_OPCODE_DATA_ARRALLOC* data = malloc(sizeof(it_OPCODE_DATA_ARRALLOC));
+        data->arrreg = fr_getuint32(state);
+        data->lengthreg = fr_getuint32(state);
+        opcode->payload = data;
+    } else if(opcode_num == OPCODE_ARRACCESS) {
+        it_OPCODE_DATA_ARRACCESS* data = malloc(sizeof(it_OPCODE_DATA_ARRACCESS));
+        data->arrreg = fr_getuint32(state);
+        data->indexreg = fr_getuint32(state);
+        data->elementreg = fr_getuint32(state);
+        opcode->payload = data;
+    } else if(opcode_num == OPCODE_ARRASSIGN) {
+        it_OPCODE_DATA_ARRASSIGN* data = malloc(sizeof(it_OPCODE_DATA_ARRASSIGN));
+        data->arrreg = fr_getuint32(state);
+        data->indexreg = fr_getuint32(state);
+        data->elementreg = fr_getuint32(state);
+        opcode->payload = data;
     } else {
         fatal("Unrecognized opcode");
     }
@@ -339,13 +356,15 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
             ts_TYPE_CLAZZ* clazz = malloc(sizeof(ts_TYPE_CLAZZ));
             clazz->category = ts_CATEGORY_CLAZZ;
             clazz->id = ts_allocate_type_id();
+            clazz->name = strdup(clazzname);
             clazz->heirarchy_len = 1;
-            clazz->heirarchy = malloc(sizeof(ts_TYPE*));
+            clazz->heirarchy = malloc(sizeof(ts_TYPE*) * 1);
             clazz->heirarchy[0] = (ts_TYPE*) clazz;
             clazz->nfields = -1;
             clazz->fields = NULL;
-            ts_register_type((ts_TYPE*) clazz, clazzname);
+            ts_register_type((ts_TYPE*) clazz, strdup(clazzname));
             program->clazzes[clazz_index++] = clazz;
+            free(clazzname);
         }
     }
     fr_rewind(state);

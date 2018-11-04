@@ -295,6 +295,32 @@ void it_execute(it_PROGRAM* prog) {
             registers[opcode_assign_data->clazzreg].clazz_data->itval[opcode_assign_data->property_index] = registers[opcode_assign_data->source];
             iptr++;
             continue;
+        case OPCODE_ARRALLOC:
+            ;
+            it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (it_OPCODE_DATA_ARRALLOC*) iptr->payload;
+            uint64_t length = registers[opcode_arralloc_data->lengthreg].number;
+            registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) malloc(sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1));
+            registers[opcode_arralloc_data->arrreg].array_data->length = length;
+            iptr++;
+            continue;
+        case OPCODE_ARRACCESS:
+            ;
+            it_OPCODE_DATA_ARRACCESS* opcode_arraccess_data = (it_OPCODE_DATA_ARRACCESS*) iptr->payload;
+            if(registers[opcode_arraccess_data->indexreg].number >= registers[opcode_arraccess_data->arrreg].array_data->length) {
+                fatal("Array index out of bounds");
+            }
+            registers[opcode_arraccess_data->elementreg] = registers[opcode_arraccess_data->arrreg].array_data->elements[registers[opcode_arraccess_data->indexreg].number];
+            iptr++;
+            continue;
+        case OPCODE_ARRASSIGN:
+            ;
+            it_OPCODE_DATA_ARRASSIGN* opcode_arrassign_data = (it_OPCODE_DATA_ARRASSIGN*) iptr->payload;
+            if(registers[opcode_arrassign_data->indexreg].number >= registers[opcode_arrassign_data->arrreg].array_data->length) {
+                fatal("Array index out of bounds");
+            }
+            registers[opcode_arrassign_data->arrreg].array_data->elements[registers[opcode_arrassign_data->indexreg].number] = registers[opcode_arrassign_data->elementreg];
+            iptr++;
+            continue;
         default:
             fatal("Unexpected opcode");
         }

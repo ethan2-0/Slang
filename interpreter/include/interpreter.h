@@ -8,11 +8,13 @@ struct it_METHOD;
 
 enum ts_CATEGORY {
     ts_CATEGORY_PRIMITIVE,
-    ts_CATEGORY_CLAZZ
+    ts_CATEGORY_CLAZZ,
+    ts_CATEGORY_ARRAY
 };
 struct ts_TYPE_BAREBONES {
     enum ts_CATEGORY category;
     uint32_t id;
+    char* name;
     int heirarchy_len;
     // This is a pointer to an array of pointers
     union ts_TYPE** heirarchy;
@@ -24,6 +26,7 @@ struct ts_CLAZZ_FIELD {
 struct ts_TYPE_CLAZZ {
     enum ts_CATEGORY category;
     uint32_t id;
+    char* name;
     int heirarchy_len;
     // This is a pointer to an array of pointers
     union ts_TYPE** heirarchy;
@@ -33,15 +36,26 @@ struct ts_TYPE_CLAZZ {
     struct it_METHOD** methods;
     size_t methodc;
 };
+struct ts_TYPE_ARRAY {
+    enum ts_CATEGORY category;
+    uint32_t id;
+    char* name;
+    int heirarchy_len;
+    // This is a pointer to an array of pointers
+    union ts_TYPE** heirarchy;
+    union ts_TYPE* parent_type;
+};
 union ts_TYPE {
     struct ts_TYPE_BAREBONES barebones;
     struct ts_TYPE_CLAZZ clazz;
+    struct ts_TYPE_ARRAY array;
 };
 
 typedef union ts_TYPE ts_TYPE;
 typedef struct ts_TYPE_BAREBONES ts_TYPE_BAREBONES;
 typedef struct ts_TYPE_CLAZZ ts_TYPE_CLAZZ;
 typedef struct ts_CLAZZ_FIELD ts_CLAZZ_FIELD;
+typedef struct ts_TYPE_ARRAY ts_TYPE_ARRAY;
 typedef enum ts_CATEGORY ts_CATEGORY;
 
 ts_TYPE* ts_get_type(char* name);
@@ -51,12 +65,18 @@ void ts_register_type(ts_TYPE* type, char* name);
 uint32_t ts_allocate_type_id();
 
 struct it_CLAZZ_DATA;
+struct it_ARRAY_DATA;
 
 union itval {
     uint64_t number;
     // This is a pointer to an array of itval
-    // union itval* itval;
     struct it_CLAZZ_DATA* clazz_data;
+    struct it_ARRAY_DATA* array_data;
+};
+
+struct it_ARRAY_DATA {
+    uint64_t length;
+    union itval elements[1];
 };
 
 struct it_CLAZZ_DATA {
@@ -98,6 +118,7 @@ typedef struct {
 } it_PROGRAM;
 
 typedef struct it_METHOD it_METHOD;
+typedef struct it_ARRAY_DATA it_ARRAY_DATA;
 
 void it_RUN(it_PROGRAM* prog);
 

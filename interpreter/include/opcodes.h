@@ -35,6 +35,9 @@
 #define OPCODE_ACCESS 0x19
 #define OPCODE_ASSIGN 0x1a
 #define OPCODE_CLASSCALL 0x1b
+#define OPCODE_ARRALLOC 0x1c
+#define OPCODE_ARRACCESS 0x1d
+#define OPCODE_ARRASSIGN 0x1e
 
 typedef struct {
     uint32_t target;
@@ -145,5 +148,19 @@ typedef struct {
     uint32_t callee_index;
     uint32_t returnreg;
 } it_OPCODE_DATA_CLASSCALL;
+typedef struct {
+    uint32_t arrreg;
+    uint32_t lengthreg;
+} it_OPCODE_DATA_ARRALLOC;
+typedef struct {
+    uint32_t arrreg;
+    uint32_t indexreg;
+    uint32_t elementreg;
+} it_OPCODE_DATA_ARRACCESS;
+typedef struct {
+    uint32_t arrreg;
+    uint32_t indexreg;
+    uint32_t elementreg;
+} it_OPCODE_DATA_ARRASSIGN;
 
 #endif
