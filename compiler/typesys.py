@@ -230,15 +230,23 @@ class TypeSystem:
             # For now, everything must be the same type, except for nulls
             # interspersed. Later this will change.
             current_type = None
+            if len(expr) == 0:
+                expr.compile_error("Zero-length arrays must be instantiated with the arbitrary-length instantiation syntax")
             for child in expr:
                 current_child_type = self.decide_type(child, scope)
-                if current_type is None:
+                if current_type is None and not current_child_type.is_void():
                     current_type = current_child_type
 
                 if not current_child_type.is_assignable_to(current_type):
                     raise TypingError(child, "Incompatible types for array: %s and %s" % (current_type, current_child_type))
 
             return self.get_array_type(current_type)
+        elif expr.i("arrinst"):
+            return self.get_array_type(self.resolve(expr[0]))
+        elif expr.i("#"):
+            if not self.decide_type(expr[0], scope).is_array():
+                raise typesys.TypingError("Can't decide length of something that isn't an array")
+            return self.int_type
         elif expr.i("access"):
             lhs_type = self.decide_type(expr[0], scope)
             if not lhs_type.is_array():
@@ -271,5 +279,4 @@ class TypeSystem:
                 lhs_type = self.decide_type(expr[0], scope)
             return lhs_type.type_of_property(expr[1].data)
         else:
-            print("Unrecognized expression getting type of None", expr)
-            return None
+            raise ValueError("Expression not accounted for in typesys. This is a compiler bug.")

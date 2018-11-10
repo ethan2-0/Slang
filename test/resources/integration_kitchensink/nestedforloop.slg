@@ -1,0 +1,9 @@
+fn main(): int {
+    let result = 0;
+    for(let i = 0; i < 10; i++) {
+        for(let j = 0; j < 10; j++) {
+            result += i * j;
+        }
+    }
+    return result;
+}

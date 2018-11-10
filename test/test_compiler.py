@@ -56,6 +56,11 @@ class TestIntegrationKitchenSink:
         path = util.assert_compile_succeeds("resources/integration_kitchensink/whileloop.slg")
         assert "0x00000032" in util.interpret(path)
 
+    def test_nested_for_loop(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/integration_kitchensink/nestedforloop.slg")
+        assert "0x000007e9" in util.interpret(path)
+
 class TestClazzesBasic:
     def test_clazz(self):
         util.clean_tmp()
@@ -192,3 +197,29 @@ class TestTypesWrongOperatorTypes:
     def test_inplace_with_bool(self):
         util.clean_tmp()
         util.assert_compile_fails("resources/types_wrong_operator_types/inplace_with_bool.slg", "must be numerical")
+
+class TestArrays:
+    def test_arrays_basic(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/arrays/basic.slg")
+        assert "0x0000000f" in util.interpret(path)
+
+    def test_arrays_misc(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/arrays/misc.slg")
+        assert "0x00000001" in util.interpret(path)
+
+    def test_arrays_out_of_bounds(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/arrays/out_of_bounds.slg")
+        assert "Array index out of bounds" in util.interpret(path, expect_fail=True)
+
+    def test_arrays_2d(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/arrays/test_2d.slg")
+        assert "0x00000001" in util.interpret(path)
+
+    def test_arrays_zerofill(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/arrays/zerofill.slg")
+        assert "0x00000001" in util.interpret(path)

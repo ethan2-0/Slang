@@ -27,6 +27,13 @@
         "reads": [1, 2]
     },
     {
+        "code": "0x1f",
+        "mneumonic": "ARRLEN",
+        "params": ["register", "register"],
+        "writes": [1],
+        "reads": [0]
+    },
+    {
         "code": "0x01",
         "mneumonic": "ZERO",
         "params": ["register"],

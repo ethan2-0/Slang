@@ -93,8 +93,8 @@ class Chain:
                 if not current_reg.type.is_array():
                     raise typesys.TypingError(child, "Cannot index something that isn't an array")
                 new_reg = self.scope.allocate(current_reg.type.parent_type)
-                index_reg = self.scope.allocate(emitter.types.decide_type(child[0]))
-                opcodes += emitter.emit_expr(node[0])
+                index_reg = self.scope.allocate(emitter.types.decide_type(child[0], emitter.scope))
+                opcodes += emitter.emit_expr(child[0], index_reg)
                 opcodes.append(self.ops["arraccess"].ins(current_reg, index_reg, new_reg))
                 current_reg = new_reg
         # if not self.node.children[-1].i("."):

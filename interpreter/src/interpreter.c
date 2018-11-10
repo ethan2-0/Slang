@@ -139,7 +139,7 @@ void it_execute(it_PROGRAM* prog) {
               // C is a barbaric language
             itval result = registers[((it_OPCODE_DATA_RETURN*) iptr->payload)->target];
             if(stackptr <= stack) {
-                printf("Returned 0x%08x\n", result);
+                printf("Returned 0x%08llx\n", result.number);
                 goto CLEANUP;
             }
             #if DEBUG
@@ -161,8 +161,6 @@ void it_execute(it_PROGRAM* prog) {
             iptr++;
             continue;
         case OPCODE_TWOCOMP:
-            // TODO: There's a compiler bug to do with TWOCOMP and the fact it's an inplace operation.
-            //       I should change TWOCOMP to use a source and a destination like with other instructions like MOV.
             registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number = -registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number;
             iptr++;
             continue;
@@ -301,11 +299,15 @@ void it_execute(it_PROGRAM* prog) {
             uint64_t length = registers[opcode_arralloc_data->lengthreg].number;
             registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) malloc(sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1));
             registers[opcode_arralloc_data->arrreg].array_data->length = length;
+            memset(&registers[opcode_arralloc_data->arrreg].array_data->elements, 0, length * sizeof(itval));
             iptr++;
             continue;
         case OPCODE_ARRACCESS:
             ;
             it_OPCODE_DATA_ARRACCESS* opcode_arraccess_data = (it_OPCODE_DATA_ARRACCESS*) iptr->payload;
+            if(registers[opcode_arraccess_data->arrreg].array_data == NULL) {
+                fatal("Attempt to access null array");
+            }
             if(registers[opcode_arraccess_data->indexreg].number >= registers[opcode_arraccess_data->arrreg].array_data->length) {
                 fatal("Array index out of bounds");
             }
@@ -315,10 +317,22 @@ void it_execute(it_PROGRAM* prog) {
         case OPCODE_ARRASSIGN:
             ;
             it_OPCODE_DATA_ARRASSIGN* opcode_arrassign_data = (it_OPCODE_DATA_ARRASSIGN*) iptr->payload;
+            if(registers[opcode_arrassign_data->arrreg].array_data == NULL) {
+                fatal("Attempt to assign to null array");
+            }
             if(registers[opcode_arrassign_data->indexreg].number >= registers[opcode_arrassign_data->arrreg].array_data->length) {
                 fatal("Array index out of bounds");
             }
             registers[opcode_arrassign_data->arrreg].array_data->elements[registers[opcode_arrassign_data->indexreg].number] = registers[opcode_arrassign_data->elementreg];
+            iptr++;
+            continue;
+        case OPCODE_ARRLEN:
+            ;
+            it_OPCODE_DATA_ARRLEN* opcode_arrlen_data = (it_OPCODE_DATA_ARRLEN*) iptr->payload;
+            if(registers[opcode_arrlen_data->arrreg].array_data == NULL) {
+                fatal("Attempt to find length of null");
+            }
+            registers[opcode_arrlen_data->resultreg].number = registers[opcode_arrlen_data->arrreg].array_data->length;
             iptr++;
             continue;
         default:

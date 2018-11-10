@@ -1,0 +1,17 @@
+fn main(): bool {
+    let l = [[int]: 8];
+    for(let i = 0; i < 8; i++) {
+        l[i] = [int: 8];
+        for(let j = 0; j < 8; j++) {
+            l[i][j] = i * j;
+        }
+    }
+    for(let i = 0; i < 8; i++) {
+        for(let j = 0; j < 8; j++) {
+            if(l[i][j] != i * j) {
+                return false;
+            }
+        }
+    }
+    return true;
+}

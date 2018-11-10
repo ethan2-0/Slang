@@ -81,7 +81,7 @@ class Toker:
             return Token("number", s)
         elif self.ch(2) in ["<=", ">=", "==", "!=", "+=", "-=", "*=", "/=", "++", "--"]:
             return Token(self.adv(2))
-        elif self.ch() in "[]{}(),;=<>*/+-^|&~%:.":
+        elif self.ch() in "[]{}(),;=<>*/+-^|&~%:.#":
             return Token(self.adv())
         elif self.ch() == "\n":
             self.adv()
@@ -316,14 +316,33 @@ class Parser:
                     ret = Node("access", ret, self.parse_expr())
                     self.expect("]")
             return ret
+        elif self.isn("#"):
+            # Why parse_add()? So that #a == b gets parsed as (#a) == (b) as opposed to #(a == b)
+            return Node(self.expect("#"), self.parse_add())
         elif self.isn("["):
-            ret = Node(self.expect("["))
-            while not self.isn("]"):
+            self.expect("[")
+            state = self.toker.get_state()
+            can_parse_type = True
+            try:
+                self.parse_type()
+            except:
+                can_parse_type = False
+            next_tok = self.next()
+            self.toker.set_state(state)
+            if next_tok.isn(":"):
+                ret = Node("arrinst", self.parse_type())
+                self.expect(":")
                 ret.add(self.parse_expr())
-                if not self.isn("]"):
-                    self.expect(",")
-            self.expect("]")
-            return ret
+                self.expect("]")
+                return ret
+            else:
+                ret = Node("[")
+                while not self.isn("]"):
+                    ret.add(self.parse_expr())
+                    if not self.isn("]"):
+                        self.expect(",")
+                self.expect("]")
+                return ret
         else:
             self.throw(self.next())
 

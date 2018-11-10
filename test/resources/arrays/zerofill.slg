@@ -1,0 +1,4 @@
+fn main(): bool {
+    let arr = [int: 1];
+    return arr[0] == 0;
+}

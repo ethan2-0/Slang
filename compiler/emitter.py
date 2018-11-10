@@ -282,6 +282,18 @@ class MethodEmitter:
                 raise typesys.TypingError(child, "Index to array access must be numerical")
             opcodes += self.emit_expr(node[1], index_reg)
             opcodes.append(ops["arraccess"].ins(lhs_reg, index_reg, register))
+        elif node.i("arrinst"):
+            quantity_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
+            if not quantity_reg.type.is_numerical():
+                raise typesys.TypingError("Array lengths must be numerical")
+            opcodes += self.emit_expr(node[1], quantity_reg)
+            opcodes.append(ops["arralloc"].ins(register, quantity_reg))
+        elif node.i("#"):
+            arr_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            if not arr_reg.type.is_array():
+                raise typesys.TypingError("Can't decide length of something that isn't an array")
+            opcodes += self.emit_expr(node[0], arr_reg)
+            opcodes.append(ops["arrlen"].ins(arr_reg, register))
         elif node.i("."):
             lhs_reg = None
             if node[0].i("ident"):
@@ -354,7 +366,7 @@ class MethodEmitter:
             chain = Chain(node[0], self.scope, ops)
             lhs_type = chain.decide_type()
             if not lhs_type.is_assignable_from(rhs_type):
-                raise typesys.TypingError(node, "Need RHS to be assignable to LHS")
+                raise typesys.TypingError(node, "Need RHS to be assignable to LHS: %s, %s" % (lhs_type, rhs_type))
             opcodes += chain.assign(rhs_reg, self)
         elif node.of("+=", "*=", "-="):
             # TODO: This does the first (n - 1) parts of the chain twice
