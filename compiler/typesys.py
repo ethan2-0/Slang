@@ -34,6 +34,9 @@ class AbstractType:
     def resolves(self, node):
         return node.i("ident") and node.data == self.name
 
+    def get_supertype(self):
+        return None
+
     def __str__(self):
         return ":%s" % self.name
 
@@ -71,17 +74,42 @@ class VoidType(AbstractType):
         return True
 
 class ClazzType(AbstractType):
-    def __init__(self, signature):
+    def __init__(self, signature, typesys):
         AbstractType.__init__(self, signature.name)
+        self.typesys = typesys
         self.signature = signature
+        self.cached_supertype = None
 
     def is_assignable_to(self, other):
-        return isinstance(other, ClazzType) and other.name == self.name
+        if not isinstance(other, ClazzType):
+            return False
+
+        if other.name == self.name:
+            return True
+
+        if self.get_supertype() is not None:
+            return self.get_supertype().is_assignable_to(other)
+
+        return False
+
+    def get_supertype(self):
+        if self.cached_supertype is not None:
+            return self.cached_supertype
+
+        if self.signature.parent_signature is not None:
+            ret = self.typesys.get_clazz_type_by_signature(self.signature.parent_signature)
+            return ret
+
+        return None
 
     def type_of_property(self, name, node=None):
         for field in self.signature.fields:
             if field.name == name:
                 return field.type
+        if self.get_supertype() is not None:
+            ret = self.get_supertype().type_of_property(name)
+            if ret is not None:
+                return ret
         if node is not None:
             node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
 
@@ -89,8 +117,12 @@ class ClazzType(AbstractType):
         for method in self.signature.method_signatures:
             if method.name == name:
                 return method
+        if self.get_supertype() is not None:
+            ret = self.get_supertype().method_signature(name)
+            if ret is not None:
+                return ret
         if node is not None:
-            node.compile_error("Invalid class method name '%s' for type '%s'" % (name, self.type))
+            node.compile_error("Invalid class method name '%s' for type '%s'" % (name, self.name))
 
     def is_clazz(self):
         return True
@@ -130,7 +162,7 @@ class TypeSystem:
 
     def accept_skeleton_clazz(self, signature):
         self.clazz_signatures.append(signature)
-        self.types.append(ClazzType(signature))
+        self.types.append(ClazzType(signature, self))
 
     def update_signature(self, signature):
         # TODO: This makes class resolution n^2

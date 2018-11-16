@@ -78,7 +78,7 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class MethodSignature:
-    def __init__(self, name, args, argnames, returntype, is_ctor=False, containing_class=None):
+    def __init__(self, name, args, argnames, returntype, is_ctor=False, containing_class=None, is_override=False):
         assert type(is_ctor) is type(False)
         self.name = name
         self.args = args
@@ -87,6 +87,7 @@ class MethodSignature:
         self.is_ctor = is_ctor
         self.id = MethodSignature.sequential_id
         self.containing_class = containing_class
+        self.is_override = is_override
         MethodSignature.sequential_id += 1
 
     @property
@@ -100,23 +101,25 @@ class MethodSignature:
         return "MethodSignature(name='%s', nargs=%s, id=%s)" % (self.name, len(self.args), self.id)
 
     def __str__(self):
+        modifiers = "override " if self.is_override else ""
         args_str = ", ".join(["%s: %s" % (name, typ.name) for typ, name in zip(self.args, self.argnames)])
         prefix = "%s." % self.containing_class.name if self.containing_class is not None else ""
         if self.is_ctor:
             return "%sctor(%s)" % (prefix, args_str)
-        return "fn %s%s(%s): %s" % (prefix, self.name, args_str, self.returntype.name)
+        return "%sfn %s%s(%s): %s" % (modifiers, prefix, self.name, args_str, self.returntype.name)
 
     @staticmethod
     def from_node(method, types, this_type=None, containing_class=None):
         if method.i("fn"):
             signature = ([] if this_type is None else [this_type]) + [types.resolve(arg[1]) for arg in method[1]]
             argnames = ([] if this_type is None else ["this"]) + [arg[0].data for arg in method[1]]
-            return MethodSignature(method[0].data, signature, argnames, types.resolve(method[2]), is_ctor=False, containing_class=containing_class)
+            is_override = method["modifiers"].has_child("override")
+            return MethodSignature(method[0].data, signature, argnames, types.resolve(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override)
         elif method.i("ctor"):
             signature = [this_type] + [types.resolve(arg[1]) for arg in method[0]]
             argnames = ["this"] + [arg[0].data for arg in method[0]]
             assert type(containing_class.name) is str
-            return MethodSignature("@@ctor", signature, argnames, types.void_type, is_ctor=True, containing_class=containing_class)
+            return MethodSignature("@@ctor.%s" % containing_class.name, signature, argnames, types.void_type, is_ctor=True, containing_class=containing_class, is_override=False)
 
     @staticmethod
     def scan(top, types):
@@ -468,7 +471,6 @@ class MethodEmitter:
         pass
 
     def emit(self):
-        # self.return_type = self.types.resolve(self.top[2])
         self.return_type = self.signature.returntype
         # To codify an assumption used in this method:
         assert self.top.i("fn") or self.top.i("ctor")
@@ -561,11 +563,49 @@ class ClazzField:
         self.type = type
 
 class ClazzSignature:
-    def __init__(self, name, fields, method_signatures, ctor_signatures):
+    def __init__(self, name, fields, method_signatures, ctor_signatures, parent_signature):
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
         self.ctor_signatures = ctor_signatures
+        # self.parent_signature = None
+        # self.parent_name = parent_name
+        self.parent_signature = parent_signature
+
+    def validate_overriding_rules(self):
+        def throw(signature):
+            raise ValueError("Method '%s' violates overriding rules on class '%s'" % (signature.name, self.name))
+
+        for signature in self.method_signatures:
+            if not signature.is_override:
+                if self.parent_signature is None:
+                    continue
+                if self.parent_signature.get_method_signature_by_name(signature.name) is not None:
+                    throw(signature)
+            else:
+                if self.parent_signature is None:
+                    throw(signature)
+                parent_sig = self.parent_signature.get_method_signature_by_name(signature.name)
+                if parent_sig is None:
+                    throw(signature)
+                if not parent_sig.returntype.is_assignable_to(signature.returntype):
+                    throw(signature)
+                if len(signature.args) != len(parent_sig.args):
+                    throw(signature)
+                for i in range(len(signature.args) - 1):
+                    # Why - 1 and + 1? Because `this` is an argument
+                    if not parent_sig.args[i + 1].is_assignable_to(signature.args[i + 1]):
+                        throw(signature)
+
+    def get_method_signature_by_name(self, name):
+        for signature in self.method_signatures:
+            if signature.name == name:
+                return signature
+
+        if self.parent_signature is not None:
+            return self.parent_signature.get_method_signature_by_name(name)
+
+        return None
 
     def __str__(self):
         return repr(self)
@@ -585,12 +625,21 @@ class ClazzSegment(Segment):
         self.fields = self.signature.fields
         self.method_signatures = self.signature.method_signatures
 
+    @property
+    def parent_signature(self):
+        return self.signature.parent_signature
+
     def __str__(self):
-        return "ClazzSegment(type='%s', typecode=%s, name=%s, nfields=%s)" % (self.humantype, self.realtype, self.name, len(self.fields))
+        return "ClazzSegment(type='%s', typecode=%s, name='%s', nfields=%s, nmethods=%s, superclass=%s)" \
+            % (self.humantype,
+            self.realtype,
+            self.name,
+            len(self.fields),
+            len(self.method_signatures),
+            "'%s'" % self.parent_signature.name if self.parent_signature is not None else "None")
 
     def print_(self, emitter):
         Segment.print_(self, emitter)
-        print(str(self))
         for method in self.method_signatures:
             print("    %s" % method)
         for field in self.fields:
@@ -598,7 +647,7 @@ class ClazzSegment(Segment):
 
     def evaluate(self, program):
         Segment.evaluate(self, program)
-        for field in self.emitter.top[1]:
+        for field in self.emitter.top["classbody"]:
             if field.i("fn") or field.i("ctor"):
                 signature = field.xattrs["signature"]
                 method = program.emit_method(field, signature=signature)
@@ -609,20 +658,25 @@ class ClazzEmitter:
     def __init__(self, top, program):
         self.top = top
         self.program = program
+        self.signature = None
+        self.is_signature_no_fields = False
 
     def _emit_field(self, node):
         return ClazzField(node[0].data, self.program.types.resolve(node[1]))
 
     def emit_signature_no_fields(self):
-        self.signature = ClazzSignature(self.top[0].data, [], [], [])
+        self.is_signature_no_fields = True
+        self.signature = ClazzSignature(self.top[0].data, [], [], [], [])
         return self.signature
 
     def emit_signature(self):
+        if self.signature is not None and not self.is_signature_no_fields:
+            return self.signature
         self.name = self.top[0].data
         self.fields = []
         self.method_signatures = []
         self.ctor_signatures = []
-        for field in self.top[1]:
+        for field in self.top["classbody"]:
             if field.i("classprop"):
                 self.fields.append(self._emit_field(field))
             elif field.i("fn"):
@@ -647,12 +701,20 @@ class ClazzEmitter:
                 self.method_signatures.append(signature)
                 self.ctor_signatures.append(signature)
                 field.xattrs["signature"] = signature
-        self.signature = ClazzSignature(self.name, self.fields, self.method_signatures, self.ctor_signatures)
-        # We need to replace the containing_class with the new signature, just
-        # so we don't have different signatures floating around.
+        self.signature = ClazzSignature(self.name, self.fields, self.method_signatures, self.ctor_signatures, None)
+        # We need to replace the containing_class with the new signature,
+        # just so we don't have different signatures floating around.
         for signature in self.method_signatures:
             signature.containing_class = self.signature
+        self.is_signature_no_fields = False
         return self.signature
+
+    def add_superclass_to_signature(self):
+        if len(self.top["extends"]) > 0:
+            # Since we have a reference to this class's signature, we can
+            # just update it in-place.
+            self.signature.parent_signature = self.program.get_clazz_signature(self.top["extends"][0].data)
+        # Otherwise, the superclass remains as `None`.
 
     def emit(self):
         self.emit_signature()
@@ -690,6 +752,10 @@ class Program:
         # TODO: Remove signature parameter and make caller call get_method_signature
         return MethodSegment(method, signature if signature is not None else get_method_signature(method[0].data, method))
 
+    def validate_overriding_rules(self):
+        for signature in self.clazz_signatures:
+            signature.validate_overriding_rules()
+
     def evaluate(self):
         for emitter in self.clazz_emitters:
             segment = emitter.emit()
@@ -704,6 +770,7 @@ class Program:
         #     methods = clazz.emit_methods()
         #     self.methods += methods
         #     self.segments += methods
+        self.validate_overriding_rules()
         for clazz in self.clazzes:
             clazz.evaluate(self)
         for method in self.methods:
@@ -732,12 +799,14 @@ class Program:
             signature = emitter.emit_signature()
             self.types.update_signature(signature)
             self.clazz_signatures[index] = signature
+        for emitter in clazz_emitters:
+            emitter.add_superclass_to_signature()
         self.clazz_emitters = clazz_emitters
         self.emitter.top.xattrs["signatures"] = MethodSignature.scan(self.emitter.top, self.types)
 
     def add_include(self, headers):
         for clazz in headers.clazzes:
-            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], []))
+            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None))
         for method in headers.methods:
             self.emitter.top.xattrs["signatures"].append(MethodSignature(
                 method.name,
@@ -755,7 +824,7 @@ class Program:
             fields = []
             for field in clazz.fields:
                 fields.append(ClazzField(field.name, self.types.resolve(parser.parse_type(field.type))))
-            clazz = ClazzSignature(clazz.name, fields, methods, ctors)
+            clazz = ClazzSignature(clazz.name, fields, methods, ctors, None)
             self.clazz_signatures.append(clazz)
             self.types.update_signature(clazz)
 
@@ -812,13 +881,13 @@ if __name__ == "__main__":
         for include in args.include:
             program.add_include(header.from_slb(include))
     if args.signatures:
-        print("Signatures:")
         for signature in program.top.xattrs["signatures"]:
             print("    %s" % signature)
     program.evaluate()
 
     if not args.no_metadata:
         program.add_metadata()
+
     if args.segments:
         for segment in program.segments:
             segment.print_(emitter)

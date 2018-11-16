@@ -25,13 +25,14 @@ class HeaderMethodArgumentRepresentation:
         return HeaderMethodArgumentRepresentation(input["name"], input["argtype"])
 
 class HeaderMethodRepresentation:
-    def __init__(self, name, args, returntype, containing_clazz, is_ctor, entrypoint=False):
+    def __init__(self, name, args, returntype, containing_clazz, is_ctor, entrypoint=False, is_override=False):
         self.name = name
         self.args = args
         self.returntype = returntype
         self.containing_clazz = containing_clazz
         self.is_ctor = is_ctor
         self.entrypoint = entrypoint
+        self.is_override = False
 
     @property
     def numargs(self):
@@ -46,7 +47,8 @@ class HeaderMethodRepresentation:
             "returns": self.returntype,
             "containingclass": self.containing_clazz,
             "entrypoint": self.entrypoint,
-            "ctor": self.is_ctor
+            "ctor": self.is_ctor,
+            "override": self.is_override
         }
 
     @staticmethod
@@ -58,14 +60,15 @@ class HeaderMethodRepresentation:
             method.signature.containing_class.name if method.signature.containing_class is not None else None,
             is_ctor=method.signature.is_ctor,
             # is_ctor=False,
-            entrypoint=entrypoint_id == method.signature.id)
+            entrypoint=entrypoint_id == method.signature.id,
+            is_override=method.signature.is_override)
 
     @staticmethod
     def unserialize(input):
         if input["type"] != "method":
             raise ValueError("Asked to unserialize type '%s' as method" % input["type"])
 
-        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"], input["containingclass"], is_ctor=input["ctor"], entrypoint=False)
+        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"], input["containingclass"], is_ctor=input["ctor"], entrypoint=False, is_override=input["override"])
 
 class HeaderClazzFieldRepresentation:
     def __init__(self, name, type):

@@ -29,7 +29,7 @@ class Token:
         return repr(self)
 
 class Toker:
-    keywords = ["class", "fn", "ctor", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
+    keywords = ["class", "override", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
     def __init__(self, src):
         self.src = src
         self.ptr = 0
@@ -169,6 +169,12 @@ class Node:
         else:
             return self.children[index]
 
+    def has_child(self, type):
+        for child in self.children:
+            if child.type == type:
+                return True
+        return False
+
     def add(self, *children):
         for child in children:
             if type(child) is not Node:
@@ -201,6 +207,7 @@ class Node:
 last_parser = None
 
 class Parser:
+    method_modifiers = ["override"]
     def __init__(self, toker):
         self.toker = toker
         global last_parser
@@ -247,8 +254,6 @@ class Parser:
                 self.expect("]")
             else:
                 self.throw("Couldn't parse property chain")
-            # elif self.isn("("):
-            #     ret.add(Node("call", *self.parse_fcall_params()))
         return ret
 
     def parse_type(self):
@@ -486,13 +491,23 @@ class Parser:
             self.throw(tok)
 
     def parse_fn(self):
-        return Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation() if self.isn(":") else Node("ident", data="void"), self.parse_statement())
+        modifiers = Node("modifiers")
+        while self.peek().of(*Parser.method_modifiers):
+            modifier = Node(self.next())
+            if modifiers.has_child(modifier.type):
+                modifier.compile_error("Duplicate modifier %s" % modifier)
+            modifiers.add(modifier)
+        return Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation() if self.isn(":") else Node("ident", data="void"), self.parse_statement(), modifiers)
 
     def parse_ctor(self):
         return Node(self.expect("ctor"), self.parse_fn_params(), self.parse_statement())
 
     def parse_class(self):
         nod = Node(self.expect("class"), Node(self.expect("ident")))
+        if self.isn("extends"):
+            nod.add(Node(self.expect("extends"), Node(self.expect("ident"))))
+        else:
+            nod.add(Node("extends"))
         body = Node("classbody")
         nod.add(body)
         self.expect("{")
@@ -500,10 +515,12 @@ class Parser:
             if self.isn("ident"):
                 body.add(Node("classprop", Node(self.expect("ident")), self.parse_type_annotation()))
                 self.expect(";")
-            elif self.isn("fn"):
+            elif self.isn("fn") or self.peek().of(*Parser.method_modifiers):
                 body.add(self.parse_fn())
             elif self.isn("ctor"):
                 body.add(self.parse_ctor())
+            else:
+                self.throw(self.peek())
         self.expect("}")
         return nod
 
@@ -512,7 +529,7 @@ class Parser:
         last_parser = self
         nod = Node("top")
         while not self.isn("EOF"):
-            if self.isn("fn"):
+            if self.isn("fn") or self.peek().of(*Parser.method_modifiers):
                 nod.add(self.parse_fn())
             elif self.isn("class"):
                 nod.add(self.parse_class())
