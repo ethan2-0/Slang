@@ -243,7 +243,8 @@ class MethodEmitter:
                 opcodes.append(ops["call"].ins(signature, register))
         elif node.i("new"):
             clazz_signature = self.program.get_clazz_signature(node[0].data)
-            opcodes.append(ops["new"].ins(clazz_signature, register))
+            result_register = self.scope.allocate(self.types.decide_type(node, self.scope))
+            opcodes.append(ops["new"].ins(clazz_signature, result_register))
             # TODO: Support multiple constructors and method overloading
             # TODO: A lot of this code is copy-pasted
             if len(clazz_signature.ctor_signatures) < 1:
@@ -259,7 +260,8 @@ class MethodEmitter:
                 reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
                 opcodes.append(ops["param"].ins(reg, index))
-            opcodes.append(ops["classcall"].ins(register, ctor_signature, self.scope.allocate(self.types.bool_type)))
+            opcodes.append(ops["classcall"].ins(result_register, ctor_signature, self.scope.allocate(self.types.bool_type)))
+            opcodes.append(ops["mov"].ins(result_register, register))
         elif node.i("["):
             if not register.type.is_array():
                 raise typesys.TypingError(node, "Cannot assign an array to something that isn't an array")
@@ -585,6 +587,7 @@ class ClazzSignature:
             else:
                 if self.parent_signature is None:
                     throw(signature)
+                # `parent_sig` is a method signature (as opposed to a class signature)
                 parent_sig = self.parent_signature.get_method_signature_by_name(signature.name)
                 if parent_sig is None:
                     throw(signature)
@@ -597,6 +600,11 @@ class ClazzSignature:
                     if not parent_sig.args[i + 1].is_assignable_to(signature.args[i + 1]):
                         throw(signature)
 
+        if self.parent_signature is not None:
+            for field in self.fields:
+                if self.parent_signature.get_field_by_name(field.name) is not None:
+                    raise ValueError("Duplicate field in both child and parent class named '%s'" % field.name)
+
     def get_method_signature_by_name(self, name):
         for signature in self.method_signatures:
             if signature.name == name:
@@ -604,6 +612,16 @@ class ClazzSignature:
 
         if self.parent_signature is not None:
             return self.parent_signature.get_method_signature_by_name(name)
+
+        return None
+
+    def get_field_by_name(self, name):
+        for field in self.fields:
+            if field.name == name:
+                return field
+
+        if self.parent_signature is not None:
+            return self.parent_signature.get_field_by_name(name)
 
         return None
 
@@ -824,7 +842,7 @@ class Program:
             fields = []
             for field in clazz.fields:
                 fields.append(ClazzField(field.name, self.types.resolve(parser.parse_type(field.type))))
-            clazz = ClazzSignature(clazz.name, fields, methods, ctors, None)
+            clazz = ClazzSignature(clazz.name, fields, methods, ctors, self.types.resolve(parser.parse_type(clazz.parent)) if clazz.parent is not None else None)
             self.clazz_signatures.append(clazz)
             self.types.update_signature(clazz)
 

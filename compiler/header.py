@@ -110,11 +110,12 @@ class HeaderClazzMethodRepresentation:
         return HeaderClazzMethodRepresentation(input["name"])
 
 class HeaderClazzRepresentation:
-    def __init__(self, name, fields, methods, ctors):
+    def __init__(self, name, fields, methods, ctors, parent):
         self.name = name
         self.fields = fields
         self.methods = methods
         self.ctors = ctors
+        self.parent = parent
 
     def serialize(self):
         return {
@@ -122,7 +123,8 @@ class HeaderClazzRepresentation:
             "name": self.name,
             "fields": [field.serialize() for field in self.fields],
             "methods": [method.serialize() for method in self.methods],
-            "ctors": [method.serialize() for method in self.ctors]
+            "ctors": [method.serialize() for method in self.ctors],
+            "parent": self.parent
         }
 
     @staticmethod
@@ -131,7 +133,8 @@ class HeaderClazzRepresentation:
             signature.name,
             [HeaderClazzFieldRepresentation.from_field(field) for field in signature.fields],
             [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.method_signatures],
-            [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures]
+            [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures],
+            signature.parent_signature.name if signature.parent_signature is not None else None
         )
 
     @staticmethod
@@ -142,7 +145,8 @@ class HeaderClazzRepresentation:
             input["name"],
             [HeaderClazzFieldRepresentation.unserialize(field) for field in input["fields"]],
             [HeaderClazzMethodRepresentation.unserialize(method) for method in input["methods"]],
-            [HeaderClazzMethodRepresentation.unserialize(method) for method in input["ctors"]]
+            [HeaderClazzMethodRepresentation.unserialize(method) for method in input["ctors"]],
+            input["parent"]
         )
 
 

@@ -1,4 +1,5 @@
 from opcodes import opcodes as ops
+import typesys
 
 class Chain:
     def __init__(self, node, scope, ops):
@@ -103,9 +104,9 @@ class Chain:
             opcodes.append(self.ops["assign"].ins(current_reg, self.node.children[-1][0].data, resultreg))
         elif self.node.children[-1].i("access"):
             if not current_reg.type.is_array():
-                raise typesys.TypingError(child, "Cannot index something that isn't an array")
-            if not current_reg.type.parent_type.is_assignable_to(resultreg.type):
-                raise typesys.TypingError("Value must be assignable to assignee array: %s not assignable to %s" % (current_reg.type.parent_type, resultreg.type))
+                raise typesys.TypingError(self.node, "Cannot index something that isn't an array")
+            if not current_reg.type.parent_type.is_assignable_from(resultreg.type):
+                raise typesys.TypingError(self.node, "Value must be assignable from assignee array: %s not assignable from %s" % (current_reg.type.parent_type, resultreg.type))
             index_reg = self.scope.allocate(emitter.types.decide_type(self.node.children[-1][0], emitter.scope))
             if not index_reg.type.is_numerical():
                 raise typesys.TypingError(child, "Index into array must be numerical")

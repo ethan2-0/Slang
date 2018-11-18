@@ -269,8 +269,10 @@ class TypeSystem:
                 if current_type is None and not current_child_type.is_void():
                     current_type = current_child_type
 
+                while current_type.get_supertype() is not None and not current_child_type.is_assignable_to(current_type):
+                    current_type = current_type.get_supertype()
                 if not current_child_type.is_assignable_to(current_type):
-                    raise TypingError(child, "Incompatible types for array: %s and %s" % (current_type, current_child_type))
+                    raise TypingError(child, "Could not reconcile type %s" % (current_child_type))
 
             return self.get_array_type(current_type)
         elif expr.i("arrinst"):

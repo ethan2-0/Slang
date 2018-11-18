@@ -93,6 +93,7 @@ class SegmentEmitterClazz(SegmentEmitter):
     def emit(self, segment):
         ret = SegmentEmitter.emit(self, segment)
         body = encode_str(segment.name)
+        body += encode_str(segment.signature.parent_signature.name if segment.signature.parent_signature is not None else "")
         body += struct.pack("!I", len(segment.fields))
         for field in segment.fields:
             body += encode_str(field.name)
