@@ -1,0 +1,27 @@
+class Parent {
+    ctor() {}
+    fn one(): int {
+        return 1;
+    }
+    fn two(): int {
+        return 2;
+    }
+}
+class Child extends Parent {
+    ctor() {}
+    override fn one(): int {
+        return 3;
+    }
+}
+class Grandchild extends Child {
+    ctor() {}
+    override fn two(): int {
+        return 4;
+    }
+}
+fn main(): bool {
+    let parent = new Parent();
+    let child: Parent = new Child();
+    let grandchild: Parent = new Grandchild();
+    return parent.one() == 1 and parent.two() == 2 and child.one() == 3 and child.two() == 2 and grandchild.one() == 3 and grandchild.two() == 4;
+}

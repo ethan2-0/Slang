@@ -45,7 +45,7 @@ class TestIntegrationKitchenSink:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/linkedlist.slg")
         assert "0x0000000a" in util.interpret(path)
-    
+
     def test_forloop(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/forloop.slg")
@@ -126,7 +126,7 @@ class TestMethodTypes:
     def test_wrong_return_type(self):
         util.clean_tmp()
         util.assert_compile_fails("resources/types_method_types/wrong_return_type.slg", "Return type mismatch")
-    
+
     def test_return_nothing_on_nonvoid(self):
         util.clean_tmp()
         util.assert_compile_fails("resources/types_method_types/return_nothing_on_nonvoid.slg", "Can't return nothing from a method unless the method returns void")
@@ -223,3 +223,48 @@ class TestArrays:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/arrays/zerofill.slg")
         assert "0x00000001" in util.interpret(path)
+
+    def test_arrays_literal_inference_inheritance(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/arrays/literal_inference_inheritance.slg")
+        assert "0x00000003" in util.interpret(path)
+
+class TestInheritance:
+    def test_inheritance_basic(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/inheritance/basic.slg")
+        assert "0x0000000c" in util.interpret(path)
+
+    def test_inheritance_polymorphism(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/inheritance/polymorphism.slg")
+        assert "0x00000001" in util.interpret(path)
+
+    def test_inheritance_polymorphism(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/inheritance/polymorphism_advanced.slg")
+        assert "0x00000001" in util.interpret(path)
+
+    def test_inheritance_overriding_missing_override(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/inheritance/overriding_missing_override.slg", message="overriding rules")
+
+    def test_inheritance_overriding_override_on_parent(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/inheritance/overriding_override_on_parent.slg", message="overriding rules")
+
+    def test_inheritance_overriding_no_corresponding(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/inheritance/overriding_no_corresponding.slg", message="overriding rules")
+
+    def test_inheritance_overriding_mismatched_arguments(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/inheritance/overriding_mismatched_arguments.slg", message="overriding rules")
+
+    def test_inheritance_duplicate_field_same_type(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/inheritance/duplicate_field_same_type.slg", message="Duplicate field in both child and parent class named 'number'")
+
+    def test_inheritance_duplicate_field_different_type(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/inheritance/duplicate_field_different_type.slg", message="Duplicate field in both child and parent class named 'number'")

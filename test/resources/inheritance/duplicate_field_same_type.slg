@@ -1,0 +1,11 @@
+class Parent {
+    number: int;
+    ctor() {}
+}
+class Child extends Parent {
+    ctor() {}
+}
+class Grandchild extends Child {
+    number: int;
+    ctor() {}
+}

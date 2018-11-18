@@ -1,0 +1,28 @@
+class Parent {
+    number: int;
+    ctor() {
+        this.number = 0;
+    }
+    fn setNumber() {
+        this.number = 1;
+    }
+}
+class Child extends Parent {
+    ctor() {}
+    override fn setNumber() {
+        this.number = 2;
+    }
+}
+fn doTest(obj: Parent, isChild: bool): bool {
+    obj.setNumber();
+    if(isChild and obj.number == 2) {
+        return true;
+    } else if(not isChild and obj.number == 1) {
+        return true;
+    } else {
+        return false;
+    }
+}
+fn main(): bool {
+    return doTest(new Parent(), false) and doTest(new Child(), true);
+}

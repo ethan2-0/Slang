@@ -1,0 +1,14 @@
+class Parent {
+    number: int;
+    ctor() {}
+}
+class Child extends Parent {
+    ctor() {}
+}
+class Grandchild extends Child {
+    ctor() {}
+}
+fn main(): int {
+    let arr = [new Parent(), new Child(), new Grandchild()];
+    return #arr;
+}

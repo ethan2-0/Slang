@@ -1,0 +1,7 @@
+class Parent {
+    ctor() {}
+}
+class Child extends Parent {
+    ctor() {}
+    override fn func() {}
+}

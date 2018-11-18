@@ -1,0 +1,24 @@
+class Parent {
+    number: int;
+    ctor() {
+        this.number = 1;
+    }
+    fn incrementParent() {
+        this.number *= 3;
+    }
+}
+class Child extends Parent {
+    ctor() {
+        this.number = 1;
+    }
+    fn incrementChild() {
+        this.number *= 2;
+    }
+}
+fn main(): int {
+    let child = new Child();
+    child.incrementParent();
+    child.incrementChild();
+    child.incrementChild();
+    return child.number;
+}
