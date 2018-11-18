@@ -350,6 +350,7 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
         } else if(segment_type == SEGMENT_TYPE_CLASS) {
             fr_getuint32(state); // length
             char* clazzname = fr_getstr(state);
+            char* parentname = fr_getstr(state);
             #if DEBUG
             printf("Prescanning class '%s'\n", clazzname);
             #endif
@@ -370,6 +371,7 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
             ts_register_type((ts_TYPE*) clazz, strdup(clazzname));
             program->clazzes[clazz_index++] = clazz;
             free(clazzname);
+            free(parentname);
         }
     }
     fr_rewind(state);
@@ -384,17 +386,34 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
         } else if(segment_type == SEGMENT_TYPE_CLASS) {
             fr_getuint32(state);
             char* clazzname = fr_getstr(state);
-            #if DEBUG
-            printf("Scanning class '%s'\n", clazzname);
-            #endif
-            uint32_t numfields = fr_getuint32(state);
+            char* supertype_name = fr_getstr(state);
             ts_TYPE_CLAZZ* clazz = (ts_TYPE_CLAZZ*) ts_get_type(clazzname);
+            if(clazz->category != ts_CATEGORY_CLAZZ) {
+                fatal("Tried to extend something that isn't a class");
+            }
+            if(strlen(supertype_name) > 0) {
+                clazz->immediate_supertype = (ts_TYPE_CLAZZ*) ts_get_type(supertype_name);
+                if(clazz->immediate_supertype == NULL) {
+                    fatal("Couldn't find superclass");
+                }
+                if(clazz->immediate_supertype->category != ts_CATEGORY_CLAZZ) {
+                    fatal("Tried to extend something that isn't a class");
+                }
+            } else {
+                clazz->immediate_supertype = NULL;
+            }
+            uint32_t numfields = fr_getuint32(state);
             clazz->nfields = numfields;
             clazz->fields = malloc(sizeof(ts_CLAZZ_FIELD) * numfields);
             for(uint32_t i = 0; i < numfields; i++) {
                 clazz->fields[i].name = fr_getstr(state);
                 clazz->fields[i].type = ts_get_type(fr_getstr(state));
             }
+            #if DEBUG
+            printf("Scanning class '%s'\n", clazzname);
+            #endif
+            free(supertype_name);
+            free(clazzname);
         }
     }
 }
@@ -419,7 +438,7 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
             method->name = fr_getstr(state); // name
             char* containing_clazz_name = fr_getstr(state);
             if(strlen(containing_clazz_name) > 0) {
-                method->containing_clazz = ts_get_type(containing_clazz_name);
+                method->containing_clazz = (ts_TYPE_CLAZZ*) ts_get_type(containing_clazz_name);
             } else {
                 method->containing_clazz = NULL;
             }
@@ -451,24 +470,6 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
     #if DEBUG
     printf("Exiting bc_scan_methods()\n");
     #endif
-}
-void bc_arrange_type_method_pointers(it_PROGRAM* program) {
-    for(int i = 0; i < program->clazzesc; i++) {
-        int methods_for_clazz = 0;
-        for(int j = 0; j < program->methodc; j++) {
-            if(program->methods[j].containing_clazz == program->clazzes[i]) {
-                methods_for_clazz++;
-            }
-        }
-        program->clazzes[i]->methodc = methods_for_clazz;
-        program->clazzes[i]->methods = malloc(sizeof(it_METHOD*) * methods_for_clazz);
-        int methodindex = 0;
-        for(int j = 0; j < program->methodc; j++) {
-            if(program->methods[j].containing_clazz == program->clazzes[i]) {
-                program->clazzes[i]->methods[methodindex++] = &program->methods[j];
-            }
-        }
-    }
 }
 it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     #if DEBUG
@@ -520,7 +521,8 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
         // Ignore the magic number
         fr_getuint32(state[i]);
     }
-    bc_arrange_type_method_pointers(result);
+    // bc_arrange_type_method_pointers(result);
+    cl_arrange_phi_tables(result);
 
     if(result->entrypoint == -1) {
         fatal("No entrypoint found");

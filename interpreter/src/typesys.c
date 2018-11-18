@@ -74,10 +74,17 @@ int ts_get_field_index(ts_TYPE_CLAZZ* clazz, char* name) {
             return i;
         }
     }
+    #if DEBUG
+    printf("Field name: '%s'\n", name);
+    #endif
     fatal("Unable to find field");
     return -1; // Unreachable
 }
 int ts_get_method_index(ts_TYPE_CLAZZ* clazz, char* name) {
+    #if DEBUG
+    printf("Asked to get index of %llx's field %s\n", clazz, name);
+    printf("%d %llx\n", clazz->methodc, clazz->methods);
+    #endif
     for(int i = 0; i < clazz->methodc; i++) {
         if(strcmp(clazz->methods[i]->name, name) == 0) {
             return i;

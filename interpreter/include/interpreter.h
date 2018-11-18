@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stddef.h>
 
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
@@ -30,6 +31,7 @@ struct ts_TYPE_CLAZZ {
     int heirarchy_len;
     // This is a pointer to an array of pointers
     union ts_TYPE** heirarchy;
+    struct ts_TYPE_CLAZZ* immediate_supertype;
     int nfields;
     struct ts_CLAZZ_FIELD* fields;
     // This is a pointer to an array of pointers
@@ -121,5 +123,7 @@ typedef struct it_METHOD it_METHOD;
 typedef struct it_ARRAY_DATA it_ARRAY_DATA;
 
 void it_RUN(it_PROGRAM* prog);
+
+void cl_arrange_phi_tables(it_PROGRAM* program);
 
 #endif
