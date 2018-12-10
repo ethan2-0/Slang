@@ -1,4 +1,4 @@
-fn main(): bool {
+entrypoint fn main(): bool {
     let x: bool = 5;
     return x;
 }

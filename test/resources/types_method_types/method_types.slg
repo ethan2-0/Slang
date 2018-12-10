@@ -8,6 +8,6 @@ fn fun(a: int, b: int, shouldMul: bool): int {
 fn getTrue(): bool {
     return true;
 }
-fn main(): bool {
+entrypoint fn main(): bool {
     return fun(1, 2, true) < 5 and getTrue();
 }

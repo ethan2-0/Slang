@@ -19,7 +19,7 @@ class Grandchild extends Child {
         return 4;
     }
 }
-fn main(): bool {
+entrypoint fn main(): bool {
     let parent = new Parent();
     let child: Parent = new Child();
     let grandchild: Parent = new Grandchild();

@@ -1,4 +1,4 @@
-fn main(): int {
+entrypoint fn main(): int {
     if(1 * 3) {
         return 5;
     } else {

@@ -3,7 +3,7 @@ class Point {
     y: int;
     ctor() {return;}
 }
-fn main(): int {
+entrypoint fn main(): int {
     let pt = new Point();
     pt.x = 5;
     return pt.x;

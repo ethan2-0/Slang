@@ -8,7 +8,7 @@ fn recurseALotInner(a: int, b: int): int {
 fn recurseALot(a: int): int {
     return recurseALotInner(a, 0);
 }
-fn main(): bool {
+entrypoint fn main(): bool {
     for(let i = 0; i < 256; i++) {
         if(recurseALot(i) != i) {
             return false;

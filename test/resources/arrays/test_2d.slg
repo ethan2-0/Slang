@@ -1,4 +1,4 @@
-fn main(): bool {
+entrypoint fn main(): bool {
     let l = [[int]: 8];
     for(let i = 0; i < 8; i++) {
         l[i] = [int: 8];

@@ -1,4 +1,4 @@
-fn main(): int {
+entrypoint fn main(): int {
     let l = [1, 2, 3];
     return l[3];
 }

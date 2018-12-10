@@ -1,7 +1,7 @@
 class Cls {
     x: int;
 }
-fn main(): int {
+entrypoint fn main(): int {
     let cls: Cls;
     return cls.x;
 }

@@ -10,7 +10,7 @@ fn loop(n: int): int {
     }
     return k
 }
-fn main(): int {
+entrypoint fn main(): int {
     let intermediate = ((1 + 2) & (3 + 4) - ((3 ^ ~6) * (7 & 8 | 9)) + 1) & 15;
     intermediate = loop(intermediate);
     return pow(2, intermediate);

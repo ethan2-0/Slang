@@ -6,6 +6,6 @@ class Point {
     x: int;
     y: int;
 }
-fn main(): bool {
+entrypoint fn main(): bool {
     return true;
 }

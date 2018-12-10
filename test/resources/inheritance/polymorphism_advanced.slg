@@ -23,6 +23,6 @@ fn doTest(obj: Parent, isChild: bool): bool {
         return false;
     }
 }
-fn main(): bool {
+entrypoint fn main(): bool {
     return doTest(new Parent(), false) and doTest(new Child(), true);
 }

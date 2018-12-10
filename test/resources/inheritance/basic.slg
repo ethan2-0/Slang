@@ -15,7 +15,7 @@ class Child extends Parent {
         this.number *= 2;
     }
 }
-fn main(): int {
+entrypoint fn main(): int {
     let child = new Child();
     child.incrementParent();
     child.incrementChild();

@@ -7,6 +7,6 @@ fn lookup(isTwo: bool, isThree: bool): int {
         return 4;
     }
 }
-fn main(): int {
+entrypoint fn main(): int {
     return lookup(true, false) * 256 + lookup(false, true) * 16 + lookup(false, false);
 }

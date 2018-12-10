@@ -1,1 +1,1 @@
-fn main(): bool {}
+entrypoint fn main(): bool {}

@@ -21,6 +21,6 @@ fn testMemberAccess(): bool {
     }
     return true;
 }
-fn main(): bool {
+entrypoint fn main(): bool {
     return testLength() and testLengthArbitrary() and testMemberAccess();
 }

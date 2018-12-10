@@ -2,6 +2,6 @@ class Clazz {
     width: int;
     height: int;
 }
-fn main(): bool {
+entrypoint fn main(): bool {
     return true;
 }

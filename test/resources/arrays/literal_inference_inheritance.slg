@@ -8,7 +8,7 @@ class Child extends Parent {
 class Grandchild extends Child {
     ctor() {}
 }
-fn main(): int {
+entrypoint fn main(): int {
     let arr = [new Parent(), new Child(), new Grandchild()];
     return #arr;
 }

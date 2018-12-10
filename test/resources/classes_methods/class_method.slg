@@ -12,7 +12,7 @@ class Cls {
         return true;
     }
 }
-fn main(): int {
+entrypoint fn main(): int {
     let cls = new Cls(3);
     cls.addToProp(5);
     return cls.getProp();

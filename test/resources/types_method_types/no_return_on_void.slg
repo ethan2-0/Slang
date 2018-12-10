@@ -1,1 +1,1 @@
-fn main() {}
+entrypoint fn main() {}

@@ -12,7 +12,7 @@ class Rectangle {
 fn rect_right(rect: Rectangle): int {
     return rect.topleft.x + rect.width;
 }
-fn main(): int {
+entrypoint fn main(): int {
     let rect = new Rectangle();
     rect.topleft = new Point();
     rect.topleft.x = 23;

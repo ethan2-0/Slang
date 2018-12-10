@@ -1,6 +1,6 @@
 fn fun(): int {
     return true;
 }
-fn main(): int {
+entrypoint fn main(): int {
     return fun();
 }
