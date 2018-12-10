@@ -31,8 +31,23 @@ class AbstractType:
     def is_array(self):
         return False
 
-    def resolves(self, node):
-        return node.i("ident") and node.data == self.name
+    def resolves(self, node, program):
+        def flatten_qualified(nod):
+            if nod.i("ident"):
+                return nod.data
+            else:
+                return "%s.%s" % (flatten_qualified(nod[0]), flatten_qualified(nod[1]))
+
+        if not node.i("ident") and not node.i("."):
+            return False
+
+        name = flatten_qualified(node)
+
+        for search_path in program.search_paths:
+            # print("search_path=%s, name=%s, self.name=%s" % (search_path, name, self.name))
+            if "%s%s" % (search_path, name) == self.name:
+                # print("resolved\n")
+                return True
 
     def get_supertype(self):
         return None
@@ -152,9 +167,9 @@ class TypeSystem:
         self.clazz_signatures = []
 
     def resolve(self, node, fail_silent=False):
-        for type in self.types:
-            if type.resolves(node):
-                return type
+        for typ in self.types:
+            if typ.resolves(node, self.program):
+                return typ
         if node.i("["):
             return self.get_array_type(self.resolve(node[0]))
         if not fail_silent:

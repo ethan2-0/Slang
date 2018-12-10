@@ -1,0 +1,14 @@
+class Cls {
+    num: int;
+    ctor() {
+        this.num = 0;
+    }
+}
+fn func(cls: Cls) {
+    cls.num = 5;
+}
+entrypoint fn main(): int {
+    let cls = new Cls();
+    func(cls);
+    return cls.num;
+}

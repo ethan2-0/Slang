@@ -29,7 +29,7 @@ class Token:
         return repr(self)
 
 class Toker:
-    keywords = ["class", "override", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
+    keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
     def __init__(self, src):
         self.src = src
         self.ptr = 0
@@ -141,9 +141,11 @@ class Node:
         if type(typ) is Token:
             self.type = typ.type
             self.data = typ.data
-        else:
+        elif type(typ) is str:
             self.type = typ
             self.data = data
+        else:
+            raise ValueError("Unexpected type %s of typ (expected str or Token)" % type(typ))
         self.children = list(children)
         self.xattrs = dict()
 
@@ -207,7 +209,7 @@ class Node:
 last_parser = None
 
 class Parser:
-    method_modifiers = ["override"]
+    method_modifiers = ["override", "entrypoint"]
     def __init__(self, toker):
         self.toker = toker
         global last_parser
@@ -456,9 +458,21 @@ class Parser:
             return nod
         elif tok.isn("ident"):
             state = self.toker.get_state()
-            peek_chain = self.parse_chain()
-            token_after_chain = self.next()
+            peek_chain = None
+            try:
+                peek_chain = self.parse_chain()
+            except:
+                pass
+            token_after_chain = self.next() if peek_chain is not None else None
             self.toker.set_state(state)
+
+            if peek_chain is None:
+                # This is for things like `doStuff();` all on its own
+                ret = Node("expr", self.parse_expr())
+                while self.isn(";"):
+                    self.expect(";")
+                return ret
+
             if token_after_chain.isn("="):
                 chain = self.parse_chain()
                 self.expect("=")
@@ -505,7 +519,7 @@ class Parser:
     def parse_class(self):
         nod = Node(self.expect("class"), Node(self.expect("ident")))
         if self.isn("extends"):
-            nod.add(Node(self.expect("extends"), Node(self.expect("ident"))))
+            nod.add(Node(self.expect("extends"), self.parse_type()))
         else:
             nod.add(Node("extends"))
         body = Node("classbody")
@@ -524,6 +538,24 @@ class Parser:
         self.expect("}")
         return nod
 
+    def parse_using(self):
+        self.expect("using")
+        ret = Node("using", Node(self.expect("ident")))
+        while self.isn("."):
+            self.expect(".")
+            ret.add(Node(self.expect("ident")))
+        self.expect(";")
+        return ret
+
+    def parse_namespace(self):
+        self.expect("namespace")
+        ret = Node("namespace", Node(self.expect("ident")))
+        while self.isn("."):
+            self.expect(".")
+            ret.add(Node(self.expect("ident")))
+        self.expect(";")
+        return ret
+
     def parse(self):
         global last_parser
         last_parser = self
@@ -533,6 +565,10 @@ class Parser:
                 nod.add(self.parse_fn())
             elif self.isn("class"):
                 nod.add(self.parse_class())
+            elif self.isn("using"):
+                nod.add(self.parse_using())
+            elif self.isn("namespace"):
+                nod.add(self.parse_namespace())
             else:
                 self.throw(self.next())
         return nod

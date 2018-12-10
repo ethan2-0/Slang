@@ -268,3 +268,13 @@ class TestInheritance:
     def test_inheritance_duplicate_field_different_type(self):
         util.clean_tmp()
         path = util.assert_compile_fails("resources/inheritance/duplicate_field_different_type.slg", message="Duplicate field in both child and parent class named 'number'")
+
+class TestMethods:
+    def test_methods_single_call(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/methods/single_call.slg")
+        assert "0x00000005" in util.interpret(path)
+
+    def test_inheritance_duplicate_field_different_type(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/methods/override_outside_class.slg", message="Can't both be an override method and not have a containing class")

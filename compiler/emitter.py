@@ -19,6 +19,9 @@ class RegisterHandle:
     def looks_like_register_handle(self):
         pass
 
+def flatten_ident_nodes(parent):
+    return ".".join([child.data for child in parent])
+
 def annotate(opcodes, annotation):
     if type(opcodes) is list:
         if len(opcodes) > 0:
@@ -78,7 +81,7 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class MethodSignature:
-    def __init__(self, name, args, argnames, returntype, is_ctor=False, containing_class=None, is_override=False):
+    def __init__(self, name, args, argnames, returntype, is_ctor=False, containing_class=None, is_override=False, is_entrypoint=False):
         assert type(is_ctor) is type(False)
         self.name = name
         self.args = args
@@ -88,6 +91,7 @@ class MethodSignature:
         self.id = MethodSignature.sequential_id
         self.containing_class = containing_class
         self.is_override = is_override
+        self.is_entrypoint = is_entrypoint
         MethodSignature.sequential_id += 1
 
     @property
@@ -101,7 +105,7 @@ class MethodSignature:
         return "MethodSignature(name='%s', nargs=%s, id=%s)" % (self.name, len(self.args), self.id)
 
     def __str__(self):
-        modifiers = "override " if self.is_override else ""
+        modifiers = ("override " if self.is_override else "") + ("entrypoint " if self.is_entrypoint else "")
         args_str = ", ".join(["%s: %s" % (name, typ.name) for typ, name in zip(self.args, self.argnames)])
         prefix = "%s." % self.containing_class.name if self.containing_class is not None else ""
         if self.is_ctor:
@@ -109,12 +113,23 @@ class MethodSignature:
         return "%sfn %s%s(%s): %s" % (modifiers, prefix, self.name, args_str, self.returntype.name)
 
     @staticmethod
-    def from_node(method, types, this_type=None, containing_class=None):
+    def from_node(method, types, program, this_type=None, containing_class=None):
+        if containing_class is None and method["modifiers"].has_child("override"):
+            method.compile_error("Can't both be an override method and not have a containing class")
+
         if method.i("fn"):
             signature = ([] if this_type is None else [this_type]) + [types.resolve(arg[1]) for arg in method[1]]
             argnames = ([] if this_type is None else ["this"]) + [arg[0].data for arg in method[1]]
             is_override = method["modifiers"].has_child("override")
-            return MethodSignature(method[0].data, signature, argnames, types.resolve(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override)
+            is_entrypoint = method["modifiers"].has_child("entrypoint")
+            if is_entrypoint and containing_class is not None:
+                method.compile_error("Can't have an entrypoint inside a class")
+            if is_entrypoint and len(argnames) > 0:
+                method.compile_error("Can't have an entrypoint with arguments")
+            name = method[0].data
+            if containing_class is None and program.namespace is not None:
+                name = "%s.%s" % (program.namespace, name)
+            return MethodSignature(name, signature, argnames, types.resolve(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint)
         elif method.i("ctor"):
             signature = [this_type] + [types.resolve(arg[1]) for arg in method[0]]
             argnames = ["this"] + [arg[0].data for arg in method[0]]
@@ -123,21 +138,33 @@ class MethodSignature:
 
     @staticmethod
     def scan(top, types):
+        # TODO: Fix this when removing top.xattrs["program"]
+        program = top.xattrs["program"]
+        if program is None:
+            raise ValueError("This is a compiler bug.")
         ret = []
         for method in top:
             if not method.i("fn"):
                 continue
-            ret.append(MethodSignature.from_node(method, types))
+            ret.append(MethodSignature.from_node(method, types, program))
         return ret
 MethodSignature.sequential_id = 0
 
 def get_method_signature(name, top_, is_real_top=False):
+    # I really need to change this. This should instead accept a reference to
+    # the Program object, which should in turn have a list of method
+    # signatures. But everything involved here is too tightly coupled, so it's
+    # a major chunk of work.
     top = top_
     if not is_real_top:
         top = top_.xattrs["top"]
 
+    program = top.xattrs["program"]
+    search_paths = [""]
+    search_paths.append(program.namespace)
+    search_paths += program.using_directives
     for signature in top.xattrs["signatures"]:
-        if signature.name == name:
+        if signature.name in ["%s.%s" % (path, name) if path != "" else name for path in search_paths]:
             return signature
 
 class MethodEmitter:
@@ -242,7 +269,8 @@ class MethodEmitter:
             else:
                 opcodes.append(ops["call"].ins(signature, register))
         elif node.i("new"):
-            clazz_signature = self.program.get_clazz_signature(node[0].data)
+            # clazz_signature = self.program.get_clazz_signature(node[0].data)
+            clazz_signature = self.types.resolve(node[0]).signature
             result_register = self.scope.allocate(self.types.decide_type(node, self.scope))
             opcodes.append(ops["new"].ins(clazz_signature, result_register))
             # TODO: Support multiple constructors and method overloading
@@ -321,9 +349,9 @@ class MethodEmitter:
                 new_opcodes, new_claim_space = self.emit_statement(statement)
                 opcodes += new_opcodes
                 claims.add_claims_conservative(*new_claim_space.claims)
-        elif node.i("call"):
-            result = self.scope.allocate(self.types.decide_type(node))
-            opcodes += self.emit_expr(node, result)
+        elif node.i("call") or node.i("expr"):
+            result = self.scope.allocate(self.types.decide_type(node if node.i("call") else node[0], self.scope))
+            opcodes += self.emit_expr(node if node.i("call") else node[0], result)
         elif node.i("let"):
             # Notice that a variable may have only exactly one let statement
             # in a given scope. So we can typecheck just with that register's
@@ -570,8 +598,8 @@ class ClazzSignature:
         self.fields = fields
         self.method_signatures = method_signatures
         self.ctor_signatures = ctor_signatures
-        # self.parent_signature = None
-        # self.parent_name = parent_name
+        if parent_signature is not None and type(parent_signature) is not ClazzSignature:
+            raise ValueError("Invalid type for parent_signature %s (expected ClazzSignature or NoneType)" % type(parent_signature))
         self.parent_signature = parent_signature
 
     def validate_overriding_rules(self):
@@ -679,18 +707,25 @@ class ClazzEmitter:
         self.signature = None
         self.is_signature_no_fields = False
 
+    @property
+    def unqualified_name(self):
+        return self.top[0].data
+
+    @property
+    def name(self):
+        return ("%s." % self.program.namespace if self.program.namespace is not None else "") + self.unqualified_name
+
     def _emit_field(self, node):
         return ClazzField(node[0].data, self.program.types.resolve(node[1]))
 
     def emit_signature_no_fields(self):
         self.is_signature_no_fields = True
-        self.signature = ClazzSignature(self.top[0].data, [], [], [], [])
+        self.signature = ClazzSignature(self.name, [], [], [], None)
         return self.signature
 
     def emit_signature(self):
         if self.signature is not None and not self.is_signature_no_fields:
             return self.signature
-        self.name = self.top[0].data
         self.fields = []
         self.method_signatures = []
         self.ctor_signatures = []
@@ -701,6 +736,7 @@ class ClazzEmitter:
                 signature = MethodSignature.from_node(
                     field,
                     self.program.types,
+                    self.program,
                     this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # At this point in execution, `this.signature` is the blank
                     # signature from emit_signature_no_fields(...).
@@ -712,6 +748,7 @@ class ClazzEmitter:
                 signature = MethodSignature.from_node(
                     field,
                     self.program.types,
+                    self.program,
                     this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # Same comment as above
                     containing_class=self.signature
@@ -731,7 +768,10 @@ class ClazzEmitter:
         if len(self.top["extends"]) > 0:
             # Since we have a reference to this class's signature, we can
             # just update it in-place.
-            self.signature.parent_signature = self.program.get_clazz_signature(self.top["extends"][0].data)
+            parent_type = self.program.types.resolve(self.top["extends"][0])
+            if parent_type is None or not parent_type.is_clazz():
+                self.top["extends"].compile_error("Tried to extend a nonexisting class")
+            self.signature.parent_signature = parent_type.signature
         # Otherwise, the superclass remains as `None`.
 
     def emit(self):
@@ -743,14 +783,26 @@ class Program:
         self.methods = []
         self.emitter = emitter
         self.top = emitter.top
+        self.top.xattrs["program"] = self
         self.segments = []
         self.types = typesys.TypeSystem(self)
         self.clazzes = []
         self.clazz_signatures = []
+        self.using_directives = []
+        self.namespace = None
+
+    @property
+    def search_paths(self):
+        search_paths = [""]
+        if self.namespace is not None:
+            search_paths.append("%s." % self.namespace)
+        for using_directive in self.using_directives:
+            search_paths.append("%s." % using_directive)
+        return search_paths
 
     def get_entrypoint(self):
         for method in self.methods:
-            if method.signature.name == "main" and method.signature.nargs == 0:
+            if method.signature.is_entrypoint:
                 return method.signature
         return None
 
@@ -804,6 +856,11 @@ class Program:
             self.segments.append(MetadataSegment(headers=self.get_header_representation()))
 
     def prescan(self):
+        for toplevel in self.top:
+            if toplevel.i("namespace"):
+                self.namespace = flatten_ident_nodes(toplevel)
+            elif toplevel.i("using"):
+                self.using_directives.append(flatten_ident_nodes(toplevel))
         clazz_emitters = []
         for toplevel in self.top:
             if not toplevel.i("class"):
@@ -820,7 +877,9 @@ class Program:
         for emitter in clazz_emitters:
             emitter.add_superclass_to_signature()
         self.clazz_emitters = clazz_emitters
-        self.emitter.top.xattrs["signatures"] = MethodSignature.scan(self.emitter.top, self.types)
+        if "signatures" not in self.emitter.top.xattrs:
+            self.emitter.top.xattrs["signatures"] = []
+        self.emitter.top.xattrs["signatures"] += MethodSignature.scan(self.emitter.top, self.types)
 
     def add_include(self, headers):
         for clazz in headers.clazzes:
@@ -874,6 +933,7 @@ if __name__ == "__main__":
     argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
     argparser.add_argument("--headers", action="store_true", help="display headers (for debugging)")
     argparser.add_argument("--signatures", action="store_true", help="display signatures (for debugging)")
+    argparser.add_argument("--directives", action="store_true", help="display using and namespace directives (for debugging)")
     argparser.add_argument("--parse-only", action="store_true", help="parse only, don't compile (for debugging)")
     argparser.add_argument("-o", "--output", metavar="file", help="file for bytecode output")
     argparser.add_argument("-i", "--include", metavar="file", action="append", help="files to link against")
@@ -894,10 +954,15 @@ if __name__ == "__main__":
 
     emitter = Emitter(tree)
     program = emitter.emit_program()
-    program.prescan()
     if args.include:
         for include in args.include:
             program.add_include(header.from_slb(include))
+    program.prescan()
+    if args.directives:
+        if program.namespace is not None:
+            print("Namespace: '%s'" % program.namespace)
+        for using_directive in program.using_directives:
+            print("Using: '%s'" % using_directive)
     if args.signatures:
         for signature in program.top.xattrs["signatures"]:
             print("    %s" % signature)
