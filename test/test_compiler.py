@@ -278,3 +278,16 @@ class TestMethods:
     def test_inheritance_duplicate_field_different_type(self):
         util.clean_tmp()
         path = util.assert_compile_fails("resources/methods/override_outside_class.slg", message="Can't both be an override method and not have a containing class")
+
+class TestNamespaces:
+    def test_basic(self):
+        util.clean_tmp()
+        lib = util.assert_compile_succeeds("resources/namespaces/basic_lib.slg")
+        main = util.assert_compile_succeeds("resources/namespaces/basic_main.slg", include=lib)
+        assert "0x0000000a" in util.interpret(lib, main)
+
+    def test_method(self):
+        util.clean_tmp()
+        lib = util.assert_compile_succeeds("resources/namespaces/method_lib.slg")
+        main = util.assert_compile_succeeds("resources/namespaces/method_main.slg", include=lib)
+        assert "0x00000005" in util.interpret(lib, main)

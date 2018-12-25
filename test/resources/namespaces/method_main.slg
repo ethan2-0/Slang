@@ -1,0 +1,5 @@
+namespace Main;
+
+entrypoint fn main(): int {
+    return Lib.TheLib.get_five();
+}

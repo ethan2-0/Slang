@@ -1,5 +1,7 @@
 # TODO: Change TypingError to Node.compile_error
 
+import util
+
 class TypingError(Exception):
     def __init__(self, node, error):
         Exception.__init__(self, "Near line %s: %s" % (node.line, error))
@@ -303,15 +305,15 @@ class TypeSystem:
             return lhs_type.parent_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.
-            signature = None
+            signature = self.program.get_method_signature(util.get_flattened(expr[0]))
+            if signature is not None:
+                return signature.returntype
             if expr[0].i("."):
                 dot_node = expr[0]
                 lhs_type = self.decide_type(dot_node[0], scope)
                 if not lhs_type.is_clazz():
                     raise TypingError(dot_node[1], "Attempt to call a method on non-class type '%s'" % lhs_type)
                 signature = lhs_type.method_signature(dot_node[1].data)
-            else:
-                signature = self.program.get_method_signature(expr[0].data)
             if signature is None:
                 expr.compile_error("Unknown method name '%s'" % expr[0].data)
             return signature.returntype

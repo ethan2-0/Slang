@@ -1,0 +1,5 @@
+namespace Lib.TheLib;
+
+fn get_five(): int {
+    return 5;
+}

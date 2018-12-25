@@ -1,0 +1,14 @@
+namespace Main;
+
+class Subclass extends Lib.TheLib.Class {
+    ctor(num: int) {
+        this.num = num;
+    }
+    override fn getNum(): int {
+        return this.getNumInner() * 2;
+    }
+}
+entrypoint fn main(): int {
+    let instance = new Subclass(5);
+    return instance.getNum();
+}

@@ -1,3 +1,4 @@
+#include <common.h>
 #include <interpreter.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,6 +14,9 @@ int cl_get_index(it_PROGRAM* program, ts_TYPE_CLAZZ* type) {
     return -1;
 }
 void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLAZZ* type) {
+    #if DEBUG
+    printf("Arranging phi tables for class %d\n", type->id);
+    #endif
     int total_methods = 0;
     if(type->immediate_supertype != NULL) {
         if(!visited[cl_get_index(program, type->immediate_supertype)]) {
@@ -58,9 +62,16 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
         type->nfields += type->immediate_supertype->nfields;
     }
     // TODO: Fix type->heirarchy
-    visited[cl_get_index(program, type)] = true;
+    int index = cl_get_index(program, type);
+    visited[index] = true;
+    #if DEBUG
+    printf("Finished arranging phi tables for class %d\n", type->id);
+    #endif
 }
 void cl_arrange_phi_tables(it_PROGRAM* program) {
+    #if DEBUG
+    printf("Entering cl_arrange_phi_tables\n");
+    #endif
     if(program->clazzesc == 0) {
         return;
     }
@@ -74,4 +85,7 @@ void cl_arrange_phi_tables(it_PROGRAM* program) {
         }
         cl_arrange_phi_tables_inner(program, visited, program->clazzes[i]);
     }
+    #if DEBUG
+    printf("Ending cl_arrange_phi_tables\n");
+    #endif
 }

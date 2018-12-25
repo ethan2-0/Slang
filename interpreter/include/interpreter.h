@@ -115,6 +115,7 @@ typedef struct {
     // This is the entrypoint, as an index into `methods`.
     int entrypoint;
     int clazzesc;
+    int clazz_index;
     // This is a pointer to an array of pointers of classes
     ts_TYPE_CLAZZ** clazzes;
 } it_PROGRAM;

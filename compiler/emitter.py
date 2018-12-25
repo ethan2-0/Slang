@@ -2,6 +2,7 @@ from opcodes import opcodes as ops
 import header
 import typesys
 import parser
+import util
 import claims as clms
 from chain import Chain
 
@@ -241,9 +242,9 @@ class MethodEmitter:
                 opcodes.append(ops["twocomp"].ins(rhs))
                 opcodes.append(ops["add"].ins(lhs, rhs, register))
         elif node.i("call"):
-            signature = None
+            signature = self.program.get_method_signature(util.get_flattened(node[0]))
             is_clazz_call = False
-            if node[0].i("."):
+            if signature is None and node[0].i("."):
                 is_clazz_call = True
                 dot_node = node[0]
                 lhs_reg = self.scope.allocate(self.types.decide_type(dot_node[0], self.scope))
@@ -251,8 +252,6 @@ class MethodEmitter:
                 if not lhs_reg.type.is_clazz():
                     lhs_reg.compile_error("Attempt to call a method of something that has type '%s', despite it not being a class" % lhs_reg.type)
                 signature = lhs_reg.type.method_signature(dot_node[1].data)
-            else:
-                signature = get_method_signature(node[0].data, self.top)
 
             if len(node.children) - 1 != len(signature.args) + (-1 if is_clazz_call else 0):
                 node.compile_error("Expected %s arguments, got %s" % (len(signature.args), len(node.children) - 1))

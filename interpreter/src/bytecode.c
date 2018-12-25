@@ -324,7 +324,7 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     result->nargs = nargs;
     result->opcodec = num_opcodes;
     #if DEBUG
-    printf("Sizeof: %d\n", sizeof(it_OPCODE));
+    printf("Opcodec: %d\n", result->opcodec);
     #endif
     result->opcodes = malloc(sizeof(it_OPCODE) * num_opcodes);
     #if DEBUG
@@ -339,7 +339,6 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     #endif
 }
 void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* state) {
-    int clazz_index = 0;
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
         if(segment_type == SEGMENT_TYPE_METHOD) {
@@ -369,7 +368,7 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
             clazz->nfields = -1;
             clazz->fields = NULL;
             ts_register_type((ts_TYPE*) clazz, strdup(clazzname));
-            program->clazzes[clazz_index++] = clazz;
+            program->clazzes[program->clazz_index++] = clazz;
             free(clazzname);
             free(parentname);
         }
@@ -482,6 +481,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     // This is the index of the start of the segments in the input bytecode
     bc_PRESCAN_RESULTS* prescan[fpc];
     it_PROGRAM* result = malloc(sizeof(it_PROGRAM));
+    result->clazz_index = 0;
     result->method_id = 0;
     result->methodc = 0;
     result->entrypoint = -1;

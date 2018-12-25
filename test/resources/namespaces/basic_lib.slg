@@ -1,0 +1,14 @@
+namespace Lib.TheLib;
+
+class Class {
+    num: int;
+    ctor(num: int) {
+        this.num = num;
+    }
+    fn getNumInner(): int {
+        return this.num;
+    }
+    fn getNum(): int {
+        return this.getNumInner();
+    }
+}
