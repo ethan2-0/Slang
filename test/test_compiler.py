@@ -108,6 +108,11 @@ class TestClazzesBasic:
         path = util.assert_compile_succeeds("resources/classes_basic/class_nullptr.slg")
         assert "Null pointer" in util.interpret(path, expect_fail=True)
 
+    def test_clazz_call(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_basic/class_call.slg")
+        assert "0x00000001" in util.interpret(path)
+
 class TestClassesMethods:
     def test_classes_method(self):
         util.clean_tmp()
@@ -291,3 +296,9 @@ class TestNamespaces:
         lib = util.assert_compile_succeeds("resources/namespaces/method_lib.slg")
         main = util.assert_compile_succeeds("resources/namespaces/method_main.slg", include=lib)
         assert "0x00000005" in util.interpret(lib, main)
+
+class TestParser:
+    def test_underscore_in_name(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/parser/underscore_in_name.slg")
+        assert "0x00000005" in util.interpret(path)

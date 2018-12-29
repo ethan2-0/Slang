@@ -1,0 +1,6 @@
+fn _getNum_(): int {
+    return 5;
+}
+entrypoint fn main(): int {
+    return _getNum_();
+}

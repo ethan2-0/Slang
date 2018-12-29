@@ -1,0 +1,23 @@
+class Cls {
+    num1: int;
+    bool2: bool;
+    num3: int;
+    ctor(num1: int, bool2: bool, num3: int) {
+        this.num1 = num1;
+        this.bool2 = bool2;
+        this.num3 = num3;
+    }
+    fn square(num: int): int {
+        return num * num;
+    }
+    fn isProper(num1: int, num2: int): bool {
+        return num1 == 1 and num2 == 2;
+    }
+    fn valuesAreProper(): bool {
+        return this.num1 == 3 and this.bool2 == true and this.num3 == 4;
+    }
+}
+entrypoint fn main(): bool {
+    let cls = new Cls(3, true, 4);
+    return cls.valuesAreProper() and cls.isProper(1, 2) and cls.square(6) == 36;
+}

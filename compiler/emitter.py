@@ -255,14 +255,15 @@ class MethodEmitter:
 
             if len(node.children) - 1 != len(signature.args) + (-1 if is_clazz_call else 0):
                 node.compile_error("Expected %s arguments, got %s" % (len(signature.args), len(node.children) - 1))
-            for param, index in zip(node.children[1:], range(len(node.children) - 1)):
+            for param, index in zip(node.children[1:], range(1 if is_clazz_call else 0, len(node.children) + (1 if is_clazz_call else 0))):
+            # for param, index in zip(node.children[1:], range(len(node.children) - 1)):
                 inferred_type = self.types.decide_type(param, self.scope)
                 declared_type = signature.args[index]
                 if not inferred_type.is_assignable_to(declared_type):
                     raise typesys.TypingError(node, "Invalid parameter type: '%s' is not assignable to '%s'" % (inferred_type, declared_type))
                 reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
-                opcodes.append(ops["param"].ins(reg, index))
+                opcodes.append(ops["param"].ins(reg, index + (-1 if is_clazz_call else 0)))
             if is_clazz_call:
                 opcodes.append(ops["classcall"].ins(lhs_reg, signature, register))
             else:
