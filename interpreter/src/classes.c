@@ -29,7 +29,7 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
             total_methods++;
         }
     }
-    type->methods = malloc(sizeof(it_METHOD*) * total_methods);
+    type->methods = mm_malloc(sizeof(it_METHOD*) * total_methods);
     int current_method_index = 0;
     if(type->immediate_supertype != NULL) {
         memcpy(type->methods, type->immediate_supertype->methods, sizeof(it_METHOD*) * type->immediate_supertype->methodc);
@@ -55,7 +55,7 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
     type->methodc = current_method_index;
     if(type->immediate_supertype != NULL) {
         ts_CLAZZ_FIELD* old_fields = type->fields;
-        type->fields = malloc(sizeof(ts_CLAZZ_FIELD*) * (type->nfields + type->immediate_supertype->nfields));
+        type->fields = mm_malloc(sizeof(ts_CLAZZ_FIELD*) * (type->nfields + type->immediate_supertype->nfields));
         memcpy(type->fields, type->immediate_supertype->fields, sizeof(ts_CLAZZ_FIELD*) * type->immediate_supertype->nfields);
         memcpy(type->fields + type->immediate_supertype->nfields, old_fields, sizeof(ts_CLAZZ_FIELD*) * type->nfields);
         free(old_fields);

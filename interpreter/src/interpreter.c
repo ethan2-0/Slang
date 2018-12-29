@@ -26,13 +26,15 @@ void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
         printf("Allocating more register space: %d < %d\n", stackptr->registers_allocated, stackptr->registerc);
         #endif
         free(stackptr->registers);
-        stackptr->registers = malloc(sizeof(itval) * stackptr->registerc);
+        stackptr->registers = mm_malloc(sizeof(itval) * stackptr->registerc);
     }
+    // Technically, we've already zeroed out the memory (in mm_malloc(...)).
+    // But that's mostly to ease debugging, I don't want to rely on it.
     memset(stackptr->registers, 0x00, stackptr->registerc * sizeof(itval));
 }
 void it_execute(it_PROGRAM* prog) {
     // Setup interpreter state
-    it_STACKFRAME* stack = malloc(sizeof(it_STACKFRAME) * STACKSIZE);
+    it_STACKFRAME* stack = mm_malloc(sizeof(it_STACKFRAME) * STACKSIZE);
     it_STACKFRAME* stackptr = stack;
     it_STACKFRAME* stackend = stack + STACKSIZE;
     for(int i = 0; i < STACKSIZE; i++) {
@@ -120,7 +122,7 @@ void it_execute(it_PROGRAM* prog) {
             printf("Need %d args, incl this.\n", classcall_callee->nargs);
             printf("This: %02x\n", thiz);
             for(uint8_t i = 0; i < classcall_callee->nargs - 1; i++) {
-                printf("Argument: %02x\n", params[i]);
+                printf("Argument: %02x\n", params[i + 1]);
             }
             #endif
 
@@ -270,7 +272,7 @@ void it_execute(it_PROGRAM* prog) {
         case OPCODE_NEW:
             ;
             it_OPCODE_DATA_NEW* opcode_new_data = (it_OPCODE_DATA_NEW*) iptr->payload;
-            registers[opcode_new_data->dest].clazz_data = malloc(sizeof(ts_TYPE_CLAZZ*) + sizeof(itval) * opcode_new_data->clazz->nfields);
+            registers[opcode_new_data->dest].clazz_data = mm_malloc(sizeof(ts_TYPE_CLAZZ*) + sizeof(itval) * opcode_new_data->clazz->nfields);
             memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(itval) * opcode_new_data->clazz->nfields);
             registers[opcode_new_data->dest].clazz_data->phi_table = opcode_new_data->clazz;
             iptr++;
@@ -297,7 +299,7 @@ void it_execute(it_PROGRAM* prog) {
             ;
             it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (it_OPCODE_DATA_ARRALLOC*) iptr->payload;
             uint64_t length = registers[opcode_arralloc_data->lengthreg].number;
-            registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) malloc(sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1));
+            registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) mm_malloc(sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1));
             registers[opcode_arralloc_data->arrreg].array_data->length = length;
             memset(&registers[opcode_arralloc_data->arrreg].array_data->elements, 0, length * sizeof(itval));
             iptr++;

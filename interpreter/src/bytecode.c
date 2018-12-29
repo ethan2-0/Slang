@@ -17,44 +17,44 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
     #endif
     if(opcode_num == OPCODE_LOAD) {
         // LOAD
-        it_OPCODE_DATA_LOAD* data = malloc(sizeof(it_OPCODE_DATA_LOAD));
+        it_OPCODE_DATA_LOAD* data = mm_malloc(sizeof(it_OPCODE_DATA_LOAD));
         data->target = fr_getuint32(state);
         data->data = fr_getuint64(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ZERO) {
         // ZERO
-        it_OPCODE_DATA_ZERO* data = malloc(sizeof(it_OPCODE_DATA_ZERO));
+        it_OPCODE_DATA_ZERO* data = mm_malloc(sizeof(it_OPCODE_DATA_ZERO));
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ADD) {
         // ADD
-        it_OPCODE_DATA_ADD* data = malloc(sizeof(it_OPCODE_DATA_ADD));
+        it_OPCODE_DATA_ADD* data = mm_malloc(sizeof(it_OPCODE_DATA_ADD));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_TWOCOMP) {
         // TWOCOMP
-        it_OPCODE_DATA_TWOCOMP* data = malloc(sizeof(it_OPCODE_DATA_TWOCOMP));
+        it_OPCODE_DATA_TWOCOMP* data = mm_malloc(sizeof(it_OPCODE_DATA_TWOCOMP));
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_MULT) {
         // MULT
-        it_OPCODE_DATA_MULT* data = malloc(sizeof(it_OPCODE_DATA_MULT));
+        it_OPCODE_DATA_MULT* data = mm_malloc(sizeof(it_OPCODE_DATA_MULT));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_MODULO) {
         // MODULO
-        it_OPCODE_DATA_MODULO* data = malloc(sizeof(it_OPCODE_DATA_MODULO));
+        it_OPCODE_DATA_MODULO* data = mm_malloc(sizeof(it_OPCODE_DATA_MODULO));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_CALL) {
         // CALL
-        it_OPCODE_DATA_CALL* data = malloc(sizeof(it_OPCODE_DATA_CALL));
+        it_OPCODE_DATA_CALL* data = mm_malloc(sizeof(it_OPCODE_DATA_CALL));
         char* callee_name = fr_getstr(state);
         data->callee = bc_resolve_name(program, callee_name);
         free(callee_name);
@@ -62,83 +62,83 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         opcode->payload = data;
     } else if(opcode_num == OPCODE_RETURN) {
         // RETURN
-        it_OPCODE_DATA_RETURN* data = malloc(sizeof(it_OPCODE_DATA_RETURN));
+        it_OPCODE_DATA_RETURN* data = mm_malloc(sizeof(it_OPCODE_DATA_RETURN));
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_EQUALS) {
         // EQUALS
-        it_OPCODE_DATA_EQUALS* data = malloc(sizeof(it_OPCODE_DATA_EQUALS));
+        it_OPCODE_DATA_EQUALS* data = mm_malloc(sizeof(it_OPCODE_DATA_EQUALS));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_INVERT) {
         // INVERT
-        it_OPCODE_DATA_INVERT* data = malloc(sizeof(it_OPCODE_DATA_INVERT));
+        it_OPCODE_DATA_INVERT* data = mm_malloc(sizeof(it_OPCODE_DATA_INVERT));
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_LTEQ) {
         // LTEQ
-        it_OPCODE_DATA_LTEQ* data = malloc(sizeof(it_OPCODE_DATA_LTEQ));
+        it_OPCODE_DATA_LTEQ* data = mm_malloc(sizeof(it_OPCODE_DATA_LTEQ));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_GT) {
         // GT
-        it_OPCODE_DATA_GT* data = malloc(sizeof(it_OPCODE_DATA_GT));
+        it_OPCODE_DATA_GT* data = mm_malloc(sizeof(it_OPCODE_DATA_GT));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_GOTO) {
         // GOTO
-        it_OPCODE_DATA_GOTO* data = malloc(sizeof(it_OPCODE_DATA_GOTO));
+        it_OPCODE_DATA_GOTO* data = mm_malloc(sizeof(it_OPCODE_DATA_GOTO));
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_JF) {
         // JF
-        it_OPCODE_DATA_JF* data = malloc(sizeof(it_OPCODE_DATA_JF));
+        it_OPCODE_DATA_JF* data = mm_malloc(sizeof(it_OPCODE_DATA_JF));
         data->predicate = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_PARAM) {
         // PARAM
-        it_OPCODE_DATA_PARAM* data = malloc(sizeof(it_OPCODE_DATA_PARAM));
+        it_OPCODE_DATA_PARAM* data = mm_malloc(sizeof(it_OPCODE_DATA_PARAM));
         data->source = fr_getuint32(state);
         data->target = fr_getuint8(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_GTEQ) {
         // GTEQ
-        it_OPCODE_DATA_GTEQ* data = malloc(sizeof(it_OPCODE_DATA_GTEQ));
+        it_OPCODE_DATA_GTEQ* data = mm_malloc(sizeof(it_OPCODE_DATA_GTEQ));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_XOR) {
         // XOR
-        it_OPCODE_DATA_XOR* data = malloc(sizeof(it_OPCODE_DATA_XOR));
+        it_OPCODE_DATA_XOR* data = mm_malloc(sizeof(it_OPCODE_DATA_XOR));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_AND) {
         // AND
-        it_OPCODE_DATA_AND* data = malloc(sizeof(it_OPCODE_DATA_AND));
+        it_OPCODE_DATA_AND* data = mm_malloc(sizeof(it_OPCODE_DATA_AND));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_OR) {
         // OR
-        it_OPCODE_DATA_OR* data = malloc(sizeof(it_OPCODE_DATA_OR));
+        it_OPCODE_DATA_OR* data = mm_malloc(sizeof(it_OPCODE_DATA_OR));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_MOV) {
         // MOV
-        it_OPCODE_DATA_MOV* data = malloc(sizeof(it_OPCODE_DATA_MOV));
+        it_OPCODE_DATA_MOV* data = mm_malloc(sizeof(it_OPCODE_DATA_MOV));
         data->source = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
@@ -152,13 +152,13 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         fr_getuint64(state);
     } else if(opcode_num == OPCODE_LT) {
         // LT
-        it_OPCODE_DATA_LT* data = malloc(sizeof(it_OPCODE_DATA_LT));
+        it_OPCODE_DATA_LT* data = mm_malloc(sizeof(it_OPCODE_DATA_LT));
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_NEW) {
-        it_OPCODE_DATA_NEW* data = malloc(sizeof(it_OPCODE_DATA_NEW));
+        it_OPCODE_DATA_NEW* data = mm_malloc(sizeof(it_OPCODE_DATA_NEW));
         data->clazz = (ts_TYPE_CLAZZ*) ts_get_type(fr_getstr(state));
         if(data->clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to instantiate something that isn't a class");
@@ -166,7 +166,7 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         data->dest = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ACCESS) {
-        it_OPCODE_DATA_ACCESS* data = malloc(sizeof(it_OPCODE_DATA_ACCESS));
+        it_OPCODE_DATA_ACCESS* data = mm_malloc(sizeof(it_OPCODE_DATA_ACCESS));
         data->clazzreg = fr_getuint32(state);
         ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->clazzreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
@@ -176,7 +176,7 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         data->destination = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ASSIGN) {
-        it_OPCODE_DATA_ASSIGN* data = malloc(sizeof(it_OPCODE_DATA_ASSIGN));
+        it_OPCODE_DATA_ASSIGN* data = mm_malloc(sizeof(it_OPCODE_DATA_ASSIGN));
         data->clazzreg = fr_getuint32(state);
         ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->clazzreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
@@ -186,7 +186,7 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         data->source = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_CLASSCALL) {
-        it_OPCODE_DATA_CLASSCALL* data = malloc(sizeof(it_OPCODE_DATA_CLASSCALL));
+        it_OPCODE_DATA_CLASSCALL* data = mm_malloc(sizeof(it_OPCODE_DATA_CLASSCALL));
         data->targetreg = fr_getuint32(state);
         ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->targetreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
@@ -199,24 +199,24 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         data->returnreg = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRALLOC) {
-        it_OPCODE_DATA_ARRALLOC* data = malloc(sizeof(it_OPCODE_DATA_ARRALLOC));
+        it_OPCODE_DATA_ARRALLOC* data = mm_malloc(sizeof(it_OPCODE_DATA_ARRALLOC));
         data->arrreg = fr_getuint32(state);
         data->lengthreg = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRACCESS) {
-        it_OPCODE_DATA_ARRACCESS* data = malloc(sizeof(it_OPCODE_DATA_ARRACCESS));
+        it_OPCODE_DATA_ARRACCESS* data = mm_malloc(sizeof(it_OPCODE_DATA_ARRACCESS));
         data->arrreg = fr_getuint32(state);
         data->indexreg = fr_getuint32(state);
         data->elementreg = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRASSIGN) {
-        it_OPCODE_DATA_ARRASSIGN* data = malloc(sizeof(it_OPCODE_DATA_ARRASSIGN));
+        it_OPCODE_DATA_ARRASSIGN* data = mm_malloc(sizeof(it_OPCODE_DATA_ARRASSIGN));
         data->arrreg = fr_getuint32(state);
         data->indexreg = fr_getuint32(state);
         data->elementreg = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRLEN) {
-        it_OPCODE_DATA_ARRLEN* data = malloc(sizeof(it_OPCODE_DATA_ARRLEN));
+        it_OPCODE_DATA_ARRLEN* data = mm_malloc(sizeof(it_OPCODE_DATA_ARRLEN));
         data->arrreg = fr_getuint32(state);
         data->resultreg = fr_getuint32(state);
         opcode->payload = data;
@@ -233,7 +233,7 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
     #if DEBUG
     printf("Entering bc_prescan\n");
     #endif
-    bc_PRESCAN_RESULTS* results = malloc(sizeof(bc_PRESCAN_RESULTS));
+    bc_PRESCAN_RESULTS* results = mm_malloc(sizeof(bc_PRESCAN_RESULTS));
     results->num_methods = 0;
     results->num_clazzes = 0;
 
@@ -306,7 +306,7 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     #endif
     free(fr_getstr(state));
     result->returntype = ts_get_type(fr_getstr(state));
-    result->argument_types = malloc(sizeof(ts_TYPE*) * registerc);
+    result->argument_types = mm_malloc(sizeof(ts_TYPE*) * registerc);
     for(int i = 0; i < registerc; i++) {
         char* typename = fr_getstr(state);
         #if DEBUG
@@ -326,7 +326,7 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     #if DEBUG
     printf("Opcodec: %d\n", result->opcodec);
     #endif
-    result->opcodes = malloc(sizeof(it_OPCODE) * num_opcodes);
+    result->opcodes = mm_malloc(sizeof(it_OPCODE) * num_opcodes);
     #if DEBUG
     for(int i = 0; i < num_opcodes; i++) {
         printf("Opcode--: %02x\n", opcode_buff[i].type);
@@ -358,12 +358,12 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
                 free(fr_getstr(state));
                 free(fr_getstr(state));
             }
-            ts_TYPE_CLAZZ* clazz = malloc(sizeof(ts_TYPE_CLAZZ));
+            ts_TYPE_CLAZZ* clazz = mm_malloc(sizeof(ts_TYPE_CLAZZ));
             clazz->category = ts_CATEGORY_CLAZZ;
             clazz->id = ts_allocate_type_id();
             clazz->name = strdup(clazzname);
             clazz->heirarchy_len = 1;
-            clazz->heirarchy = malloc(sizeof(ts_TYPE*) * 1);
+            clazz->heirarchy = mm_malloc(sizeof(ts_TYPE*) * 1);
             clazz->heirarchy[0] = (ts_TYPE*) clazz;
             clazz->nfields = -1;
             clazz->fields = NULL;
@@ -403,7 +403,7 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
             }
             uint32_t numfields = fr_getuint32(state);
             clazz->nfields = numfields;
-            clazz->fields = malloc(sizeof(ts_CLAZZ_FIELD) * numfields);
+            clazz->fields = mm_malloc(sizeof(ts_CLAZZ_FIELD) * numfields);
             for(uint32_t i = 0; i < numfields; i++) {
                 clazz->fields[i].name = fr_getstr(state);
                 clazz->fields[i].type = ts_get_type(fr_getstr(state));
@@ -480,7 +480,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     }
     // This is the index of the start of the segments in the input bytecode
     bc_PRESCAN_RESULTS* prescan[fpc];
-    it_PROGRAM* result = malloc(sizeof(it_PROGRAM));
+    it_PROGRAM* result = mm_malloc(sizeof(it_PROGRAM));
     result->clazz_index = 0;
     result->method_id = 0;
     result->methodc = 0;
@@ -499,8 +499,8 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     #if DEBUG
     printf("%d methods\n", result->methodc);
     #endif
-    result->methods = malloc(sizeof(it_METHOD) * result->methodc);
-    result->clazzes = malloc(sizeof(ts_TYPE_CLAZZ*) * result->clazzesc);
+    result->methods = mm_malloc(sizeof(it_METHOD) * result->methodc);
+    result->clazzes = mm_malloc(sizeof(ts_TYPE_CLAZZ*) * result->clazzesc);
     // typedef struct {
     //     int num_methods;
     //     uint32_t entrypoint_id;
@@ -536,7 +536,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
             largest_bufflen = state[i]->bufflen;
         }
     }
-    it_OPCODE* opcodes = malloc(sizeof(it_OPCODE) * largest_bufflen);
+    it_OPCODE* opcodes = mm_malloc(sizeof(it_OPCODE) * largest_bufflen);
     for(int i = 0; i < fpc; i++) {
         while(!fr_iseof(state[i])) {
             uint8_t segment_type = fr_getuint8(state[i]);

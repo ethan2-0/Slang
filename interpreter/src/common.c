@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 void fatal_with_errcode(char* description, int errcode) {
     printf("Fatal error\n%s", description);
@@ -93,5 +94,10 @@ char* fr_getstr(fr_STATE* state) {
     }
     // Null-terminate the string
     buff[length] = '\0';
+    return buff;
+}
+void* mm_malloc(size_t size) {
+    void* buff = malloc(size);
+    memset(buff, 0, size);
     return buff;
 }

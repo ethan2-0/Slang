@@ -12,39 +12,39 @@ static ts_TYPE_REGISTRY* global_registry = NULL;
 static uint32_t type_id = 3;
 void ts_init_global_registry() {
     // Create and initialize an int type
-    global_registry = malloc(sizeof(ts_TYPE_REGISTRY));
+    global_registry = mm_malloc(sizeof(ts_TYPE_REGISTRY));
     global_registry->name = strdup("int");
-    global_registry->type = malloc(sizeof(ts_TYPE));
+    global_registry->type = mm_malloc(sizeof(ts_TYPE));
     ts_TYPE_BAREBONES* int_type = (ts_TYPE_BAREBONES*) global_registry->type;
     int_type->id = 0;
     int_type->name = strdup("int");
     int_type->heirarchy_len = 1;
-    int_type->heirarchy = malloc(sizeof(ts_TYPE_BAREBONES*));
+    int_type->heirarchy = mm_malloc(sizeof(ts_TYPE_BAREBONES*));
     int_type->heirarchy[0] = (ts_TYPE*) int_type;
     int_type->category = ts_CATEGORY_PRIMITIVE;
 
     // Create and initialize a bool type
-    global_registry->next = malloc(sizeof(ts_TYPE_REGISTRY));
+    global_registry->next = mm_malloc(sizeof(ts_TYPE_REGISTRY));
     global_registry->next->next = NULL;
     global_registry->next->name = strdup("bool");
-    global_registry->next->type = malloc(sizeof(ts_TYPE));
+    global_registry->next->type = mm_malloc(sizeof(ts_TYPE));
     ts_TYPE_BAREBONES* bool_type = (ts_TYPE_BAREBONES*) global_registry->next->type;
     bool_type->id = 1;
     bool_type->name = strdup("bool");
     bool_type->heirarchy_len = 1;
-    bool_type->heirarchy = malloc(sizeof(ts_TYPE_BAREBONES*));
+    bool_type->heirarchy = mm_malloc(sizeof(ts_TYPE_BAREBONES*));
     bool_type->heirarchy[0] = (ts_TYPE*) bool_type;
     bool_type->category = ts_CATEGORY_PRIMITIVE;
 
-    global_registry->next->next = malloc(sizeof(ts_TYPE_REGISTRY));
+    global_registry->next->next = mm_malloc(sizeof(ts_TYPE_REGISTRY));
     global_registry->next->next->next = NULL;
     global_registry->next->next->name = strdup("void");
-    global_registry->next->next->type = malloc(sizeof(ts_TYPE));
+    global_registry->next->next->type = mm_malloc(sizeof(ts_TYPE));
     ts_TYPE_BAREBONES* void_type = (ts_TYPE_BAREBONES*) global_registry->next->next->type;
     void_type->id = 2;
     bool_type->name = strdup("bool");
     void_type->heirarchy_len = 1;
-    void_type->heirarchy = malloc(sizeof(ts_TYPE_BAREBONES*));
+    void_type->heirarchy = mm_malloc(sizeof(ts_TYPE_BAREBONES*));
     void_type->heirarchy[0] = (ts_TYPE*) void_type;
     void_type->category = ts_CATEGORY_PRIMITIVE;
 }
@@ -63,7 +63,7 @@ void ts_register_type(ts_TYPE* type, char* name) {
     while(end->next != NULL) {
         end = end->next;
     }
-    end->next = malloc(sizeof(ts_TYPE_REGISTRY));
+    end->next = mm_malloc(sizeof(ts_TYPE_REGISTRY));
     end->next->name = name;
     end->next->type = type;
     end->next->next = NULL;
@@ -110,15 +110,15 @@ ts_TYPE* ts_get_type_inner(char* name) {
     return NULL;
 }
 ts_TYPE_ARRAY* ts_create_array_type(ts_TYPE* parent_type) {
-    ts_TYPE_ARRAY* result = malloc(sizeof(ts_TYPE_ARRAY));
+    ts_TYPE_ARRAY* result = mm_malloc(sizeof(ts_TYPE_ARRAY));
     result->category = ts_CATEGORY_ARRAY;
     result->id = ts_allocate_type_id();
     size_t parent_name_length = strlen(parent_type->barebones.name);
-    result->name = malloc(sizeof(char) * (parent_name_length + 3));
+    result->name = mm_malloc(sizeof(char) * (parent_name_length + 3));
     sprintf(result->name, "[%s]", parent_type->barebones.name);
     ts_register_type(result, result->name);
     result->heirarchy_len = 1;
-    result->heirarchy = malloc(sizeof(ts_TYPE*) * 1);
+    result->heirarchy = mm_malloc(sizeof(ts_TYPE*) * 1);
     result->heirarchy[0] = (ts_TYPE*) result;
     result->parent_type = parent_type;
     ts_register_type(result, result->name);
