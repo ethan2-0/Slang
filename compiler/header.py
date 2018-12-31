@@ -172,7 +172,7 @@ class HeaderRepresentation:
     def from_program(program):
         return HeaderRepresentation(
             [HeaderMethodRepresentation.from_method(method, program) for method in program.methods],
-            [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures]
+            [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures if not clazz.is_included]
         )
 
     @staticmethod
@@ -189,6 +189,12 @@ class HeaderRepresentation:
         )
 
 HeaderRepresentation.HIDDEN = HeaderRepresentation([], [], hidden=True)
+
+def from_json(fname):
+    file_data = None
+    with open(fname, "r") as f:
+        file_data = f.read()
+    return HeaderRepresentation.unserialize(json.loads(file_data))
 
 def from_slb(fname):
     file_data = None

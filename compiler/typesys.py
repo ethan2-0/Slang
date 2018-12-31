@@ -152,7 +152,7 @@ class ArrayType(AbstractType):
     def is_assignable_to(self, other):
         return isinstance(other, ArrayType) and other.parent_type == self.parent_type
 
-    def resolves(self, node):
+    def resolves(self, node, program):
         return node.i("[]") and self.parent_type.resolves(node[0])
 
     def is_array(self):

@@ -593,11 +593,12 @@ class ClazzField:
         self.type = type
 
 class ClazzSignature:
-    def __init__(self, name, fields, method_signatures, ctor_signatures, parent_signature):
+    def __init__(self, name, fields, method_signatures, ctor_signatures, parent_signature, is_included=False):
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
         self.ctor_signatures = ctor_signatures
+        self.is_included = is_included
         if parent_signature is not None and type(parent_signature) is not ClazzSignature:
             raise ValueError("Invalid type for parent_signature %s (expected ClazzSignature or NoneType)" % type(parent_signature))
         self.parent_signature = parent_signature
@@ -866,14 +867,18 @@ class Program:
             if not toplevel.i("class"):
                 continue
             clazz_emitters.append(ClazzEmitter(toplevel, self))
+        # This is the indices in self.clazz_signatures of the class signature
+        # associated with its respective emitter
+        indices = dict()
         for emitter in clazz_emitters:
             signature = emitter.emit_signature_no_fields()
+            indices[id(emitter)] = len(self.clazz_signatures)
             self.clazz_signatures.append(signature)
             self.types.accept_skeleton_clazz(signature)
-        for emitter, index in zip(clazz_emitters, range(len(clazz_emitters))):
+        for emitter in clazz_emitters:
             signature = emitter.emit_signature()
             self.types.update_signature(signature)
-            self.clazz_signatures[index] = signature
+            self.clazz_signatures[indices[id(emitter)]] = signature
         for emitter in clazz_emitters:
             emitter.add_superclass_to_signature()
         self.clazz_emitters = clazz_emitters
@@ -883,7 +888,7 @@ class Program:
 
     def add_include(self, headers):
         for clazz in headers.clazzes:
-            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None))
+            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, is_included=True))
         for method in headers.methods:
             self.emitter.top.xattrs["signatures"].append(MethodSignature(
                 method.name,
@@ -901,7 +906,7 @@ class Program:
             fields = []
             for field in clazz.fields:
                 fields.append(ClazzField(field.name, self.types.resolve(parser.parse_type(field.type))))
-            clazz = ClazzSignature(clazz.name, fields, methods, ctors, self.types.resolve(parser.parse_type(clazz.parent)) if clazz.parent is not None else None)
+            clazz = ClazzSignature(clazz.name, fields, methods, ctors, self.types.resolve(parser.parse_type(clazz.parent)) if clazz.parent is not None else None, is_included=True)
             self.clazz_signatures.append(clazz)
             self.types.update_signature(clazz)
 
@@ -924,6 +929,7 @@ class Emitter:
 
 if __name__ == "__main__":
     import argparse
+    import os.path
     argparser = argparse.ArgumentParser()
     argparser.add_argument("file")
     argparser.add_argument("--no-metadata", action="store_true", help="don't include metadata")
@@ -935,8 +941,10 @@ if __name__ == "__main__":
     argparser.add_argument("--signatures", action="store_true", help="display signatures (for debugging)")
     argparser.add_argument("--directives", action="store_true", help="display using and namespace directives (for debugging)")
     argparser.add_argument("--parse-only", action="store_true", help="parse only, don't compile (for debugging)")
+    argparser.add_argument("--no-stdlib", action="store_true", help="don't link against standard library")
     argparser.add_argument("-o", "--output", metavar="file", help="file for bytecode output")
     argparser.add_argument("-i", "--include", metavar="file", action="append", help="files to link against")
+    argparser.add_argument("-j", "--include-json", metavar="file", action="append", help="json to link against")
     args = argparser.parse_args()
 
     if args.output is None:
@@ -957,6 +965,15 @@ if __name__ == "__main__":
     if args.include:
         for include in args.include:
             program.add_include(header.from_slb(include))
+
+    if args.include_json:
+        for include in args.include_json:
+            program.add_include(header.from_json(include))
+
+    if not args.no_stdlib:
+        compiler_dir = os.path.dirname(__file__)
+        program.add_include(header.from_slb(os.path.join(compiler_dir, "stdlib/bin/stdlib.slb")))
+
     program.prescan()
     if args.directives:
         if program.namespace is not None:

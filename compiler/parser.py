@@ -30,6 +30,8 @@ class Token:
 
 class Toker:
     keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
+    ident_start_chars = string.ascii_letters + "_"
+    ident_chars = ident_start_chars + string.digits
     def __init__(self, src):
         self.src = src
         self.ptr = 0
@@ -60,9 +62,9 @@ class Toker:
             while self.ch() != "\n":
                 self.adv()
             return self.next()
-        elif self.ch() in string.ascii_letters:
+        elif self.ch() in Toker.ident_start_chars:
             s = ""
-            while self.ch() in string.ascii_letters + string.digits + "_" and not self.is_eof():
+            while self.ch() in Toker.ident_chars and not self.is_eof():
                 s += self.adv()
             if s in self.keywords:
                 return Token(s)
