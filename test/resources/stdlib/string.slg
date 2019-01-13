@@ -1,0 +1,27 @@
+using stdlib;
+
+entrypoint fn main(): int {
+    let helloworldarr = ['H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!'];
+    let helloworld = new String(helloworldarr, 0, #helloworldarr);
+    let helloworldarr2 = ['H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!'];
+    let helloworld2 = new String(helloworldarr2, 0, #helloworldarr2);
+    if(not helloworld.equals(helloworld2)) {
+        return 2;
+    }
+
+    if(not helloworld.charAt(0) == 'H') {
+        return 3;
+    }
+    if(not helloworld.substrOpen(7).charAt(2) == 'r') {
+        return 4;
+    }
+    let worldarr = ['W', 'o', 'r', 'l', 'd'];
+    let world = new String(worldarr, 0, #worldarr);
+    if(not helloworld.substr(7, 12).equals(world)) {
+        return 5;
+    }
+    if(not helloworld.substrOpen(7).substr(0, 5).equals(world)) {
+        return 6;
+    }
+    return 1;
+}

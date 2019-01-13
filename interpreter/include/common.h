@@ -17,6 +17,7 @@ typedef struct {
     int index;
 } fr_STATE;
 fr_STATE* fr_new(FILE* fp);
+fr_STATE* fr_new_from_buffer(int bufflen, char* buffer);
 void fr_destroy(fr_STATE* state);
 void fr_advance(fr_STATE* state, int qty);
 bool fr_iseof(fr_STATE* state);

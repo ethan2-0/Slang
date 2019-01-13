@@ -214,6 +214,26 @@ class TypeSystem:
         self.array_types.append(typ)
         return typ
 
+    def resolve_to_signature(self, node, scope):
+        if util.get_flattened(node) is not None and self.program.get_method_signature(util.get_flattened(node)) is not None:
+            return self.program.get_method_signature(util.get_flattened(node))
+        if node.i("ident"):
+            node.compile_error("Attempt to call an identifier that doesn't resolve to a method")
+        elif node.i("."):
+            typ = self.decide_type(node[0], scope)
+            if not node[1].i("ident"):
+                raise ValueError("This is a compiler bug")
+            if not typ.is_clazz():
+                node.compile_error("Cannot perform access on something that isn't an instance of a class")
+            if typ.type_of_property(node[1].data) is not None:
+                node.compile_error("Attempt to call a property")
+            elif typ.method_signature(node[1].data) is not None:
+                return typ.method_signature(node[1].data)
+            else:
+                node.compile_error("Attempt to perform property access that doesn't make sense")
+        else:
+            node.compile_error("Attempt to call something that can't be called")
+
     def decide_type(self, expr, scope):
         if expr.of("+", "*", "-", "^", "&", "|", "%") and len(expr) == 2:
             lhs_type = self.decide_type(expr[0], scope)
@@ -305,7 +325,7 @@ class TypeSystem:
             return lhs_type.parent_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.
-            signature = self.program.get_method_signature(util.get_flattened(expr[0]))
+            signature = self.resolve_to_signature(expr[0], scope)
             if signature is not None:
                 return signature.returntype
             if expr[0].i("."):

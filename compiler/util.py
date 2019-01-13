@@ -4,8 +4,12 @@ def get_flattened(nod):
     if nod.i("ident"):
         return nod.data
     elif nod.i("."):
-        ret = "%s.%s" % (get_flattened(nod[0]), get_flattened(nod[1]))
+        flattened_left = get_flattened(nod[0])
+        flattened_right = get_flattened(nod[1])
+        if flattened_left is None or flattened_right is None:
+            return None
+        ret = "%s.%s" % (flattened_left, flattened_right)
         nod.xattrs["flattened"] = ret
         return ret
     else:
-        raise ValueError()
+        return None

@@ -31,6 +31,15 @@ fr_STATE* fr_new(FILE* fp) {
     fclose(fp);
     return state;
 }
+fr_STATE* fr_new_from_buffer(int bufflen, char* buffer) {
+    fr_STATE* state = malloc(sizeof(fr_STATE));
+    state->index = 0;
+    state->fp = NULL;
+    state->bufflen = bufflen;
+    state->buffer = malloc(bufflen * sizeof(char));
+    memcpy(state->buffer, buffer, bufflen);
+    return state;
+}
 void fr_destroy(fr_STATE* state) {
     free(state->buffer);
     free(state);
@@ -96,6 +105,7 @@ char* fr_getstr(fr_STATE* state) {
     buff[length] = '\0';
     return buff;
 }
+
 void* mm_malloc(size_t size) {
     void* buff = malloc(size);
     memset(buff, 0, size);

@@ -1,0 +1,23 @@
+{
+    "type": "metadata",
+    "methods": [
+        {
+            "type": "method",
+            "name": "stdlib.internal.print",
+            "arguments": [
+                {
+                    "type": "argument",
+                    "name": "value",
+                    "argtype": "[int]"
+                }
+            ],
+            "numargs": 1,
+            "returns": "void",
+            "containingclass": null,
+            "entrypoint": false,
+            "ctor": false,
+            "override": false
+        }
+    ],
+    "classes": []
+}

@@ -119,6 +119,10 @@ class TestClassesMethods:
         path = util.assert_compile_succeeds("resources/classes_methods/class_method.slg")
         util.interpret(path)
 
+    def test_method_and_property_name(self):
+        util.clean_tmp()
+        util.assert_compile_fails("resources/classes_methods/method_and_property_name.slg", "Class property and method with the same name")
+
 class TestMethodTypes:
     def test_method_types(self):
         util.clean_tmp()
@@ -302,3 +306,14 @@ class TestParser:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/parser/underscore_in_name.slg")
         assert "0x00000005" in util.interpret(path)
+
+class TestStdlib:
+    def test_basic(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/basic.slg")
+        assert "0x00000001" in util.interpret(path)
+
+    def test_string(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/string.slg")
+        assert "0x00000001" in util.interpret(path)

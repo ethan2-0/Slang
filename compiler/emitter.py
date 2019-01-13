@@ -44,8 +44,8 @@ class Scopes:
     def pop(self):
         self.locals.pop()
 
-    def allocate(self, type=None):
-        ret = RegisterHandle(self.register_ids, type)
+    def allocate(self, typ):
+        ret = RegisterHandle(self.register_ids, typ)
         self.registers.append(ret)
         self.register_ids += 1
         return ret
@@ -177,6 +177,29 @@ class MethodEmitter:
         self.types = program.types
         self.signature = signature
 
+    def emit_to_method_signature(self, node, opcodes):
+        if util.get_flattened(node) is not None and self.program.get_method_signature(util.get_flattened(node)) is not None:
+            return self.program.get_method_signature(util.get_flattened(node)), None
+        if node.i("ident"):
+            node.compile_error("Attempt to call an identifier that doesn't resolve to a method")
+        elif node.i("."):
+            typ = self.types.decide_type(node[0], self.scope)
+            if not node[1].i("ident"):
+                raise ValueError("This is a compiler bug")
+            if not typ.is_clazz():
+                node.compile_error("Cannot perform access on something that isn't an instance of a class")
+            if typ.type_of_property(node[1].data) is not None:
+                node.compile_error("Attempt to call a property")
+            elif typ.method_signature(node[1].data) is not None:
+                reg = self.scope.allocate(typ)
+                opcodes += self.emit_expr(node[0], reg)
+                return typ.method_signature(node[1].data), reg
+            else:
+                node.compile_error("Attempt to perform property access that doesn't make sense")
+        else:
+            node.compile_error("Attempt to call something that can't be called")
+
+
     def emit_expr(self, node, register):
         opcodes = []
         if node.i("number"):
@@ -242,21 +265,14 @@ class MethodEmitter:
                 opcodes.append(ops["twocomp"].ins(rhs))
                 opcodes.append(ops["add"].ins(lhs, rhs, register))
         elif node.i("call"):
-            signature = self.program.get_method_signature(util.get_flattened(node[0]))
-            is_clazz_call = False
-            if signature is None and node[0].i("."):
-                is_clazz_call = True
-                dot_node = node[0]
-                lhs_reg = self.scope.allocate(self.types.decide_type(dot_node[0], self.scope))
-                opcodes += self.emit_expr(dot_node[0], lhs_reg)
-                if not lhs_reg.type.is_clazz():
-                    lhs_reg.compile_error("Attempt to call a method of something that has type '%s', despite it not being a class" % lhs_reg.type)
-                signature = lhs_reg.type.method_signature(dot_node[1].data)
+            emitted_opcodes = []
+            signature, lhs_reg = self.emit_to_method_signature(node[0], emitted_opcodes)
+            opcodes += emitted_opcodes
+            is_clazz_call = lhs_reg is not None
 
             if len(node.children) - 1 != len(signature.args) + (-1 if is_clazz_call else 0):
                 node.compile_error("Expected %s arguments, got %s" % (len(signature.args), len(node.children) - 1))
             for param, index in zip(node.children[1:], range(1 if is_clazz_call else 0, len(node.children) + (1 if is_clazz_call else 0))):
-            # for param, index in zip(node.children[1:], range(len(node.children) - 1)):
                 inferred_type = self.types.decide_type(param, self.scope)
                 declared_type = signature.args[index]
                 if not inferred_type.is_assignable_to(declared_type):
@@ -269,7 +285,6 @@ class MethodEmitter:
             else:
                 opcodes.append(ops["call"].ins(signature, register))
         elif node.i("new"):
-            # clazz_signature = self.program.get_clazz_signature(node[0].data)
             clazz_signature = self.types.resolve(node[0]).signature
             result_register = self.scope.allocate(self.types.decide_type(node, self.scope))
             opcodes.append(ops["new"].ins(clazz_signature, result_register))
@@ -608,6 +623,8 @@ class ClazzSignature:
             raise ValueError("Method '%s' violates overriding rules on class '%s'" % (signature.name, self.name))
 
         for signature in self.method_signatures:
+            if self.get_field_by_name(signature.name) is not None:
+                raise ValueError("Class property and method with the same name: '%s' (from class '%s'" % (signature.name, self.name))
             if not signature.is_override:
                 if self.parent_signature is None:
                     continue

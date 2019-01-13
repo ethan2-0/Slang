@@ -5,6 +5,7 @@
 #include "common.h"
 #include "opcodes.h"
 #include "interpreter.h"
+#include "slbstdlib.h"
 
 uint32_t bc_resolve_name(it_PROGRAM* program, char* callee_name);
 uint32_t bc_assign_method_id(it_PROGRAM* program);
@@ -474,18 +475,20 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     #if DEBUG
     printf("Parsing %d files\n", fpc);
     #endif
-    fr_STATE* state[fpc];
+    int num_files = fpc + 1;
+    fr_STATE* state[num_files];
     for(int i = 0; i < fpc; i++) {
         state[i] = fr_new(fp[i]);
     }
+    state[fpc] = fr_new_from_buffer((size_t) (sl_stdlib_end - sl_stdlib), sl_stdlib);
     // This is the index of the start of the segments in the input bytecode
-    bc_PRESCAN_RESULTS* prescan[fpc];
+    bc_PRESCAN_RESULTS* prescan[num_files];
     it_PROGRAM* result = mm_malloc(sizeof(it_PROGRAM));
     result->clazz_index = 0;
     result->method_id = 0;
     result->methodc = 0;
     result->entrypoint = -1;
-    for(int i = 0; i < fpc; i++) {
+    for(int i = 0; i < num_files; i++) {
         prescan[i] = bc_prescan(state[i]);
         fr_rewind(state[i]);
         // Ignore the magic number
@@ -493,7 +496,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
         result->methodc += prescan[i]->num_methods;
     }
     result->clazzesc = 0;
-    for(int i = 0; i < fpc; i++) {
+    for(int i = 0; i < num_files; i++) {
         result->clazzesc += prescan[i]->num_clazzes;
     }
     #if DEBUG
@@ -505,7 +508,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     //     int num_methods;
     //     uint32_t entrypoint_id;
     // } bc_PRESCAN_RESULTS;
-    for(int i = 0; i < fpc; i++) {
+    for(int i = 0; i < num_files; i++) {
         bc_scan_types(result, prescan[i], state[i]);
         fr_rewind(state[i]);
         // Ignore the magic number
@@ -514,7 +517,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     #if DEBUG
     printf("Again, %d methods\n", result->methodc);
     #endif
-    for(int i = 0, method_index = 0; i < fpc; i++) {
+    for(int i = 0, method_index = 0; i < num_files; i++) {
         bc_scan_methods(result, state[i], method_index);
         method_index += prescan[i]->num_methods;
         fr_rewind(state[i]);
@@ -531,13 +534,13 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     // Reset the index into the input bytecode to the beginning of the segments
     int method_index = 0;
     int largest_bufflen = 0;
-    for(int i = 0; i < fpc; i++) {
+    for(int i = 0; i < num_files; i++) {
         if(state[i]->bufflen > largest_bufflen) {
             largest_bufflen = state[i]->bufflen;
         }
     }
     it_OPCODE* opcodes = mm_malloc(sizeof(it_OPCODE) * largest_bufflen);
-    for(int i = 0; i < fpc; i++) {
+    for(int i = 0; i < num_files; i++) {
         while(!fr_iseof(state[i])) {
             uint8_t segment_type = fr_getuint8(state[i]);
             if(segment_type == SEGMENT_TYPE_METHOD) {
@@ -554,7 +557,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     }
 
     free(opcodes);
-    for(int i = 0; i < fpc; i++) {
+    for(int i = 0; i < num_files; i++) {
         fr_destroy(state[i]);
         bc_prescan_destroy(prescan[i]);
     }

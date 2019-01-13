@@ -1,0 +1,119 @@
+namespace stdlib;
+
+fn die() {
+    let x = [int: 0];
+    let y = x[0];
+}
+
+class String {
+    chars: [int];
+    startIndex: int;
+    length: int;
+    ctor(chars: [int], startIndex: int, length: int) {
+        if(startIndex + length > #chars) {
+            die();
+        }
+        this.chars = chars;
+        this.startIndex = startIndex;
+        this.length = length;
+    }
+    fn charAt(index: int): int {
+        if(index > this.length) {
+            die();
+        }
+        return this.chars[index + this.startIndex];
+    }
+    fn _getCleanBuffer(): [int] {
+        if(this.startIndex == 0 and this.length == #this.chars) {
+            return this.chars;
+        }
+        let newBuff = [int: this.length];
+        for(let i = 0; i < this.length; i++) {
+            newBuff[i] = this.chars[this.startIndex + i];
+        }
+        this.chars = newBuff;
+        return newBuff;
+    }
+    fn concat(other: String): String {
+        let newBuff = [int: other.length + this.length];
+        let cleanBuff = this._getCleanBuffer();
+        let otherCleanBuff = other._getCleanBuffer();
+        for(let i = 0; i < #cleanBuff; i++) {
+            newBuff[i] = cleanBuff[i];
+        }
+        for(let i = 0; i < #otherCleanBuff; i++) {
+            newBuff[i + #cleanBuff] = otherCleanBuff[i];
+        }
+        return new String(newBuff, 0, this.length + other.length);
+    }
+    fn substr(startIndex: int, endIndex: int): String {
+        if(startIndex < 0) {
+            startIndex = this.length - startIndex;
+        }
+        if(endIndex < 0) {
+            endIndex = this.length - endIndex;
+        }
+        if(endIndex >= this.length) {
+            endIndex = this.length;
+        }
+        if(startIndex >= this.length or endIndex > this.length) {
+            die();
+        }
+        return new String(this.chars, this.startIndex + startIndex, endIndex - startIndex);
+    }
+    fn substrOpen(startIndex: int): String {
+        if(startIndex < 0) {
+            startIndex = this.length - startIndex;
+        }
+        return this.substr(startIndex, this.length);
+    }
+    fn equals(other: String): bool {
+        if(other.length != this.length) {
+            return false;
+        }
+        if(other.chars == this.chars) {
+            return this.startIndex == other.startIndex;
+        }
+        for(let i = 0; i < this.length; i++) {
+            if(this.charAt(i) != other.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    fn indexOf(other: String): int {
+        for(let i = 0; i <= (this.length - other.length); i++) {
+            let isThisTime = true;
+            for(let j = 0; j < other.length and isThisTime; j++) {
+                if(this.charAt(i + j) != other.charAt(j)) {
+                    isThisTime = false;
+                }
+            }
+            if(isThisTime) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    fn indexOfChar(ch: int): int {
+        for(let i = 0; i < this.length; i++) {
+            if(ch == this.charAt(i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    fn contains(other: String): bool {
+        return this.indexOf(other) != -1;
+    }
+    fn containsChar(other: int): bool {
+        return this.indexOfChar(other) != -1;
+    }
+}
+fn print(str: String) {
+    // This is to work around a compiler bug that I haven't gotten around to fixing yet
+    // let _ = stdlib.internal.print(str._getCleanBuffer());
+}
+fn getOne(): int {
+    return 1;
+}
