@@ -1,0 +1,5 @@
+using stdlib;
+
+entrypoint fn main() {
+    print(new String(['P', 'r', 'i', 'n', 't', 'e', 'd', 10], 0, 7));
+}

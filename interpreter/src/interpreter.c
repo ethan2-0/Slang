@@ -9,14 +9,6 @@
 
 #define STACKSIZE 1024
 
-typedef struct {
-    itval* registers;
-    int registerc;
-    int registers_allocated;
-    uint32_t returnreg;
-    it_OPCODE* iptr;
-    it_METHOD* method;
-} it_STACKFRAME;
 void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
     stackptr->method = method;
     stackptr->iptr = stackptr->method->opcodes;
@@ -73,19 +65,25 @@ void it_execute(it_PROGRAM* prog) {
         case OPCODE_CALL:
             ; // Labels can't be immediately followed by declarations, because
               // C is a barbaric language
+            uint32_t callee_id = ((it_OPCODE_DATA_CALL*) iptr->payload)->callee;
+            it_METHOD* callee = &prog->methods[callee_id];
+            if(callee->replacement_ptr != NULL) {
+                uint32_t returnreg = ((it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+                registers[returnreg] = callee->replacement_ptr(stackptr, params);
+                iptr++;
+                continue;
+            }
             it_STACKFRAME* oldstack = stackptr;
             stackptr++;
             if(stackptr >= stackend) {
                 fatal("Stack overflow");
             }
-            uint32_t callee_id = ((it_OPCODE_DATA_CALL*) iptr->payload)->callee;
 
             #if DEBUG
             printf("Calling %d\n", callee_id);
             #endif
 
             oldstack->returnreg = ((it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
-            it_METHOD* callee = &prog->methods[callee_id];
 
             #if DEBUG
             printf("Need %d args.\n", callee->nargs);
@@ -346,9 +344,46 @@ CLEANUP:
     // Explicitly not freeing stackptr and stackend since they're dangling pointers at this point
     return;
 }
-void it_RUN(it_PROGRAM* prog) {
+void it_run(it_PROGRAM* prog) {
     #if DEBUG
     printf("Entering it_RUN\n");
     #endif
     it_execute(prog);
+}
+itval rm_print(it_STACKFRAME* stackptr, itval* params) {
+    it_ARRAY_DATA* arr = params[0].array_data;
+    char* chars = mm_malloc(sizeof(char) * (arr->length + 1));
+    for(int i = 0; i < arr->length; i++) {
+        chars[i] = (char) (arr->elements[i].number & 0xff);
+    }
+    chars[arr->length] = 0;
+    fputs(chars, stdout);
+    free(chars);
+    return (itval) ((uint64_t) 0);
+}
+itval rm_exit(it_STACKFRAME* stackptr, itval* params) {
+    uint64_t exit_status = params[0].number;
+    exit(exit_status);
+    // This will never be reached
+    return (itval) ((uint64_t) 0);
+}
+void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it_METHOD_REPLACEMENT_PTR methodptr, char* name) {
+    if(method_index >= prog->methodc) {
+        fatal("Attempting to create replaced method with index greater than methodc. This is a bug.");
+    }
+    prog->methods[method_index].argument_types = NULL;
+    prog->methods[method_index].containing_clazz = NULL;
+    prog->methods[method_index].id = prog->method_id++;
+    prog->methods[method_index].name = name;
+    prog->methods[method_index].nargs = nargs;
+    prog->methods[method_index].opcodec = 0;
+    prog->methods[method_index].opcodes = NULL;
+    prog->methods[method_index].registerc = 0;
+    prog->methods[method_index].returntype = NULL;
+    prog->methods[method_index].replacement_ptr = methodptr;
+}
+void it_replace_methods(it_PROGRAM* prog) {
+    int method_index = prog->methodc - NUM_REPLACED_METHODS;
+    it_create_replaced_method(prog, method_index++, 1, rm_print, strdup("stdlib.internal.print"));
+    it_create_replaced_method(prog, method_index++, 1, rm_exit, strdup("stdlib.internal.exit"));
 }

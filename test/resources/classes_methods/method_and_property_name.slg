@@ -1,0 +1,9 @@
+class Cls {
+    prop: int;
+    ctor() {}
+    fn prop() {}
+}
+
+entrypoint fn main(): bool {
+    return true;
+}

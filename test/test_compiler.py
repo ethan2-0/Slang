@@ -317,3 +317,9 @@ class TestStdlib:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/stdlib/string.slg")
         assert "0x00000001" in util.interpret(path)
+
+class TestReplacedMethods:
+    def test_print(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/replaced_methods/print.slg")
+        assert "Printed" in util.interpret(path)

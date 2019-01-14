@@ -291,6 +291,7 @@ uint32_t bc_resolve_name(it_PROGRAM* program, char* name) {
     return -1;
 }
 void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* program, it_METHOD* result) {
+    result->replacement_ptr = NULL;
     uint32_t length = fr_getuint32(state);
     uint32_t registerc = fr_getuint32(state);
     uint32_t nargs = fr_getuint32(state);
@@ -486,7 +487,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
     it_PROGRAM* result = mm_malloc(sizeof(it_PROGRAM));
     result->clazz_index = 0;
     result->method_id = 0;
-    result->methodc = 0;
+    result->methodc = NUM_REPLACED_METHODS;
     result->entrypoint = -1;
     for(int i = 0; i < num_files; i++) {
         prescan[i] = bc_prescan(state[i]);
@@ -524,6 +525,7 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
         // Ignore the magic number
         fr_getuint32(state[i]);
     }
+    it_replace_methods(result);
     // bc_arrange_type_method_pointers(result);
     cl_arrange_phi_tables(result);
 

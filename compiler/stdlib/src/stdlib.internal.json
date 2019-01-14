@@ -17,6 +17,23 @@
             "entrypoint": false,
             "ctor": false,
             "override": false
+        },
+        {
+            "type": "method",
+            "name": "stdlib.internal.exit",
+            "arguments": [
+                {
+                    "type": "argument",
+                    "name": "code",
+                    "argtype": "int"
+                }
+            ],
+            "numargs": 1,
+            "returns": "void",
+            "containingclass": null,
+            "entrypoint": false,
+            "ctor": false,
+            "override": false
         }
     ],
     "classes": []

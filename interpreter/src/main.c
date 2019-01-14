@@ -34,5 +34,5 @@ int main(int argc, char* argv[]) {
     }
     #endif
     // TODO: Properly destroy `prog`
-    it_RUN(prog);
+    it_run(prog);
 }

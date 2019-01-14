@@ -92,6 +92,15 @@ typedef struct {
     uint8_t type;
     void* payload;
 } it_OPCODE;
+typedef struct {
+    itval* registers;
+    int registerc;
+    int registers_allocated;
+    uint32_t returnreg;
+    it_OPCODE* iptr;
+    struct it_METHOD* method;
+} it_STACKFRAME;
+typedef itval (*it_METHOD_REPLACEMENT_PTR)(it_STACKFRAME*, itval*);
 struct it_METHOD {
     uint32_t id;
     // This could technically be a uint8_t, but ehh
@@ -104,6 +113,7 @@ struct it_METHOD {
     // This is a pointer to an array
     ts_TYPE** argument_types;
     ts_TYPE_CLAZZ* containing_clazz;
+    it_METHOD_REPLACEMENT_PTR replacement_ptr;
 };
 typedef struct {
     // This is the number of methods
@@ -123,8 +133,11 @@ typedef struct {
 typedef struct it_METHOD it_METHOD;
 typedef struct it_ARRAY_DATA it_ARRAY_DATA;
 
-void it_RUN(it_PROGRAM* prog);
+void it_run(it_PROGRAM* prog);
+void it_replace_methods(it_PROGRAM* prog);
 
 void cl_arrange_phi_tables(it_PROGRAM* program);
+
+#define NUM_REPLACED_METHODS 2
 
 #endif

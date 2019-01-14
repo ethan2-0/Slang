@@ -1,8 +1,12 @@
 namespace stdlib;
 
-fn die() {
-    let x = [int: 0];
-    let y = x[0];
+fn die(message: String) {
+    let s = new String(['F', 'a', 't', 'a', 'l', ' ', 'e', 'r', 'r', 'o', 'r', ':', ' '], 0, 13);
+    let newline = new String([10], 0, 1);
+    print(s);
+    print(message);
+    print(newline);
+    exit(1);
 }
 
 class String {
@@ -11,15 +15,18 @@ class String {
     length: int;
     ctor(chars: [int], startIndex: int, length: int) {
         if(startIndex + length > #chars) {
-            die();
+            die(new String(['L', 'e', 'n', 'g', 't', 'h', ' ', 't', 'o', 'o', ' ', 'l', 'a', 'r', 'g', 'e'], 0, 16));
         }
         this.chars = chars;
         this.startIndex = startIndex;
+        if(length == -1) {
+            length = #chars;
+        }
         this.length = length;
     }
     fn charAt(index: int): int {
         if(index > this.length) {
-            die();
+            die(new String(['c', 'h', 'a', 'r', 'A', 't', ' ', 'i', 'n', 'd', 'e', 'x', ' ', 'o', 'u', 't', ' ', 'o', 'f', ' ', 'b', 'o', 'u', 'n', 'd', 's'], 0, 26));
         }
         return this.chars[index + this.startIndex];
     }
@@ -57,7 +64,7 @@ class String {
             endIndex = this.length;
         }
         if(startIndex >= this.length or endIndex > this.length) {
-            die();
+            die(new String(['s', 'u', 'b', 's', 't', 'r', ' ', 'i', 'n', 'd', 'e', 'x', ' ', 'o', 'u', 't', ' ', 'o', 'f', ' ', 'b', 'o', 'u', 'n', 'd', 's'], 0, 26));
         }
         return new String(this.chars, this.startIndex + startIndex, endIndex - startIndex);
     }
@@ -112,7 +119,10 @@ class String {
 }
 fn print(str: String) {
     // This is to work around a compiler bug that I haven't gotten around to fixing yet
-    // let _ = stdlib.internal.print(str._getCleanBuffer());
+    let _ = stdlib.internal.print(str._getCleanBuffer());
+}
+fn exit(code: int) {
+    let _ = stdlib.internal.exit(code);
 }
 fn getOne(): int {
     return 1;
