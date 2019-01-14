@@ -1,6 +1,7 @@
 # TODO: Change TypingError to Node.compile_error
 
 import util
+import parser
 
 class TypingError(Exception):
     def __init__(self, node, error):

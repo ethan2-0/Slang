@@ -1,11 +1,9 @@
 namespace stdlib;
 
 fn die(message: String) {
-    let s = new String(['F', 'a', 't', 'a', 'l', ' ', 'e', 'r', 'r', 'o', 'r', ':', ' '], 0, 13);
-    let newline = new String([10], 0, 1);
-    print(s);
+    print("Fatal error: ");
     print(message);
-    print(newline);
+    print("\n");
     exit(1);
 }
 
@@ -15,7 +13,7 @@ class String {
     length: int;
     ctor(chars: [int], startIndex: int, length: int) {
         if(startIndex + length > #chars) {
-            die(new String(['L', 'e', 'n', 'g', 't', 'h', ' ', 't', 'o', 'o', ' ', 'l', 'a', 'r', 'g', 'e'], 0, 16));
+            die("Given length that overruns end of string");
         }
         this.chars = chars;
         this.startIndex = startIndex;
@@ -26,7 +24,7 @@ class String {
     }
     fn charAt(index: int): int {
         if(index > this.length) {
-            die(new String(['c', 'h', 'a', 'r', 'A', 't', ' ', 'i', 'n', 'd', 'e', 'x', ' ', 'o', 'u', 't', ' ', 'o', 'f', ' ', 'b', 'o', 'u', 'n', 'd', 's'], 0, 26));
+            die("charAt index out of bounds");
         }
         return this.chars[index + this.startIndex];
     }
@@ -64,7 +62,7 @@ class String {
             endIndex = this.length;
         }
         if(startIndex >= this.length or endIndex > this.length) {
-            die(new String(['s', 'u', 'b', 's', 't', 'r', ' ', 'i', 'n', 'd', 'e', 'x', ' ', 'o', 'u', 't', ' ', 'o', 'f', ' ', 'b', 'o', 'u', 'n', 'd', 's'], 0, 26));
+            die("substr index out of bounds");
         }
         return new String(this.chars, this.startIndex + startIndex, endIndex - startIndex);
     }

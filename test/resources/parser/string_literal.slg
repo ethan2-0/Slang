@@ -1,0 +1,9 @@
+using stdlib;
+
+entrypoint fn main(): bool {
+    let t = "a\nc";
+    if(t.charAt(0) != 'a' or t.charAt(1) != '\n' or t.charAt(2) != 'c') {
+        return false;
+    }
+    return true;
+}

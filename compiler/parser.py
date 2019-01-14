@@ -30,6 +30,7 @@ class Token:
 
 class Toker:
     keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
+    escapes = {"n": "\n", "\\": "\\", "'": "'", "r": "\r", "0": "\0", "b": "\b", "v": "\v"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
     def __init__(self, src):
@@ -52,6 +53,16 @@ class Toker:
     def is_eof(self):
         return self.ptr >= len(self.src)
 
+    def tokenize_string_body_ch(self):
+        ch = self.adv()
+        ret = None
+        if ch == "\\":
+            ch = self.adv()
+            if ch in Toker.escapes:
+                return Toker.escapes[ch]
+            self.throw("Invalid escape sequence: '\\%s'" % ch)
+        return ch
+
     def next(self):
         if self.is_eof():
             return Token("EOF")
@@ -72,10 +83,17 @@ class Toker:
                 return Token("ident", s)
         elif self.ch() == "'":
             self.adv()
-            ret = ord(self.adv())
+            ret = ord(self.tokenize_string_body_ch())
             if self.adv() != "'":
                 self.throw("Unclosed character literal.")
             return Token("number", str(ret))
+        elif self.ch() == "\"":
+            self.adv()
+            s = ""
+            while self.ch() != "\"":
+                s += self.tokenize_string_body_ch()
+            self.adv()
+            return Token("string", s)
         elif self.ch() in string.digits:
             s = ""
             while self.ch() in string.digits:
@@ -309,6 +327,8 @@ class Parser:
             return Node(self.expect("not"), self.parse_comparison())
         elif self.isn("number"):
             return Node(self.expect("number"))
+        elif self.isn("string"):
+            return Node(self.expect("string"))
         elif self.peek().of("true", "false", "null"):
             return Node(self.next())
         elif self.isn("new"):

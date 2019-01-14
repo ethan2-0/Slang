@@ -199,7 +199,6 @@ class MethodEmitter:
         else:
             node.compile_error("Attempt to call something that can't be called")
 
-
     def emit_expr(self, node, register):
         opcodes = []
         if node.i("number"):
@@ -312,9 +311,9 @@ class MethodEmitter:
             opcodes.append(annotate(ops["load"].ins(arrlen_reg, len(node)), "array instantiation length"))
             opcodes.append(ops["arralloc"].ins(register, arrlen_reg))
             index_reg = self.scope.allocate(self.types.int_type)
+            element_reg = self.scope.allocate(register.type.parent_type)
             for i, elm in zip(range(len(node)), node):
                 opcodes.append(annotate(ops["load"].ins(index_reg, i), "array instantiation index"))
-                element_reg = self.scope.allocate(self.types.decide_type(elm, self.scope))
                 opcodes += self.emit_expr(elm, element_reg)
                 opcodes.append(ops["arrassign"].ins(register, index_reg, element_reg))
         elif node.i("access"):
@@ -515,10 +514,30 @@ class MethodEmitter:
     def encode(self, opcodes):
         pass
 
+    def convert_strings(self):
+        def replace(parent, index):
+            s = parent[index].data
+            array_node = parser.Node("[")
+            for ch in s:
+                array_node.add(parser.Node("number", data=ord(ch)))
+            nod = parser.Node("new", parser.Node("ident", data="stdlib.String"), array_node, parser.Node("number", data=0), parser.Node("number", data=len(s)))
+            parent.children[index] = nod
+
+        def convert_strings_inner(nod):
+            for i in range(len(nod)):
+                if nod[i].i("string"):
+                    replace(nod, i)
+                else:
+                    convert_strings_inner(nod[i])
+        # TODO: Technically, this doesn't work properly with functions with single-statement bodies.
+        if self.top.has_child("statements"):
+            convert_strings_inner(self.top["statements"])
+
     def emit(self):
         self.return_type = self.signature.returntype
-        # To codify an assumption used in this method:
+        # This caused a bug at some point
         assert self.top.i("fn") or self.top.i("ctor")
+        self.convert_strings()
         for argtype, argname in zip(self.signature.args, self.signature.argnames):
             self.scope.let(argname, self.scope.allocate(argtype), self.top[1] if self.top.i("fn") else self.top[0])
         opcodes, claims = self.emit_statement(self.top[3] if self.top.i("fn") else self.top[1])

@@ -307,6 +307,16 @@ class TestParser:
         path = util.assert_compile_succeeds("resources/parser/underscore_in_name.slg")
         assert "0x00000005" in util.interpret(path)
 
+    def test_escapes(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/parser/escapes.slg")
+        assert "0x00000001" in util.interpret(path)
+
+    def test_string_literal(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/parser/string_literal.slg")
+        assert "0x00000001" in util.interpret(path)
+
 class TestStdlib:
     def test_basic(self):
         util.clean_tmp()
