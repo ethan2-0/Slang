@@ -9,6 +9,8 @@
 
 #define STACKSIZE 1024
 
+extern bool gc_needs_collection;
+
 void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
     stackptr->method = method;
     stackptr->iptr = stackptr->method->opcodes;
@@ -57,6 +59,9 @@ void it_execute(it_PROGRAM* prog) {
         printf("\n");
         printf("Type %02x, iptr %d\n", iptr->type, iptr - instruction_start);
         #endif
+        if(gc_needs_collection) {
+            gc_collect(stack, stackptr);
+        }
         switch(iptr->type) {
         case OPCODE_PARAM:
             params[((it_OPCODE_DATA_PARAM*) iptr->payload)->target] = registers[((it_OPCODE_DATA_PARAM*) iptr->payload)->source];
@@ -270,7 +275,10 @@ void it_execute(it_PROGRAM* prog) {
         case OPCODE_NEW:
             ;
             it_OPCODE_DATA_NEW* opcode_new_data = (it_OPCODE_DATA_NEW*) iptr->payload;
-            registers[opcode_new_data->dest].clazz_data = mm_malloc(sizeof(ts_TYPE_CLAZZ*) + sizeof(itval) * opcode_new_data->clazz->nfields);
+            size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(itval) * opcode_new_data->clazz->nfields;
+            registers[opcode_new_data->dest].clazz_data = mm_malloc(new_allocation_size);
+            gc_OBJECT_REGISTRY* new_register = gc_register_object(registers[opcode_new_data->dest], new_allocation_size, ts_CATEGORY_CLAZZ);
+            registers[opcode_new_data->dest].clazz_data->gc_registry_entry = new_register;
             memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(itval) * opcode_new_data->clazz->nfields);
             registers[opcode_new_data->dest].clazz_data->phi_table = opcode_new_data->clazz;
             iptr++;
@@ -297,9 +305,13 @@ void it_execute(it_PROGRAM* prog) {
             ;
             it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (it_OPCODE_DATA_ARRALLOC*) iptr->payload;
             uint64_t length = registers[opcode_arralloc_data->lengthreg].number;
-            registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) mm_malloc(sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1));
+            size_t arralloc_allocation_size = sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1);
+            registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) mm_malloc(arralloc_allocation_size);
             registers[opcode_arralloc_data->arrreg].array_data->length = length;
             memset(&registers[opcode_arralloc_data->arrreg].array_data->elements, 0, length * sizeof(itval));
+            registers[opcode_arralloc_data->arrreg].array_data->type = stackptr->method->register_types[opcode_arralloc_data->arrreg];
+            gc_OBJECT_REGISTRY* arralloc_registry = gc_register_object(registers[opcode_arralloc_data->arrreg], arralloc_allocation_size, ts_CATEGORY_ARRAY);
+            registers[opcode_arralloc_data->arrreg].array_data->gc_registry_entry = arralloc_registry;
             iptr++;
             continue;
         case OPCODE_ARRACCESS:
@@ -371,7 +383,7 @@ void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it
     if(method_index >= prog->methodc) {
         fatal("Attempting to create replaced method with index greater than methodc. This is a bug.");
     }
-    prog->methods[method_index].argument_types = NULL;
+    prog->methods[method_index].register_types = NULL;
     prog->methods[method_index].containing_clazz = NULL;
     prog->methods[method_index].id = prog->method_id++;
     prog->methods[method_index].name = name;

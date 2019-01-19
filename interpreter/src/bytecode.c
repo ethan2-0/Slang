@@ -169,7 +169,7 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
     } else if(opcode_num == OPCODE_ACCESS) {
         it_OPCODE_DATA_ACCESS* data = mm_malloc(sizeof(it_OPCODE_DATA_ACCESS));
         data->clazzreg = fr_getuint32(state);
-        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->clazzreg];
+        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->register_types[data->clazzreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to access something that isn't a class");
         }
@@ -179,7 +179,7 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
     } else if(opcode_num == OPCODE_ASSIGN) {
         it_OPCODE_DATA_ASSIGN* data = mm_malloc(sizeof(it_OPCODE_DATA_ASSIGN));
         data->clazzreg = fr_getuint32(state);
-        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->clazzreg];
+        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->register_types[data->clazzreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to assign to a property of something that isn't a class");
         }
@@ -189,7 +189,7 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
     } else if(opcode_num == OPCODE_CLASSCALL) {
         it_OPCODE_DATA_CLASSCALL* data = mm_malloc(sizeof(it_OPCODE_DATA_CLASSCALL));
         data->targetreg = fr_getuint32(state);
-        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->argument_types[data->targetreg];
+        ts_TYPE_CLAZZ* clazzreg_type = (ts_TYPE_CLAZZ*) method->register_types[data->targetreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to call a method of something that isn't a class");
         }
@@ -308,13 +308,13 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     #endif
     free(fr_getstr(state));
     result->returntype = ts_get_type(fr_getstr(state));
-    result->argument_types = mm_malloc(sizeof(ts_TYPE*) * registerc);
+    result->register_types = mm_malloc(sizeof(ts_TYPE*) * registerc);
     for(int i = 0; i < registerc; i++) {
         char* typename = fr_getstr(state);
         #if DEBUG
         printf("Got register type '%s'\n", typename);
         #endif
-        result->argument_types[i] = ts_get_type(typename);
+        result->register_types[i] = ts_get_type(typename);
     }
     int num_opcodes = 0;
     while(state->index < end_index) {

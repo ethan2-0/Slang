@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
@@ -71,19 +72,32 @@ struct it_ARRAY_DATA;
 
 union itval {
     uint64_t number;
-    // This is a pointer to an array of itval
     struct it_CLAZZ_DATA* clazz_data;
     struct it_ARRAY_DATA* array_data;
 };
 
+typedef struct {
+    struct gc_OBJECT_REGISTRY* next;
+    struct gc_OBJECT_REGISTRY* previous;
+    uint64_t object_id;
+    bool is_present;
+    size_t allocation_size;
+    union itval object;
+    ts_CATEGORY category;
+    uint32_t visited;
+} gc_OBJECT_REGISTRY;
+
 struct it_ARRAY_DATA {
     uint64_t length;
+    gc_OBJECT_REGISTRY* gc_registry_entry;
+    ts_TYPE_ARRAY* type;
     union itval elements[1];
 };
 
 struct it_CLAZZ_DATA {
     ts_TYPE_CLAZZ* phi_table;
-    union itval itval[1];
+    gc_OBJECT_REGISTRY* gc_registry_entry;
+    union itval itval[0];
 };
 
 typedef union itval itval;
@@ -111,7 +125,7 @@ struct it_METHOD {
     it_OPCODE* opcodes;
     ts_TYPE* returntype;
     // This is a pointer to an array
-    ts_TYPE** argument_types;
+    ts_TYPE** register_types;
     ts_TYPE_CLAZZ* containing_clazz;
     it_METHOD_REPLACEMENT_PTR replacement_ptr;
 };
@@ -137,6 +151,12 @@ void it_run(it_PROGRAM* prog);
 void it_replace_methods(it_PROGRAM* prog);
 
 void cl_arrange_phi_tables(it_PROGRAM* program);
+
+gc_OBJECT_REGISTRY* gc_register_object(itval object, size_t allocation_size, ts_CATEGORY category);
+// void gc_free(gc_OBJECT_REGISTRY* registry_entry);
+void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame);
+bool gc_needs_collection;
+// bool does_gc_need_collection();
 
 #define NUM_REPLACED_METHODS 2
 
