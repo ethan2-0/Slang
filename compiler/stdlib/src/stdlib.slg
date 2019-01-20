@@ -119,9 +119,70 @@ fn print(str: String) {
     // This is to work around a compiler bug that I haven't gotten around to fixing yet
     let _ = stdlib.internal.print(str._getCleanBuffer());
 }
+fn println(str: String) {
+    // I know, this is horribly inefficient
+    print(str);
+    print("\n");
+}
 fn exit(code: int) {
     let _ = stdlib.internal.exit(code);
 }
 fn getOne(): int {
     return 1;
+}
+fn itos_base(input: int, base: int): String {
+    // TODO: Handle when input * base > max_int
+    let negative = input < 0;
+    if(negative) {
+        input *= -1;
+    }
+    let symbols = "0123456789abcdefghijklmnopqrstuvwxyz";
+    let magnitude_tmp = 1;
+    let magnitude = 0;
+    while(magnitude_tmp < input) {
+        magnitude_tmp *= base;
+        magnitude++;
+    }
+    let resultarr = [int: magnitude + 1];
+    resultarr[0] = '-';
+    let resultptr = magnitude;
+    while(input > 0) {
+        resultarr[resultptr] = symbols.charAt(input % base);
+        input = input / base;
+        resultptr--;
+    }
+    if(negative) {
+        return new String(resultarr, 0, magnitude + 1);
+    } else {
+        return new String(resultarr, 1, magnitude);
+    }
+}
+fn itos(input: int): String {
+    return itos_base(input, 10);
+}
+fn stoi_base(input: String, base: int): int {
+    let symbols = "0123456789abcdefghijklmnopqrstuvwxyz";
+    let negative = input.charAt(0) == '-';
+    if(negative) {
+        input = input.substrOpen(1);
+    }
+    let index = input.length - 1;
+    let result = 0;
+    let magnitude = 1;
+    while(index >= 0) {
+        let indexOf = symbols.indexOfChar(input.charAt(index));
+        if(indexOf == -1 or indexOf >= base) {
+            die("Unknown symbol in stoi_base");
+        }
+        result += indexOf * magnitude;
+        index--;
+        magnitude *= base;
+    }
+    if(negative) {
+        return result * -1;
+    }
+    return result;
+}
+fn stoi(input: String): int {
+    return stoi_base(input, 10);
 }

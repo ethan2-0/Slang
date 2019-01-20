@@ -1,0 +1,17 @@
+using stdlib;
+
+entrypoint fn main(): bool {
+    if(not stoi("12345") == 12345) {
+        return false;
+    }
+    if(not stoi_base("6qgq", 36) == 314234) {
+        return false;
+    }
+    if(not stoi_base("1001100101101111010", 2) == 314234) {
+        return false;
+    }
+    if(not stoi("-12345") == -12345) {
+        return false;
+    }
+    return true;
+}

@@ -1,0 +1,17 @@
+using stdlib;
+
+entrypoint fn main(): bool {
+    if(not itos(12345).equals("12345")) {
+        return false;
+    }
+    if(not itos_base(314234, 36).equals("6qgq")) {
+        return false;
+    }
+    if(not itos_base(314234, 2).equals("1001100101101111010")) {
+        return false;
+    }
+    if(not itos_base(-12345, 10).equals("-12345")) {
+        return false;
+    }
+    return true;
+}

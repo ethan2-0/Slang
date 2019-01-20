@@ -328,6 +328,16 @@ class TestStdlib:
         path = util.assert_compile_succeeds("resources/stdlib/string.slg")
         assert "0x00000001" in util.interpret(path)
 
+    def test_itos(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/itos.slg")
+        assert "0x00000001" in util.interpret(path)
+
+    def test_stoi(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/stoi.slg")
+        assert "0x00000001" in util.interpret(path)
+
 class TestReplacedMethods:
     def test_print(self):
         util.clean_tmp()

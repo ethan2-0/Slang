@@ -317,7 +317,7 @@ class TypeSystem:
             return self.get_array_type(self.resolve(expr[0]))
         elif expr.i("#"):
             if not self.decide_type(expr[0], scope).is_array():
-                raise typesys.TypingError("Can't decide length of something that isn't an array")
+                raise TypingError(expr[0], "Can't decide length of something that isn't an array")
             return self.int_type
         elif expr.i("access"):
             lhs_type = self.decide_type(expr[0], scope)

@@ -23,5 +23,11 @@ entrypoint fn main(): int {
     if(not helloworld.substrOpen(7).substr(0, 5).equals(world)) {
         return 6;
     }
+    if(not helloworld.indexOfChar('l') == 2) {
+        return 7;
+    }
+    if(not helloworld.indexOf("lo, ") == 3) {
+        return 8;
+    }
     return 1;
 }

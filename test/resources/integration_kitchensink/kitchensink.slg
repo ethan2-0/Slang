@@ -13,5 +13,5 @@ fn loop(n: int): int {
 entrypoint fn main(): int {
     let intermediate = ((1 + 2) & (3 + 4) - ((3 ^ ~6) * (7 & 8 | 9)) + 1) & 15;
     intermediate = loop(intermediate);
-    return pow(2, intermediate);
+    return pow(2, intermediate + 1) / 2;
 }
