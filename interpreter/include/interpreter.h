@@ -71,7 +71,7 @@ struct it_CLAZZ_DATA;
 struct it_ARRAY_DATA;
 
 union itval {
-    uint64_t number;
+    int64_t number;
     struct it_CLAZZ_DATA* clazz_data;
     struct it_ARRAY_DATA* array_data;
 };

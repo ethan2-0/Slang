@@ -221,6 +221,12 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         data->arrreg = fr_getuint32(state);
         data->resultreg = fr_getuint32(state);
         opcode->payload = data;
+    } else if(opcode_num == OPCODE_DIV) {
+        it_OPCODE_DATA_DIV* data = mm_malloc(sizeof(it_OPCODE_DATA_DIV));
+        data->source1 = fr_getuint32(state);
+        data->source2 = fr_getuint32(state);
+        data->target = fr_getuint32(state);
+        opcode->payload = data;
     } else {
         fatal("Unrecognized opcode");
     }

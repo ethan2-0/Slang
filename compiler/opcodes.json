@@ -154,6 +154,13 @@
         "writes": [2]
     },
     {
+        "code": "0x20",
+        "mneumonic": "DIV",
+        "params": ["register", "register", "register"],
+        "reads": [0, 1],
+        "writes": [2]
+    },
+    {
         "code": "0x05",
         "mneumonic": "MODULO",
         "params": ["register", "register", "register"],

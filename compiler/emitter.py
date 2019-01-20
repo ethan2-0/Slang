@@ -206,7 +206,7 @@ class MethodEmitter:
             opcodes.append(ops["load"].ins(register, abs(nt)))
             if nt < 0:
                 opcodes.append(ops["twocomp"].ins(register))
-        elif node.of("+", "*", "^", "&", "|", "%", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
+        elif node.of("+", "*", "^", "&", "|", "%", "/", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
             lhs = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs)
             rhs = self.scope.allocate(self.types.decide_type(node[1], self.scope))
@@ -217,6 +217,7 @@ class MethodEmitter:
                 "^": "xor",
                 "&": "and",
                 "|": "or",
+                "/": "div",
                 "%": "modulo",
                 "==": "equals",
                 "<": "lt",

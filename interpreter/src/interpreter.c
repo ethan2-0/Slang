@@ -177,6 +177,10 @@ void it_execute(it_PROGRAM* prog) {
             registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number % registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
             iptr++;
             continue;
+        case OPCODE_DIV:
+            registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number / registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
+            iptr++;
+            continue;
         case OPCODE_EQUALS:
             // TODO: Make this work on systems where sizeof(itval.number) != sizeof(itval.itval)
             //       This probably involves a specialized EQUALS opcode, either in the compiler or
@@ -371,13 +375,13 @@ itval rm_print(it_STACKFRAME* stackptr, itval* params) {
     chars[arr->length] = 0;
     fputs(chars, stdout);
     free(chars);
-    return (itval) ((uint64_t) 0);
+    return (itval) ((int64_t) 0);
 }
 itval rm_exit(it_STACKFRAME* stackptr, itval* params) {
     uint64_t exit_status = params[0].number;
     exit(exit_status);
     // This will never be reached
-    return (itval) ((uint64_t) 0);
+    return (itval) ((int64_t) 0);
 }
 void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it_METHOD_REPLACEMENT_PTR methodptr, char* name) {
     if(method_index >= prog->methodc) {

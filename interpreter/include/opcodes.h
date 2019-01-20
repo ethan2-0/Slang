@@ -39,6 +39,7 @@
 #define OPCODE_ARRACCESS 0x1d
 #define OPCODE_ARRASSIGN 0x1e
 #define OPCODE_ARRLEN 0x1f
+#define OPCODE_DIV 0x20
 
 typedef struct {
     uint32_t target;
@@ -167,5 +168,10 @@ typedef struct {
     uint32_t arrreg;
     uint32_t resultreg;
 } it_OPCODE_DATA_ARRLEN;
+typedef struct {
+    uint32_t source1;
+    uint32_t source2;
+    uint32_t target;
+} it_OPCODE_DATA_DIV;
 
 #endif

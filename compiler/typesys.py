@@ -236,7 +236,7 @@ class TypeSystem:
             node.compile_error("Attempt to call something that can't be called")
 
     def decide_type(self, expr, scope):
-        if expr.of("+", "*", "-", "^", "&", "|", "%") and len(expr) == 2:
+        if expr.of("+", "*", "-", "^", "&", "|", "%", "/") and len(expr) == 2:
             lhs_type = self.decide_type(expr[0], scope)
             rhs_type = self.decide_type(expr[1], scope)
             if not lhs_type.is_numerical():
