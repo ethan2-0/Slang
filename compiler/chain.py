@@ -14,6 +14,8 @@ class Chain:
                 if not current_type.is_clazz():
                     raise typesys.TypingError(child, "Cannot perform property access on something that isn't a class")
                 current_type = current_type.type_of_property(child[0].data)
+                if current_type is None:
+                    child[0].compile_error("Cannot find property")
             elif child.i("call"):
                 raise ValueError("Can't decide type of a chain that ends in a call (this is a compiler bug)")
             elif child.i("access"):

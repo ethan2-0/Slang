@@ -73,6 +73,9 @@ void it_execute(it_PROGRAM* prog) {
             uint32_t callee_id = ((it_OPCODE_DATA_CALL*) iptr->payload)->callee;
             it_METHOD* callee = &prog->methods[callee_id];
             if(callee->replacement_ptr != NULL) {
+                #if DEBUG
+                printf("Calling replaced method %s\n", callee->name);
+                #endif
                 uint32_t returnreg = ((it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
                 registers[returnreg] = callee->replacement_ptr(stackptr, params);
                 iptr++;
@@ -293,7 +296,8 @@ void it_execute(it_PROGRAM* prog) {
             if(registers[opcode_access_data->clazzreg].clazz_data == NULL) {
                 fatal("Null pointer on access");
             }
-            registers[opcode_access_data->destination] = registers[opcode_access_data->clazzreg].clazz_data->itval[opcode_access_data->property_index];
+            struct it_CLAZZ_DATA* clazz_data = registers[opcode_access_data->clazzreg].clazz_data;
+            registers[opcode_access_data->destination] = clazz_data->itval[opcode_access_data->property_index];
             iptr++;
             continue;
         case OPCODE_ASSIGN:
@@ -325,6 +329,7 @@ void it_execute(it_PROGRAM* prog) {
                 fatal("Attempt to access null array");
             }
             if(registers[opcode_arraccess_data->indexreg].number >= registers[opcode_arraccess_data->arrreg].array_data->length) {
+                printf("Index out of bounds in %s at opcode %d (access)\n", stackptr->method->name, (iptr - instruction_start));
                 fatal("Array index out of bounds");
             }
             registers[opcode_arraccess_data->elementreg] = registers[opcode_arraccess_data->arrreg].array_data->elements[registers[opcode_arraccess_data->indexreg].number];
@@ -337,6 +342,7 @@ void it_execute(it_PROGRAM* prog) {
                 fatal("Attempt to assign to null array");
             }
             if(registers[opcode_arrassign_data->indexreg].number >= registers[opcode_arrassign_data->arrreg].array_data->length) {
+                printf("Index out of bounds in %s at opcode %d (assignment)\n", stackptr->method->name, (iptr - instruction_start));
                 fatal("Array index out of bounds");
             }
             registers[opcode_arrassign_data->arrreg].array_data->elements[registers[opcode_arrassign_data->indexreg].number] = registers[opcode_arrassign_data->elementreg];
@@ -377,6 +383,22 @@ itval rm_print(it_STACKFRAME* stackptr, itval* params) {
     free(chars);
     return (itval) ((int64_t) 0);
 }
+itval rm_read(it_STACKFRAME* stackptr, itval* params) {
+    it_ARRAY_DATA* buff = params[0].array_data;
+    int64_t num_chars = params[1].number;
+    if(num_chars > 1024) {
+        num_chars = 1024;
+    }
+    // I could use a VLA here, but it wouldn't actualyl help anything
+    char mybuff[1025];
+    ssize_t result = read(STDIN_FILENO, mybuff, (size_t) num_chars);
+    for(int i = 0; i < result; i++) {
+        buff->elements[i].number = mybuff[i];
+    }
+    itval ret;
+    ret.number = result;
+    return ret;
+}
 itval rm_exit(it_STACKFRAME* stackptr, itval* params) {
     uint64_t exit_status = params[0].number;
     exit(exit_status);
@@ -402,4 +424,5 @@ void it_replace_methods(it_PROGRAM* prog) {
     int method_index = prog->methodc - NUM_REPLACED_METHODS;
     it_create_replaced_method(prog, method_index++, 1, rm_print, strdup("stdlib.internal.print"));
     it_create_replaced_method(prog, method_index++, 1, rm_exit, strdup("stdlib.internal.exit"));
+    it_create_replaced_method(prog, method_index++, 1, rm_read, strdup("stdlib.internal.read"));
 }

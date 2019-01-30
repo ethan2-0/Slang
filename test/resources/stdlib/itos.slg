@@ -1,6 +1,18 @@
 using stdlib;
 
 entrypoint fn main(): bool {
+    if(not itos(1).equals("1")) {
+        return false;
+    }
+    if(not itos(0).equals("0")) {
+        return false;
+    }
+    if(not itos(10).equals("10")) {
+        return false;
+    }
+    if(not itos(-10).equals("-10")) {
+        return false;
+    }
     if(not itos(12345).equals("12345")) {
         return false;
     }

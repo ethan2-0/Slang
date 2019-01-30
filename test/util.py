@@ -13,15 +13,16 @@ tmpdir = resolve_filename("tmp")
 def resolve_temp_path(temp_path):
     return os.path.join(tmpdir, temp_path)
 
-def do_compile(filename, outfile, include=[], parse_only=False):
-    if not isinstance(include, list):
-        include = [include]
+def do_compile(filename, outfile, include=[], include_json=[], parse_only=False):
     include_specifiers = list(itertools.chain.from_iterable([["--include", incl] for incl in include]))
+    include_specifiers += list(itertools.chain.from_iterable([["--include-json", incl] for incl in include_json]))
     return subprocess.run(["python3", resolve_filename("../compiler/emitter.py"), "-o", outfile,] + include_specifiers + (["--parse-only"] if parse_only else []) + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-def assert_compile_succeeds(filename, message="", include=[], parse_only=False):
+def assert_compile_succeeds(filename, message="", include=[], include_json=[], parse_only=False):
+    assert isinstance(include, list)
+    assert isinstance(include_json, list)
     outfile = resolve_temp_path(os.path.split(filename)[1])
-    completed_process = do_compile(filename, outfile, include, parse_only=parse_only)
+    completed_process = do_compile(filename, outfile, include=include, include_json=include_json, parse_only=parse_only)
     # I know, I shouldn't just coerce to utf8...
     stdout = completed_process.stdout.decode("utf8")
     if completed_process.returncode != 0 or message not in stdout:
@@ -38,8 +39,8 @@ def assert_compile_fails(filename, message="", include=[]):
         assert False
     return outfile
 
-def interpret(*filenames, expect_fail=False):
-    result = subprocess.run(["../interpreter/builddir/interpreter"] + list(filenames), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def interpret(*filenames, expect_fail=False, stdin=None):
+    result = subprocess.run(["../interpreter/builddir/interpreter"] + list(filenames), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, input=stdin)
     assert (result.returncode == 0) ^ expect_fail
     return result.stdout.decode("utf8")
 

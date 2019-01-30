@@ -1,0 +1,13 @@
+using stdlib;
+
+entrypoint fn main() {
+    if(not strconcat_all(["This ", "is ", "a ", "test"]).equals("This is a test")) {
+        die("Basic strconcat_all test failed");
+    }
+    if(not strconcat_all([String: 0]).equals("")) {
+        die("strconcat_all on empty list failed");
+    }
+    if(not strconcat_all(["Hi"]).equals("Hi")) {
+        die("strconcat_all on length-one list failed");
+    }
+}

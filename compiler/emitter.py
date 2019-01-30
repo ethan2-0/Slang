@@ -270,6 +270,8 @@ class MethodEmitter:
             opcodes += emitted_opcodes
             is_clazz_call = lhs_reg is not None
 
+            param_registers = []
+
             if len(node.children) - 1 != len(signature.args) + (-1 if is_clazz_call else 0):
                 node.compile_error("Expected %s arguments, got %s" % (len(signature.args), len(node.children) - 1))
             for param, index in zip(node.children[1:], range(1 if is_clazz_call else 0, len(node.children) + (1 if is_clazz_call else 0))):
@@ -279,7 +281,10 @@ class MethodEmitter:
                     raise typesys.TypingError(node, "Invalid parameter type: '%s' is not assignable to '%s'" % (inferred_type, declared_type))
                 reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
-                opcodes.append(ops["param"].ins(reg, index + (-1 if is_clazz_call else 0)))
+                param_registers.append((reg, index + (-1 if is_clazz_call else 0)))
+                # opcodes.append(ops["param"].ins(reg, index + (-1 if is_clazz_call else 0)))
+            for reg, index in param_registers:
+                opcodes.append(ops["param"].ins(reg, index))
             if is_clazz_call:
                 opcodes.append(ops["classcall"].ins(lhs_reg, signature, register))
             else:
@@ -519,9 +524,23 @@ class MethodEmitter:
         def replace(parent, index):
             s = parent[index].data
             array_node = parser.Node("[")
-            for ch in s:
-                array_node.add(parser.Node("number", data=ord(ch)))
-            nod = parser.Node("new", parser.Node("ident", data="stdlib.String"), array_node, parser.Node("number", data=0), parser.Node("number", data=len(s)))
+            nod = None
+            if len(s) > 0:
+                for ch in s:
+                    array_node.add(parser.Node("number", data=ord(ch)))
+                nod = parser.Node("new", parser.Node("ident", data="stdlib.String"), array_node, parser.Node("number", data=0), parser.Node("number", data=len(s)))
+            else:
+                nod = parser.Node(
+                    "new",
+                    parser.Node("ident", data="stdlib.String"),
+                    parser.Node(
+                        "arrinst",
+                        parser.Node("ident", data="int"),
+                        parser.Node("number", data=0)
+                    ),
+                    parser.Node("number", data=0),
+                    parser.Node("number", data=0)
+                )
             parent.children[index] = nod
 
         def convert_strings_inner(nod):
@@ -597,7 +616,7 @@ class MethodSegment(Segment):
         Segment.print_(self, emitter)
         print("Registers:", ", ".join([repr(register) for register in self.emitter.scope.registers]))
         for opcode, index in zip(self.opcodes, range(len(self.opcodes))):
-            print("    %2d: %s" % (index, str(opcode)))
+            print("%6d: %s" % (index, str(opcode)))
 
     def evaluate(self, program):
         self.opcodes = self.emit_opcodes(program)
@@ -639,6 +658,9 @@ class ClazzSignature:
         self.parent_signature = parent_signature
 
     def validate_overriding_rules(self):
+        if self.is_included:
+            return
+
         def throw(signature):
             raise ValueError("Method '%s' violates overriding rules on class '%s'" % (signature.name, self.name))
 
@@ -943,7 +965,7 @@ class Program:
             fields = []
             for field in clazz.fields:
                 fields.append(ClazzField(field.name, self.types.resolve(parser.parse_type(field.type))))
-            clazz = ClazzSignature(clazz.name, fields, methods, ctors, self.types.resolve(parser.parse_type(clazz.parent)) if clazz.parent is not None else None, is_included=True)
+            clazz = ClazzSignature(clazz.name, fields, methods, ctors, self.types.resolve(parser.parse_type(clazz.parent)).signature if clazz.parent is not None else None, is_included=True)
             self.clazz_signatures.append(clazz)
             self.types.update_signature(clazz)
 

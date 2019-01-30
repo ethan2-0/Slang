@@ -1,0 +1,5 @@
+using stdlib;
+
+entrypoint fn main() {
+    die("This is the fatal message.");
+}

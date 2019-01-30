@@ -158,6 +158,6 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame);
 bool gc_needs_collection;
 // bool does_gc_need_collection();
 
-#define NUM_REPLACED_METHODS 2
+#define NUM_REPLACED_METHODS 3
 
 #endif

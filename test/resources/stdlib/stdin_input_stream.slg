@@ -1,0 +1,12 @@
+using stdlib;
+
+entrypoint fn main() {
+    let stream = new StdinInputStream();
+    let reader = new BufferedReader(stream);
+    reader.setBufferSize(8);
+    while(reader.hasMore()) {
+        let firstNum = stoi(reader.readLine());
+        let secondNum = stoi(reader.readLine());
+        println(itos(firstNum + secondNum));
+    }
+}

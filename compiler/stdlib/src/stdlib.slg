@@ -131,6 +131,9 @@ fn getOne(): int {
     return 1;
 }
 fn itos_base(input: int, base: int): String {
+    if(input == 0) {
+        return "0";
+    }
     // TODO: Handle when input * base > max_int
     let negative = input < 0;
     if(negative) {
@@ -139,7 +142,7 @@ fn itos_base(input: int, base: int): String {
     let symbols = "0123456789abcdefghijklmnopqrstuvwxyz";
     let magnitude_tmp = 1;
     let magnitude = 0;
-    while(magnitude_tmp < input) {
+    while(magnitude_tmp <= input) {
         magnitude_tmp *= base;
         magnitude++;
     }
@@ -185,4 +188,211 @@ fn stoi_base(input: String, base: int): int {
 }
 fn stoi(input: String): int {
     return stoi_base(input, 10);
+}
+fn ctos(input: int): String {
+    return new String([input], 0, 1);
+}
+fn strconcat_all(strs: [String]): String {
+    let len = 0;
+    for(let i = 0; i < #strs; i++) {
+        len += strs[i].length;
+    }
+    let result = [int: len];
+    let index = 0;
+    for(let i = 0; i < #strs; i++) {
+        for(let j = 0; j < strs[i].length; j++) {
+            result[index] = strs[i].charAt(j);
+            index++;
+        }
+    }
+    return new String(result, 0, #result);
+}
+fn strjoin(strs: [String], delimiter: String): String {
+    if(#strs == 0) {
+        return "";
+    }
+    let len = 0;
+    for(let i = 0; i < #strs; i++) {
+        len += strs[i].length;
+    }
+    len += delimiter.length * ((#strs) - 1);
+    let result = [int: len];
+    let index = 0;
+    for(let i = 0; i < #strs; i++) {
+        for(let j = 0; j < strs[i].length; j++) {
+            result[index] = strs[i].charAt(j);
+            index++;
+        }
+        if(i < (#strs) - 1) {
+            for(let j = 0; j < delimiter.length; j++) {
+                result[index] = delimiter.charAt(j);
+                index++;
+            }
+        }
+    }
+    return new String(result, 0, len);
+}
+class InputStream {
+    // This is heavily inspired by java.io.InputStream.
+    ctor() {
+        die("Cannot construct InputStream directly.");
+    }
+    fn read(buff: [int], maxlen: int): int {
+        die("InputStream is abstract.");
+        return -1;
+    }
+    fn hasMore(): bool {
+        die("InputStream is abstract.");
+        return false;
+    }
+    fn available(): int {
+        return 0;
+    }
+}
+class StdinInputStream extends InputStream {
+    _hasMore: bool;
+    ctor() {
+        // Do nothing
+        this._hasMore = true;
+    }
+    override fn read(buff: [int], maxlen: int): int {
+        let result = stdlib.internal.read(buff, maxlen);
+        if(result <= 0) {
+            this._hasMore = false;
+        }
+        return result;
+    }
+    override fn hasMore(): bool {
+        return this._hasMore;
+    }
+    override fn available(): int {
+        if(this.hasMore()) {
+            return 1;
+        }
+        return 0;
+    }
+}
+class SeekableInputStream extends InputStream {
+    ctor() {
+        die("Cannot construct SeekableInputStream directly.");
+    }
+    fn seek(index: int) {
+        die("SeekableInputStream is abstract.");
+    }
+    fn reset() {
+        let _ = this.seek(0);
+    }
+}
+class ArrayInputStream extends SeekableInputStream {
+    data: [int];
+    index: int;
+    datalen: int;
+    ctor(data: [int]) {
+        this.data = data;
+        this.index = 0;
+        this.datalen = #data;
+    }
+    override fn read(buff: [int], maxlen: int): int {
+        if(maxlen > #buff) {
+            maxlen = #buff;
+        }
+        if(maxlen + this.index > this.datalen) {
+            maxlen = this.datalen - this.index;
+        }
+        for(let i = 0; i < maxlen; i++) {
+            buff[i] = this.data[this.index + i];
+        }
+        this.index += maxlen;
+        return maxlen;
+    }
+    override fn hasMore(): bool {
+        return this.index < this.datalen;
+    }
+    override fn available(): int {
+        return this.datalen - this.index;
+    }
+    override fn seek(index: int) {
+        if(index >= this.datalen) {
+            die("Invalid seek index");
+        }
+        this.index = index;
+    }
+}
+class BufferedReader {
+    stream: InputStream;
+    bufferSize: int;
+    buffer: [int];
+    bufferIndex: int;
+    bufferMax: int;
+    ctor(stream: InputStream) {
+        this.stream = stream;
+        this.bufferSize = 1024;
+        this.buffer = null;
+        this.bufferIndex = 0;
+        this.bufferMax = 0;
+    }
+    fn setBufferSize(size: int) {
+        this.bufferSize = size;
+    }
+    fn refillBuffer() {
+        if(this.buffer == null) {
+            this.buffer = [int: this.bufferSize];
+        }
+        this.bufferMax = this.stream.read(this.buffer, this.bufferSize);
+        this.bufferIndex = 0;
+    }
+    fn nextChar(): int {
+        if(this.bufferIndex >= this.bufferMax) {
+            this.refillBuffer();
+        }
+        let ret = this.buffer[this.bufferIndex];
+        this.bufferIndex += 1;
+        return ret;
+    }
+    fn hasMore(): bool {
+        if(this.bufferIndex >= this.bufferMax) {
+            this.refillBuffer();
+        }
+        return this.bufferIndex < this.bufferMax;
+    }
+    fn readUntilDelimiter(delimiter: int): String {
+        if(this.bufferIndex >= this.bufferMax) {
+            this.refillBuffer();
+        }
+        for(let i = this.bufferIndex; i < this.bufferMax; i++) {
+            if(this.buffer[i] == delimiter) {
+                let ret = new String(this.buffer, this.bufferIndex, i - this.bufferIndex);
+                this.bufferIndex = i + 1;
+                return ret;
+            }
+        }
+        let arr = [int: this.bufferSize / 4];
+        let index = 0;
+        let ch = this.nextChar();
+        let shouldContinue = true;
+        while(ch != '\n' and shouldContinue) {
+            if(not this.hasMore()) {
+                shouldContinue = false;
+            } else {
+                arr[index] = ch;
+                index += 1;
+                if(index >= #arr) {
+                    let newarr = [int: (#arr) * 2];
+                    for(let i = 0; i < #arr; i++) {
+                        newarr[i] = arr[i];
+                    }
+                    arr = newarr;
+                }
+                ch = this.nextChar();
+            }
+        }
+        if(ch != '\n') {
+            arr[index] = ch;
+            index += 1;
+        }
+        return new String(arr, 0, index);
+    }
+    fn readLine(): String {
+        return this.readUntilDelimiter('\n');
+    }
 }

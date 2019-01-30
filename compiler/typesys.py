@@ -231,7 +231,7 @@ class TypeSystem:
             elif typ.method_signature(node[1].data) is not None:
                 return typ.method_signature(node[1].data)
             else:
-                node.compile_error("Attempt to perform property access that doesn't make sense")
+                node.compile_error("Attempt to perform property access that doesn't make sense (perhaps the property doesn't exist or is spelled wrong?)")
         else:
             node.compile_error("Attempt to call something that can't be called")
 
@@ -322,7 +322,7 @@ class TypeSystem:
         elif expr.i("access"):
             lhs_type = self.decide_type(expr[0], scope)
             if not lhs_type.is_array():
-                raise TypingError(child, "Attempt to access element of something that isn't an array")
+                raise TypingError(expr, "Attempt to access element of something that isn't an array")
             return lhs_type.parent_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.

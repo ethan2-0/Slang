@@ -1,0 +1,10 @@
+using stdlib;
+
+fn add(a: int, b: int) {
+    return a + b;
+}
+entrypoint fn main() {
+    if(add(add(3, 5), add(10, 13)) != 31) {
+        die("The nested-call bug has returned.");
+    }
+}

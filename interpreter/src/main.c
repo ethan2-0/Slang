@@ -4,6 +4,7 @@
 #include "bytecode.h"
 #include "opcodes.h"
 #include "common.h"
+#include "interpreter.h"
 
 int main(int argc, char* argv[]) {
     if(argc < 2) {

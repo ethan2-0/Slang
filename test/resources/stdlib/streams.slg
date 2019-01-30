@@ -1,0 +1,27 @@
+using stdlib;
+
+entrypoint fn main() {
+    let str = "0123456789";
+    let instream = new ArrayInputStream(str._getCleanBuffer());
+    let buff = [int: 6];
+    if(instream.read(buff, #buff) != 6) {
+        die("ArrayInputStream reading returns wrong length (first time)");
+    }
+    if(instream.read(buff, #buff) != 4) {
+        die("ArrayInputStream reading returns wrong length (second time)");
+    }
+    let buffstring = new String(buff, 0, #buff);
+    if(not buffstring.equals("678945")) {
+        die("Simple buffer reading doesn't work");
+    }
+    let otherstr = "abcdefghijklmnop\nqrstuvwxyz";
+    instream = new ArrayInputStream(otherstr._getCleanBuffer());
+    let reader = new BufferedReader(instream);
+    if(not reader.readLine().equals("abcdefghijklmnop")) {
+        die("BufferedReader first readLine is wrong");
+    }
+    let line = reader.readLine();
+    if(not line.equals("qrstuvwxyz")) {
+        die("BufferedReader second readLine is wrong");
+    }
+}

@@ -1,0 +1,20 @@
+using stdlib;
+
+entrypoint fn main() {
+    if(not strjoin(["One", "two", "three", "four"], ", ").equals("One, two, three, four")) {
+        die("Basic strjoin failed");
+    }
+    if(not strjoin(["One"], ", ").equals("One")) {
+        die("strjoin with length one array failed");
+    }
+    if(not strjoin([String: 0], ", ").equals("")) {
+        die("strjoin with length zero array failed");
+    }
+    if(not strjoin(["One", "two"], "").equals("Onetwo")) {
+        die("strjoin with empty delimiter failed");
+    }
+    if(not strjoin([""], ", ").equals("")) {
+        die("strjoin with array of empty string failed");
+    }
+    return null;
+}

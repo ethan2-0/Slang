@@ -34,6 +34,28 @@
             "entrypoint": false,
             "ctor": false,
             "override": false
+        },
+        {
+            "type": "method",
+            "name": "stdlib.internal.read",
+            "arguments": [
+                {
+                    "type": "argument",
+                    "name": "buff",
+                    "argtype": "[int]"
+                },
+                {
+                    "type": "argument",
+                    "name": "num_chars",
+                    "argtype": "int"
+                }
+            ],
+            "numargs": 2,
+            "returns": "int",
+            "containingclass": null,
+            "entrypoint": false,
+            "ctor": false,
+            "override": false
         }
     ],
     "classes": []

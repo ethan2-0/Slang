@@ -32,7 +32,7 @@ class TestIntegrationInclude:
     def test_include(self):
         util.clean_tmp()
         lib = util.assert_compile_succeeds("resources/integration_include/lib.slg")
-        main = util.assert_compile_succeeds("resources/integration_include/main.slg", include=lib)
+        main = util.assert_compile_succeeds("resources/integration_include/main.slg", include=[lib])
         assert "0x00000003" in util.interpret(lib, main)
 
 class TestIntegrationKitchenSink:
@@ -288,17 +288,22 @@ class TestMethods:
         util.clean_tmp()
         path = util.assert_compile_fails("resources/methods/override_outside_class.slg", message="Can't both be an override method and not have a containing class")
 
+    def test_nested_calls(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/methods/single_call.slg")
+        util.interpret(path)
+
 class TestNamespaces:
     def test_basic(self):
         util.clean_tmp()
         lib = util.assert_compile_succeeds("resources/namespaces/basic_lib.slg")
-        main = util.assert_compile_succeeds("resources/namespaces/basic_main.slg", include=lib)
+        main = util.assert_compile_succeeds("resources/namespaces/basic_main.slg", include=[lib])
         assert "0x0000000a" in util.interpret(lib, main)
 
     def test_method(self):
         util.clean_tmp()
         lib = util.assert_compile_succeeds("resources/namespaces/method_lib.slg")
-        main = util.assert_compile_succeeds("resources/namespaces/method_main.slg", include=lib)
+        main = util.assert_compile_succeeds("resources/namespaces/method_main.slg", include=[lib])
         assert "0x00000005" in util.interpret(lib, main)
 
 class TestParser:
@@ -338,8 +343,39 @@ class TestStdlib:
         path = util.assert_compile_succeeds("resources/stdlib/stoi.slg")
         assert "0x00000001" in util.interpret(path)
 
+    def test_die(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/die.slg")
+        assert "This is the fatal message." in util.interpret(path, expect_fail=True)
+
+    def test_strconcat_all(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/strconcat_all.slg")
+        util.interpret(path)
+
+    def test_strjoin(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/strjoin.slg")
+        util.interpret(path)
+
+    def test_streams(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/streams.slg")
+        util.interpret(path)
+
+    def test_stdin_input_stream(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/stdin_input_stream.slg")
+        assert "3\n8" in util.interpret(path, stdin=b"1\n2\n3\n5")
+
+
 class TestReplacedMethods:
     def test_print(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/replaced_methods/print.slg")
         assert "Printed" in util.interpret(path)
+
+    def test_exit(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/replaced_methods/exit.slg", include_json=["../compiler/stdlib/src/stdlib.internal.json"])
+        util.interpret(path, expect_fail=True)
