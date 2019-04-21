@@ -5,8 +5,8 @@ entrypoint fn main() {
     let reader = new BufferedReader(stream);
     reader.setBufferSize(8);
     while(reader.hasMore()) {
-        let firstNum = stoi(reader.readLine());
-        let secondNum = stoi(reader.readLine());
+        let firstNum = stoi(reader.readLine().strip());
+        let secondNum = stoi(reader.readLine().strip());
         println(itos(firstNum + secondNum));
     }
 }

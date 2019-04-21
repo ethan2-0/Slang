@@ -30,7 +30,7 @@ class Token:
 
 class Toker:
     keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
-    escapes = {"n": "\n", "\\": "\\", "'": "'", "r": "\r", "0": "\0", "b": "\b", "v": "\v"}
+    escapes = {"n": "\n", "\\": "\\", "'": "'", "\"": "\"", "r": "\r", "0": "\0", "b": "\b", "v": "\v", "t": "\t", "f": "\f"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
     def __init__(self, src):

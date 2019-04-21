@@ -4,6 +4,7 @@ fn die(message: String) {
     print("Fatal error: ");
     print(message);
     print("\n");
+    // let blah = stdlib.internal.debug();
     exit(1);
 }
 
@@ -32,6 +33,9 @@ class String {
         if(this.startIndex == 0 and this.length == #this.chars) {
             return this.chars;
         }
+        return this._getBufferCopy();
+    }
+    fn _getBufferCopy(): [int] {
         let newBuff = [int: this.length];
         for(let i = 0; i < this.length; i++) {
             newBuff[i] = this.chars[this.startIndex + i];
@@ -114,6 +118,90 @@ class String {
     fn containsChar(other: int): bool {
         return this.indexOfChar(other) != -1;
     }
+    fn strip(): String {
+        let whitespace = " \t\n\r\v\f";
+        let leftIndex = 0;
+        while(whitespace.containsChar(this.charAt(leftIndex))) {
+            leftIndex++;
+        }
+        let rightIndex = this.length - 1;
+        while(whitespace.containsChar(this.charAt(rightIndex))) {
+            rightIndex--;
+        }
+        return this.substr(leftIndex, rightIndex + 1);
+    }
+    fn trim(): String {
+        return this.strip();
+    }
+    fn lowercase(): String {
+        let lowercase = "abcdefghijklmnopqrstuvwxyz";
+        let uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let containsUppercaseLetter = false;
+        for(let i = 0; i < this.length; i++) {
+            if(uppercase.containsChar(this.charAt(i))) {
+                containsUppercaseLetter = true;
+            }
+        }
+        if(not containsUppercaseLetter) {
+            return this;
+        }
+        let newBuff = this._getBufferCopy();
+        for(let i = 0; i < #newBuff; i++) {
+            if(uppercase.containsChar(newBuff[i])) {
+                newBuff[i] = lowercase.charAt(uppercase.indexOfChar(newBuff[i]));
+            }
+        }
+        return new String(newBuff, 0, #newBuff);
+    }
+    fn uppercase(): String {
+        let uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let lowercase = "abcdefghijklmnopqrstuvwxyz";
+        let containsLowercaseLetter = false;
+        for(let i = 0; i < this.length; i++) {
+            if(lowercase.containsChar(this.charAt(i))) {
+                containsLowercaseLetter = true;
+            }
+        }
+        if(not containsLowercaseLetter) {
+            return this;
+        }
+        let newBuff = this._getBufferCopy();
+        for(let i = 0; i < #newBuff; i++) {
+            if(lowercase.containsChar(newBuff[i])) {
+                newBuff[i] = uppercase.charAt(lowercase.indexOfChar(newBuff[i]));
+            }
+        }
+        return new String(newBuff, 0, #newBuff);
+    }
+    fn equalsIgnoreCase(other: String): bool {
+        if(other.length != this.length) {
+            return false;
+        }
+        let lowercase = "abcdefghijklmnopqrstuvwxyz";
+        let uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        for(let i = 0; i < this.length; i++) {
+            let thisChar = this.charAt(i);
+            let otherChar = other.charAt(i);
+            if(thisChar != otherChar) {
+                let thisCharIndex = -2;
+                if(lowercase.containsChar(thisChar)) {
+                    thisCharIndex = lowercase.indexOfChar(thisChar);
+                } else if(uppercase.containsChar(thisChar)) {
+                    thisCharIndex = uppercase.indexOfChar(thisChar);
+                }
+                let otherCharIndex = -1;
+                if(lowercase.containsChar(otherChar)) {
+                    otherCharIndex = lowercase.indexOfChar(otherChar);
+                } else if(uppercase.containsChar(otherChar)) {
+                    otherCharIndex = uppercase.indexOfChar(otherChar);
+                }
+                if(thisCharIndex != otherCharIndex) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 }
 fn print(str: String) {
     // This is to work around a compiler bug that I haven't gotten around to fixing yet
@@ -163,6 +251,23 @@ fn itos_base(input: int, base: int): String {
 fn itos(input: int): String {
     return itos_base(input, 10);
 }
+fn btos(input: bool): String {
+    if(input == true) {
+        return "true";
+    } else {
+        return "false";
+    }
+}
+fn stob(input: String): bool {
+    if(input.equalsIgnoreCase("yes") or input.equalsIgnoreCase("true")) {
+        return true;
+    } else if(input.equalsIgnoreCase("no") or input.equalsIgnoreCase("false")) {
+        return false;
+    }
+    die("Unrecognized boolean input in stob");
+    // Unreachable
+    return false;
+}
 fn stoi_base(input: String, base: int): int {
     let symbols = "0123456789abcdefghijklmnopqrstuvwxyz";
     let negative = input.charAt(0) == '-';
@@ -175,6 +280,7 @@ fn stoi_base(input: String, base: int): int {
     while(index >= 0) {
         let indexOf = symbols.indexOfChar(input.charAt(index));
         if(indexOf == -1 or indexOf >= base) {
+            println(strconcat_all(["Unknown symbol: '", ctos(input.charAt(index)), "', ord: ", itos(input.charAt(index))]))
             die("Unknown symbol in stoi_base");
         }
         result += indexOf * magnitude;
@@ -370,7 +476,7 @@ class BufferedReader {
         let index = 0;
         let ch = this.nextChar();
         let shouldContinue = true;
-        while(ch != '\n' and shouldContinue) {
+        while(ch != delimiter and shouldContinue) {
             if(not this.hasMore()) {
                 shouldContinue = false;
             } else {
@@ -386,7 +492,7 @@ class BufferedReader {
                 ch = this.nextChar();
             }
         }
-        if(ch != '\n') {
+        if(ch != delimiter) {
             arr[index] = ch;
             index += 1;
         }

@@ -1,0 +1,82 @@
+using stdlib;
+
+fn test_itos(): bool {
+    if(not itos(1).equals("1")) {
+        return false;
+    }
+    if(not itos(0).equals("0")) {
+        return false;
+    }
+    if(not itos(10).equals("10")) {
+        return false;
+    }
+    if(not itos(-10).equals("-10")) {
+        return false;
+    }
+    if(not itos(12345).equals("12345")) {
+        return false;
+    }
+    if(not itos_base(314234, 36).equals("6qgq")) {
+        return false;
+    }
+    if(not itos_base(314234, 2).equals("1001100101101111010")) {
+        return false;
+    }
+    if(not itos_base(-12345, 10).equals("-12345")) {
+        return false;
+    }
+    return true;
+}
+fn test_stoi(): bool {
+    if(not stoi("12345") == 12345) {
+        return false;
+    }
+    if(not stoi_base("6qgq", 36) == 314234) {
+        return false;
+    }
+    if(not stoi_base("1001100101101111010", 2) == 314234) {
+        return false;
+    }
+    if(not stoi("-12345") == -12345) {
+        return false;
+    }
+    return true;
+}
+fn test_ctos() {
+    if(not ctos('a').equals("a")) {
+        die("ctos failed");
+    }
+}
+fn test_stob() {
+    if(stob("yes") != true) {
+        die("ctos(\"yes\") failed");
+    }
+    if(stob("true") != true) {
+        die("ctos(\"true\") failed");
+    }
+    if(stob("no") != false) {
+        die("ctos(\"false\") failed");
+    }
+    if(stob("false") != false) {
+        die("ctos(\"false\") failed");
+    }
+}
+fn test_btos() {
+    if(not btos(true).equals("true")) {
+        die("btos(true) failed");
+    }
+    if(not btos(false).equals("false")) {
+        die("btos(false) failed");
+    }
+}
+entrypoint fn main() {
+    if(not test_itos()) {
+        die("itos failed");
+    }
+    if(not test_stoi()) {
+        die("stoi failed");
+    }
+    test_ctos();
+    test_stob();
+    test_btos();
+}

@@ -328,20 +328,15 @@ class TestStdlib:
         path = util.assert_compile_succeeds("resources/stdlib/basic.slg")
         assert "0x00000001" in util.interpret(path)
 
-    def test_string(self):
+    def test_string_basic(self):
         util.clean_tmp()
-        path = util.assert_compile_succeeds("resources/stdlib/string.slg")
+        path = util.assert_compile_succeeds("resources/stdlib/string_basic.slg")
         assert "0x00000001" in util.interpret(path)
 
-    def test_itos(self):
+    def test_conversion(self):
         util.clean_tmp()
-        path = util.assert_compile_succeeds("resources/stdlib/itos.slg")
-        assert "0x00000001" in util.interpret(path)
-
-    def test_stoi(self):
-        util.clean_tmp()
-        path = util.assert_compile_succeeds("resources/stdlib/stoi.slg")
-        assert "0x00000001" in util.interpret(path)
+        path = util.assert_compile_succeeds("resources/stdlib/conversion.slg")
+        util.interpret(path)
 
     def test_die(self):
         util.clean_tmp()
@@ -367,6 +362,11 @@ class TestStdlib:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/stdlib/stdin_input_stream.slg")
         assert "3\n8" in util.interpret(path, stdin=b"1\n2\n3\n5")
+
+    def test_string_advanced(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/stdlib/string_advanced.slg")
+        util.interpret(path)
 
 
 class TestReplacedMethods:

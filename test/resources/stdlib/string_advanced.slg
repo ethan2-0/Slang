@@ -1,0 +1,24 @@
+using stdlib;
+
+entrypoint fn main() {
+    let s = " \n\r\th\tello\n\r";
+    if(not s.trim().equals("h\tello")) {
+        die("String.trim doesn't work");
+    }
+    s = "abcDEFghi";
+    if(not s.lowercase().equals("abcdefghi")) {
+        die("String.lowercase doesn't work");
+    }
+    if(not s.uppercase().equals("ABCDEFGHI")) {
+        die("String.uppercase doesn't work");
+    }
+    if(not s.equalsIgnoreCase("AbCdEfGhI")) {
+        die("String.equalsIgnoreCase doesn't work");
+    }
+    if(s.equalsIgnoreCase("abcDEFghj")) {
+        die("String.equalsIgnoreCase gives false positive (1)");
+    }
+    if(s.equalsIgnoreCase("abcDEFghij")) {
+        die("String.equalsIgnoreCase gives false positive (2)");
+    }
+}
