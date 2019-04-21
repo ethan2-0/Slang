@@ -86,15 +86,20 @@ void gc_free(gc_OBJECT_REGISTRY* registry_entry) {
 typedef struct {
     gc_OBJECT_REGISTRY* entry;
     struct gc_QUEUE_ENTRY* next;
+    // ELW
+    int number;
 } gc_QUEUE_ENTRY;
 typedef struct {
     gc_QUEUE_ENTRY* start;
     gc_QUEUE_ENTRY* end;
 } gc_QUEUE_ENTRY_PROPERTIES;
 void gc_add_to_queue(gc_OBJECT_REGISTRY* registry, gc_QUEUE_ENTRY_PROPERTIES* properties) {
+    static int number = 0;
+    number++;
     gc_QUEUE_ENTRY* entry = mm_malloc(sizeof(gc_QUEUE_ENTRY));
     entry->entry = registry;
     entry->next = NULL;
+    entry->number = number;
     if(properties->start == NULL) {
         properties->start = entry;
         properties->end = entry;
@@ -104,7 +109,12 @@ void gc_add_to_queue(gc_OBJECT_REGISTRY* registry, gc_QUEUE_ENTRY_PROPERTIES* pr
     }
 }
 gc_OBJECT_REGISTRY* gc_pop_from_queue(gc_QUEUE_ENTRY_PROPERTIES* properties) {
+    static int prev_number = 0;
     gc_QUEUE_ENTRY* queue_entry = properties->start;
+    if(queue_entry->number - prev_number != 1) {
+        printf("Number is different: %d, %d\n", prev_number, queue_entry->number);
+    }
+    prev_number = queue_entry->number;
     gc_OBJECT_REGISTRY* ret = properties->start->entry;
     properties->start = queue_entry->next;
     free(queue_entry);
@@ -116,7 +126,7 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
     gc_QUEUE_ENTRY_PROPERTIES properties;
     properties.start = NULL;
     properties.end = NULL;
-    int added_to_queue = 0;
+    int add_parity = 0;
     for(it_STACKFRAME* currentptr = stack; currentptr <= current_frame; currentptr++) {
         it_METHOD* method = currentptr->method;
         for(int i = 0; i < method->registerc; i++) {
@@ -125,11 +135,11 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
             }
             ts_CATEGORY category = method->register_types[i]->barebones.category;
             if(category == ts_CATEGORY_ARRAY) {
-                added_to_queue++;
+                add_parity++;
                 it_ARRAY_DATA* array_data = currentptr->registers[i].array_data;
                 gc_add_to_queue(array_data->gc_registry_entry, &properties);
             } else if(category == ts_CATEGORY_CLAZZ) {
-                added_to_queue++;
+                add_parity++;
                 gc_add_to_queue(currentptr->registers[i].clazz_data->gc_registry_entry, &properties);
             }
         }
@@ -137,6 +147,10 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
     gc_OBJECT_REGISTRY* updated;
     while(properties.start != NULL) {
         gc_OBJECT_REGISTRY* entry = gc_pop_from_queue(&properties);
+        add_parity--;
+        if(entry->visited >= gc_current_pass) {
+            continue;
+        }
         entry->visited = gc_current_pass;
         if(entry->category == ts_CATEGORY_ARRAY) {
             it_ARRAY_DATA* arr_data = entry->object.array_data;
@@ -148,6 +162,7 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
                     if(arr_data->elements[i].array_data == NULL) {
                         continue;
                     }
+                    add_parity++;
                     gc_add_to_queue(arr_data->elements[i].array_data->gc_registry_entry, &properties);
                 }
             } else if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_CLAZZ) {
@@ -155,19 +170,22 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
                     if(arr_data->elements[i].clazz_data == NULL) {
                         continue;
                     }
+                    add_parity++;
                     gc_add_to_queue(arr_data->elements[i].clazz_data->gc_registry_entry, &properties);
                 }
             }
         } else if(entry->category == ts_CATEGORY_CLAZZ) {
-            ts_TYPE_CLAZZ* properties = entry->object.clazz_data->phi_table;
-            for(int i = 0; i < properties->nfields; i++) {
+            ts_TYPE_CLAZZ* clazz_properties = entry->object.clazz_data->phi_table;
+            for(int i = 0; i < clazz_properties->nfields; i++) {
                 if(entry->object.clazz_data->itval[i].array_data == NULL) {
                     continue;
-                } else if(properties->fields[i].type->barebones.category == ts_CATEGORY_PRIMITIVE) {
+                } else if(clazz_properties->fields[i].type->barebones.category == ts_CATEGORY_PRIMITIVE) {
                     continue;
-                } else if(properties->fields[i].type->barebones.category == ts_CATEGORY_ARRAY) {
+                } else if(clazz_properties->fields[i].type->barebones.category == ts_CATEGORY_ARRAY) {
+                    add_parity++;
                     gc_add_to_queue(entry->object.clazz_data->itval[i].array_data->gc_registry_entry, &properties);
-                } else if(properties->fields[i].type->barebones.category == ts_CATEGORY_CLAZZ) {
+                } else if(clazz_properties->fields[i].type->barebones.category == ts_CATEGORY_CLAZZ) {
+                    add_parity++;
                     gc_add_to_queue(entry->object.clazz_data->itval[i].clazz_data->gc_registry_entry, &properties);
                 }
             }
@@ -175,16 +193,16 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
             fatal("Somehow got an entry that isn't a class or array");
         }
     }
-    int to_free = 0;
-    int to_remain = 0;
+    if(add_parity != 0) {
+        printf("Add parity failed: %d\n", add_parity);
+        fatal("Add parity failed");
+    }
     for(gc_OBJECT_REGISTRY* registry = gc_first_registry; registry != NULL; registry = registry->next) {
         if(!registry->is_present) {
             continue;
         }
         if(registry->visited < gc_current_pass) {
-            to_free++;
-        } else {
-            to_remain++;
+            gc_free(registry);
         }
     }
     gc_needs_collection = false;
