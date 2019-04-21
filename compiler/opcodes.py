@@ -6,9 +6,10 @@ import emitter
 
 
 class OpcodeInstance:
-    def __init__(self, opcode, params, annotation=None):
+    def __init__(self, opcode, params, node, annotation=None):
         self.opcode = opcode
         self.params = params
+        self.node = node
         self.annotations = [annotation] if annotation is not None else []
         # This index is used in the bytecode emitter
         self.index = -1
@@ -35,7 +36,7 @@ class Opcode:
     def __str__(self):
         return "Opcode(mneumonic=%s)" % self.mneumonic
 
-    def instantiate(self, *args):
+    def instantiate(self, *args, node=None):
         args = list(args)
         def complain_about_typechecking():
             raise ValueError("Argument has invalid type (%s ; %s)" % (args, self.params))
@@ -68,10 +69,10 @@ class Opcode:
             else:
                 raise ValueError()
 
-        return OpcodeInstance(self, args)
+        return OpcodeInstance(self, args, node)
 
-    def ins(self, *args):
-        return self.instantiate(*args)
+    def ins(self, *args, node=None):
+        return self.instantiate(*args, node=node)
 
     def __call__(self, *args):
         return self.instantiate(*args)

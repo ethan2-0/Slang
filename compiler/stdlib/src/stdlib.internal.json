@@ -56,6 +56,17 @@
             "entrypoint": false,
             "ctor": false,
             "override": false
+        },
+        {
+            "type": "method",
+            "name": "stdlib.internal.traceback",
+            "arguments": [],
+            "numargs": 0,
+            "returns": "void",
+            "containingclass": null,
+            "entrypoint": false,
+            "ctor": false,
+            "override": false
         }
     ],
     "classes": []

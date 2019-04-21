@@ -13,6 +13,7 @@ uint32_t bc_assign_method_id(it_PROGRAM* program);
 void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it_OPCODE* opcode) {
     uint8_t opcode_num = fr_getuint8(state);
     opcode->type = opcode_num;
+    opcode->linenum = fr_getuint32(state);
     #if DEBUG
     printf("Opcode %02x\n", opcode_num);
     #endif

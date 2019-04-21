@@ -203,7 +203,7 @@ class MethodEmitter:
         opcodes = []
         if node.i("number"):
             nt = int(node.data)
-            opcodes.append(ops["load"].ins(register, abs(nt)))
+            opcodes.append(ops["load"].ins(register, abs(nt), node=node))
             if nt < 0:
                 opcodes.append(ops["twocomp"].ins(register))
         elif node.of("+", "*", "^", "&", "|", "%", "/", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
@@ -228,42 +228,42 @@ class MethodEmitter:
                 # TODO: What happens if x0 is 0x1 and x1 is 0x2? Specifically for "and".
                 "and": "and",
                 "or": "or"
-            }[node.type]].ins(lhs, rhs, register))
+            }[node.type]].ins(lhs, rhs, register, node=node))
             if node.i("!="):
-                opcodes.append(ops["invert"].ins(register))
+                opcodes.append(ops["invert"].ins(register, node=node))
         elif node.i("not"):
             if not register.type.is_boolean():
                 raise typesys.TypingError(node, "Operator 'not' needs boolean argument")
             opcodes += self.emit_expr(node[0], register)
-            opcodes.append(ops["invert"].ins(register))
+            opcodes.append(ops["invert"].ins(register, node=node))
         elif node.i("~"):
             if not register.type.is_numerical():
                 raise typesys.TypingError(node, "Operator '~' needs numerical argument")
             opcodes += self.emit_expr(node[0], register)
             reg = self.scope.allocate(self.types.int_type)
-            opcodes.append(ops["load"].ins(reg, 0xffffffff))
-            opcodes.append(ops["xor"].ins(reg, register, register))
+            opcodes.append(ops["load"].ins(reg, 0xffffffff, node=node))
+            opcodes.append(ops["xor"].ins(reg, register, register, node=node))
         elif node.i("ident"):
-            opcodes.append(annotate(ops["mov"].ins(self.scope.resolve(node.data, node), register), "access %s" % node.data))
+            opcodes.append(annotate(ops["mov"].ins(self.scope.resolve(node.data, node), register, node=node), "access %s" % node.data))
         elif node.i("true"):
-            opcodes.append(ops["load"].ins(register, 1))
+            opcodes.append(ops["load"].ins(register, 1, node=node))
         elif node.i("false"):
-            opcodes.append(ops["load"].ins(register, 0))
+            opcodes.append(ops["load"].ins(register, 0, node=node))
         elif node.i("null"):
-            opcodes.append(ops["zero"].ins(register))
+            opcodes.append(ops["zero"].ins(register, node=node))
         elif node.i("-"):
             if len(node.children) == 1:
                 if not self.types.decide_type(node[0], self.scope).is_numerical():
                     raise typesys.TypingError(node, "Operator '-' needs numerical argument")
                 opcodes += self.emit_expr(node[0], register)
-                opcodes.append(ops["twocomp"].ins(register))
+                opcodes.append(ops["twocomp"].ins(register, node=node))
             else:
                 lhs = self.scope.allocate(self.types.decide_type(node[0], self.scope))
                 opcodes += self.emit_expr(node[0], lhs)
                 rhs = self.scope.allocate(self.types.decide_type(node[1], self.scope))
                 opcodes += self.emit_expr(node[1], rhs)
-                opcodes.append(ops["twocomp"].ins(rhs))
-                opcodes.append(ops["add"].ins(lhs, rhs, register))
+                opcodes.append(ops["twocomp"].ins(rhs, node=node))
+                opcodes.append(ops["add"].ins(lhs, rhs, register, node=node))
         elif node.i("call"):
             emitted_opcodes = []
             signature, lhs_reg = self.emit_to_method_signature(node[0], emitted_opcodes)
@@ -284,15 +284,15 @@ class MethodEmitter:
                 param_registers.append((reg, index + (-1 if is_clazz_call else 0)))
                 # opcodes.append(ops["param"].ins(reg, index + (-1 if is_clazz_call else 0)))
             for reg, index in param_registers:
-                opcodes.append(ops["param"].ins(reg, index))
+                opcodes.append(ops["param"].ins(reg, index, node=node))
             if is_clazz_call:
-                opcodes.append(ops["classcall"].ins(lhs_reg, signature, register))
+                opcodes.append(ops["classcall"].ins(lhs_reg, signature, register, node=node))
             else:
-                opcodes.append(ops["call"].ins(signature, register))
+                opcodes.append(ops["call"].ins(signature, register, node=node))
         elif node.i("new"):
             clazz_signature = self.types.resolve(node[0]).signature
             result_register = self.scope.allocate(self.types.decide_type(node, self.scope))
-            opcodes.append(ops["new"].ins(clazz_signature, result_register))
+            opcodes.append(ops["new"].ins(clazz_signature, result_register, node=node))
             # TODO: Support multiple constructors and method overloading
             # TODO: A lot of this code is copy-pasted
             if len(clazz_signature.ctor_signatures) < 1:
@@ -307,21 +307,21 @@ class MethodEmitter:
                     raise typesys.TypingError(node, "Invalid parameter type: '%s' is not assignable to '%s'" % (inferred_type, declared_type))
                 reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
-                opcodes.append(ops["param"].ins(reg, index))
-            opcodes.append(ops["classcall"].ins(result_register, ctor_signature, self.scope.allocate(self.types.bool_type)))
-            opcodes.append(ops["mov"].ins(result_register, register))
+                opcodes.append(ops["param"].ins(reg, index, node=node))
+            opcodes.append(ops["classcall"].ins(result_register, ctor_signature, self.scope.allocate(self.types.bool_type), node=node))
+            opcodes.append(ops["mov"].ins(result_register, register, node=node))
         elif node.i("["):
             if not register.type.is_array():
                 raise typesys.TypingError(node, "Cannot assign an array to something that isn't an array")
             arrlen_reg = self.scope.allocate(self.types.int_type)
-            opcodes.append(annotate(ops["load"].ins(arrlen_reg, len(node)), "array instantiation length"))
-            opcodes.append(ops["arralloc"].ins(register, arrlen_reg))
+            opcodes.append(annotate(ops["load"].ins(arrlen_reg, len(node), node=node), "array instantiation length"))
+            opcodes.append(ops["arralloc"].ins(register, arrlen_reg, node=node))
             index_reg = self.scope.allocate(self.types.int_type)
             element_reg = self.scope.allocate(register.type.parent_type)
             for i, elm in zip(range(len(node)), node):
-                opcodes.append(annotate(ops["load"].ins(index_reg, i), "array instantiation index"))
+                opcodes.append(annotate(ops["load"].ins(index_reg, i, node=node), "array instantiation index"))
                 opcodes += self.emit_expr(elm, element_reg)
-                opcodes.append(ops["arrassign"].ins(register, index_reg, element_reg))
+                opcodes.append(ops["arrassign"].ins(register, index_reg, element_reg, node=node))
         elif node.i("access"):
             lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs_reg)
@@ -334,19 +334,19 @@ class MethodEmitter:
             if not index_reg.type.is_numerical():
                 raise typesys.TypingError(child, "Index to array access must be numerical")
             opcodes += self.emit_expr(node[1], index_reg)
-            opcodes.append(ops["arraccess"].ins(lhs_reg, index_reg, register))
+            opcodes.append(ops["arraccess"].ins(lhs_reg, index_reg, register, node=node))
         elif node.i("arrinst"):
             quantity_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             if not quantity_reg.type.is_numerical():
                 raise typesys.TypingError("Array lengths must be numerical")
             opcodes += self.emit_expr(node[1], quantity_reg)
-            opcodes.append(ops["arralloc"].ins(register, quantity_reg))
+            opcodes.append(ops["arralloc"].ins(register, quantity_reg, node=node))
         elif node.i("#"):
             arr_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             if not arr_reg.type.is_array():
                 raise typesys.TypingError("Can't decide length of something that isn't an array")
             opcodes += self.emit_expr(node[0], arr_reg)
-            opcodes.append(ops["arrlen"].ins(arr_reg, register))
+            opcodes.append(ops["arrlen"].ins(arr_reg, register, node=node))
         elif node.i("."):
             lhs_reg = None
             if node[0].i("ident"):
@@ -355,7 +355,7 @@ class MethodEmitter:
                 # node, register
                 lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
                 opcodes += self.emit_expr(node[0], lhs_reg)
-            opcodes.append(ops["access"].ins(lhs_reg, node[1].data, register))
+            opcodes.append(ops["access"].ins(lhs_reg, node[1].data, register, node=node))
         else:
             node.compile_error("Unexpected")
         return opcodes
@@ -407,9 +407,9 @@ class MethodEmitter:
                 if not self.return_type.is_assignable_to(self.types.void_type):
                     raise typesys.TypingError(node, "Can't return nothing from a method unless the method returns void")
                 reg = self.scope.allocate(self.types.int_type)
-                opcodes.append(ops["zero"].ins(reg))
+                opcodes.append(ops["zero"].ins(reg, node=node))
             claims.add_claims(clms.ClaimReturns())
-            opcodes.append(ops["return"].ins(reg))
+            opcodes.append(ops["return"].ins(reg, node=node))
         elif node.i("chain"):
             opcodes += Chain(node, self.scope, ops).access(None, self, no_output=True)
         elif node.i("assignment"):
@@ -431,12 +431,12 @@ class MethodEmitter:
             if not resultreg.type.is_numerical() or not rhs_reg.type.is_numerical():
                 raise typesys.TypingError(node, "LHS and RHS of arithmetic must be numerical, not '%s' and '%s'" % (resultreg.type.name, rhs_reg.type.name))
             if node.i("-="):
-                opcodes.append(ops["twocomp"].ins(rhs_reg))
+                opcodes.append(ops["twocomp"].ins(rhs_reg, node=node))
             opcodes.append(ops[{
                 "+=": "add",
                 "*=": "mult",
                 "-=": "add"
-            }[node.type]].ins(resultreg, rhs_reg, resultreg))
+            }[node.type]].ins(resultreg, rhs_reg, resultreg, node=node))
             opcodes += chain.assign(resultreg, self)
         elif node.i("while"):
             result = []
@@ -448,9 +448,9 @@ class MethodEmitter:
             statement, _unused_claims = self.emit_statement(node[1])
             nop = ops["nop"].ins()
             result += conditional
-            result.append(ops["jf"].ins(condition_register, nop))
+            result.append(ops["jf"].ins(condition_register, nop, node=node))
             result += statement
-            result.append(ops["goto"].ins(conditional[0]))
+            result.append(ops["goto"].ins(conditional[0], node=node))
             result.append(nop)
             opcodes += result
         elif node.i("for"):
@@ -464,8 +464,8 @@ class MethodEmitter:
                 raise typesys.TypingError(node, "Condition of a for loop must be boolean")
             conditional = annotate(self.emit_expr(node[1], condition_register), "for loop condition")
             result += conditional
-            end_nop = ops["nop"].ins()
-            result.append(ops["jf"].ins(condition_register, end_nop))
+            end_nop = ops["nop"].ins(node=node)
+            result.append(ops["jf"].ins(condition_register, end_nop, node=node))
 
             # For now, we don't know whether the body of a for loop will ever be run
             body_statement, _unused_body_claim_space = self.emit_statement(node[3])
@@ -476,7 +476,7 @@ class MethodEmitter:
             eachtime = annotate(each_time_statement, "for loop each time")
             result += eachtime
 
-            result.append(annotate(ops["goto"].ins(conditional[0]), "for loop loop"))
+            result.append(annotate(ops["goto"].ins(conditional[0], node=node), "for loop loop"))
             result.append(end_nop)
 
             opcodes += result
@@ -488,13 +488,13 @@ class MethodEmitter:
             conditional = annotate(self.emit_expr(node[0], condition_register), "if predicate")
             true_path_statement, true_path_claims = self.emit_statement(node[1])
             statement = annotate(true_path_statement, "if true path")
-            nop = ops["nop"].ins()
+            nop = ops["nop"].ins(node=node)
             result += conditional
-            result.append(ops["jf"].ins(condition_register, nop))
+            result.append(ops["jf"].ins(condition_register, nop, node=node))
             result += statement
-            else_end_nop = ops["NOP"].ins()
+            else_end_nop = ops["NOP"].ins(node=node)
             if len(node) > 2:
-                result.append(ops["goto"].ins(else_end_nop)) #
+                result.append(ops["goto"].ins(else_end_nop, node=node)) #
             result.append(nop)
             if len(node) > 2:
                 false_path_statement, false_path_claims = self.emit_statement(node[2])
@@ -509,10 +509,10 @@ class MethodEmitter:
             if not var.type.is_numerical():
                 raise typesys.TypingError(node, "Subject of increment/decrement must be numerical")
             reg = self.scope.allocate(self.types.int_type)
-            opcodes.append(ops["load"].ins(reg, 1))
+            opcodes.append(ops["load"].ins(reg, 1, node=node))
             if node.i("--"):
-                opcodes.append(ops["twocomp"].ins(reg))
-            opcodes.append(ops["add"].ins(var, reg, var))
+                opcodes.append(ops["twocomp"].ins(reg, node=node))
+            opcodes.append(ops["add"].ins(var, reg, var, node=node))
         else:
             node.compile_error("Unexpected (this is a compiler bug)")
         return opcodes, claims

@@ -105,6 +105,7 @@ typedef union itval itval;
 typedef struct {
     uint8_t type;
     void* payload;
+    uint32_t linenum;
 } it_OPCODE;
 typedef struct {
     itval* registers;
@@ -113,6 +114,7 @@ typedef struct {
     uint32_t returnreg;
     it_OPCODE* iptr;
     struct it_METHOD* method;
+    int index;
 } it_STACKFRAME;
 typedef itval (*it_METHOD_REPLACEMENT_PTR)(it_STACKFRAME*, itval*);
 struct it_METHOD {
@@ -158,6 +160,6 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame);
 bool gc_needs_collection;
 // bool does_gc_need_collection();
 
-#define NUM_REPLACED_METHODS 3
+#define NUM_REPLACED_METHODS 4
 
 #endif

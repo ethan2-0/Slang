@@ -35,6 +35,7 @@ void it_execute(it_PROGRAM* prog) {
         stack[i].registers_allocated = 0;
         // Set the register file pointer to the null pointer so we can free() it.
         stack[i].registers = 0;
+        stack[i].index = i;
     }
     load_method(stackptr, &prog->methods[prog->entrypoint]);
     itval* registers = stackptr->registers;
@@ -76,6 +77,7 @@ void it_execute(it_PROGRAM* prog) {
                 #if DEBUG
                 printf("Calling replaced method %s\n", callee->name);
                 #endif
+                stackptr->iptr = iptr;
                 uint32_t returnreg = ((it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
                 registers[returnreg] = callee->replacement_ptr(stackptr, params);
                 iptr++;
@@ -405,6 +407,22 @@ itval rm_exit(it_STACKFRAME* stackptr, itval* params) {
     // This will never be reached
     return (itval) ((int64_t) 0);
 }
+itval rm_traceback(it_STACKFRAME* stackptr, itval* params) {
+    printf("Traceback (most recent call first):\n");
+    while(true) {
+        if(stackptr->method->containing_clazz != NULL) {
+            printf("Method %s, of class %s, line %d\n", stackptr->method->name, stackptr->method->containing_clazz->name, stackptr->iptr->linenum);
+        } else {
+            printf("Method %s, line %d\n", stackptr->method->name, stackptr->iptr->linenum);
+        }
+
+        if(stackptr->index <= 0) {
+            break;
+        }
+        stackptr--;
+    }
+    return (itval) ((int64_t) 0);
+}
 void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it_METHOD_REPLACEMENT_PTR methodptr, char* name) {
     if(method_index >= prog->methodc) {
         fatal("Attempting to create replaced method with index greater than methodc. This is a bug.");
@@ -423,6 +441,7 @@ void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it
 void it_replace_methods(it_PROGRAM* prog) {
     int method_index = prog->methodc - NUM_REPLACED_METHODS;
     it_create_replaced_method(prog, method_index++, 1, rm_print, strdup("stdlib.internal.print"));
-    it_create_replaced_method(prog, method_index++, 1, rm_exit, strdup("stdlib.internal.exit"));
+    it_create_replaced_method(prog, method_index++, 0, rm_exit, strdup("stdlib.internal.exit"));
     it_create_replaced_method(prog, method_index++, 1, rm_read, strdup("stdlib.internal.read"));
+    it_create_replaced_method(prog, method_index++, 0, rm_traceback, strdup("stdlib.internal.traceback"));
 }

@@ -9,6 +9,7 @@ class MethodBytecodeEmitter:
     def __init__(self, opcodes):
         self.opcodes = opcodes
         self.opcodes_numbered = False
+        self.current_line_num = 0
 
     def number_opcodes(self):
         if self.opcodes_numbered:
@@ -36,7 +37,9 @@ class MethodBytecodeEmitter:
                 params += encode_str(param)
             elif paramtype == "instruction":
                 params += struct.pack("!I", param.index)
-        ret = struct.pack("!B", opcode.opcode.code) + params
+        if opcode.node is not None:
+            self.current_line_num = opcode.node.line
+        ret = struct.pack("!BI", opcode.opcode.code, self.current_line_num) + params
         return ret
 
     def emit(self):

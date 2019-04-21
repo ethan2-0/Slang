@@ -4,7 +4,7 @@ fn die(message: String) {
     print("Fatal error: ");
     print(message);
     print("\n");
-    // let blah = stdlib.internal.debug();
+    let blah = stdlib.internal.traceback();
     exit(1);
 }
 
