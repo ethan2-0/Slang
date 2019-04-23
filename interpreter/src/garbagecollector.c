@@ -83,7 +83,7 @@ void gc_free_internal(gc_OBJECT_REGISTRY* registry_entry) {
 void gc_free(gc_OBJECT_REGISTRY* registry_entry) {
     gc_free_internal(registry_entry);
 }
-typedef struct {
+typedef struct gc_QUEUE_ENTRY {
     gc_OBJECT_REGISTRY* entry;
     struct gc_QUEUE_ENTRY* next;
     // ELW
@@ -144,7 +144,6 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
             }
         }
     }
-    gc_OBJECT_REGISTRY* updated;
     while(properties.start != NULL) {
         gc_OBJECT_REGISTRY* entry = gc_pop_from_queue(&properties);
         add_parity--;
@@ -154,7 +153,6 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
         entry->visited = gc_current_pass;
         if(entry->category == ts_CATEGORY_ARRAY) {
             it_ARRAY_DATA* arr_data = entry->object.array_data;
-            updated = arr_data;
             if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_PRIMITIVE) {
                 continue;
             } else if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_ARRAY) {

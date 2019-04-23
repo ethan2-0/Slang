@@ -149,7 +149,7 @@ void it_execute(it_PROGRAM* prog) {
               // C is a barbaric language
             itval result = registers[((it_OPCODE_DATA_RETURN*) iptr->payload)->target];
             if(stackptr <= stack) {
-                printf("Returned 0x%08llx\n", result.number);
+                printf("Returned 0x%08lx\n", result.number);
                 goto CLEANUP;
             }
             #if DEBUG
@@ -319,7 +319,7 @@ void it_execute(it_PROGRAM* prog) {
             registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) mm_malloc(arralloc_allocation_size);
             registers[opcode_arralloc_data->arrreg].array_data->length = length;
             memset(&registers[opcode_arralloc_data->arrreg].array_data->elements, 0, length * sizeof(itval));
-            registers[opcode_arralloc_data->arrreg].array_data->type = stackptr->method->register_types[opcode_arralloc_data->arrreg];
+            registers[opcode_arralloc_data->arrreg].array_data->type = (ts_TYPE_ARRAY*) stackptr->method->register_types[opcode_arralloc_data->arrreg];
             gc_OBJECT_REGISTRY* arralloc_registry = gc_register_object(registers[opcode_arralloc_data->arrreg], arralloc_allocation_size, ts_CATEGORY_ARRAY);
             registers[opcode_arralloc_data->arrreg].array_data->gc_registry_entry = arralloc_registry;
             iptr++;
@@ -331,7 +331,7 @@ void it_execute(it_PROGRAM* prog) {
                 fatal("Attempt to access null array");
             }
             if(registers[opcode_arraccess_data->indexreg].number >= registers[opcode_arraccess_data->arrreg].array_data->length) {
-                printf("Index out of bounds in %s at opcode %d (access)\n", stackptr->method->name, (iptr - instruction_start));
+                printf("Index out of bounds in %s at opcode %ld (access)\n", stackptr->method->name, (iptr - instruction_start));
                 fatal("Array index out of bounds");
             }
             registers[opcode_arraccess_data->elementreg] = registers[opcode_arraccess_data->arrreg].array_data->elements[registers[opcode_arraccess_data->indexreg].number];
@@ -344,7 +344,7 @@ void it_execute(it_PROGRAM* prog) {
                 fatal("Attempt to assign to null array");
             }
             if(registers[opcode_arrassign_data->indexreg].number >= registers[opcode_arrassign_data->arrreg].array_data->length) {
-                printf("Index out of bounds in %s at opcode %d (assignment)\n", stackptr->method->name, (iptr - instruction_start));
+                printf("Index out of bounds in %s at opcode %ld (assignment)\n", stackptr->method->name, (iptr - instruction_start));
                 fatal("Array index out of bounds");
             }
             registers[opcode_arrassign_data->arrreg].array_data->elements[registers[opcode_arrassign_data->indexreg].number] = registers[opcode_arrassign_data->elementreg];

@@ -11,10 +11,6 @@ int main(int argc, char* argv[]) {
         fatal("Not enough arguments\nInclude a bytecode file name\n");
     }
     FILE* fp[argc - 1];
-    // fp = fopen(argv[1], "r");
-    // if(fp == NULL) {
-    //     fatal("Error reading file.");
-    // }
     for(int i = 1; i < argc; i++) {
         fp[i - 1] = fopen(argv[i], "r");
         if(fp[i - 1] == NULL) {

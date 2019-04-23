@@ -76,7 +76,7 @@ union itval {
     struct it_ARRAY_DATA* array_data;
 };
 
-typedef struct {
+typedef struct gc_OBJECT_REGISTRY {
     struct gc_OBJECT_REGISTRY* next;
     struct gc_OBJECT_REGISTRY* previous;
     uint64_t object_id;

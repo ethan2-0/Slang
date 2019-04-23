@@ -116,12 +116,12 @@ ts_TYPE_ARRAY* ts_create_array_type(ts_TYPE* parent_type) {
     size_t parent_name_length = strlen(parent_type->barebones.name);
     result->name = mm_malloc(sizeof(char) * (parent_name_length + 3));
     sprintf(result->name, "[%s]", parent_type->barebones.name);
-    ts_register_type(result, result->name);
+    ts_register_type((ts_TYPE*) result, result->name);
     result->heirarchy_len = 1;
     result->heirarchy = mm_malloc(sizeof(ts_TYPE*) * 1);
     result->heirarchy[0] = (ts_TYPE*) result;
     result->parent_type = parent_type;
-    ts_register_type(result, result->name);
+    ts_register_type((ts_TYPE*) result, result->name);
     return result;
 }
 ts_TYPE* ts_get_type(char* name) {
@@ -134,7 +134,7 @@ ts_TYPE* ts_get_type(char* name) {
             char* parent_name = strdup(name);
             // Remove the last character (which is `]`)
             parent_name[strlen(parent_name) - 1] = '\0';
-            ts_TYPE* ret = ts_create_array_type(ts_get_type(parent_name + 1));
+            ts_TYPE* ret = (ts_TYPE*) ts_create_array_type(ts_get_type(parent_name + 1));
             free(parent_name);
             #if DEBUG
             printf("Created array type with ID %d\n", ret->barebones.id);

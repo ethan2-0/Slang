@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-
+//
 int cl_get_index(it_PROGRAM* program, ts_TYPE_CLAZZ* type) {
     for(int i = 0; i < program->clazzesc; i++) {
         if(program->clazzes[i] == type) {
@@ -57,7 +57,6 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
         ts_CLAZZ_FIELD* old_fields = type->fields;
         type->fields = mm_malloc(sizeof(ts_CLAZZ_FIELD) * (type->nfields + type->immediate_supertype->nfields));
         memcpy(type->fields, type->immediate_supertype->fields, sizeof(ts_CLAZZ_FIELD) * type->immediate_supertype->nfields);
-        ts_CLAZZ_FIELD* intermediate = type->fields + type->immediate_supertype->nfields;
         memcpy(type->fields + type->immediate_supertype->nfields, old_fields, sizeof(ts_CLAZZ_FIELD) * type->nfields);
         free(old_fields);
         type->nfields += type->immediate_supertype->nfields;
