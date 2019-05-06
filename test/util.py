@@ -41,7 +41,11 @@ def assert_compile_fails(filename, message="", include=[]):
 
 def interpret(*filenames, expect_fail=False, stdin=None):
     result = subprocess.run(["../interpreter/builddir/interpreter"] + list(filenames), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, input=stdin)
-    assert (result.returncode == 0) ^ expect_fail
+    success = (result.returncode == 0) ^ expect_fail
+    if not success:
+        print("Stdout:")
+        print(result.stdout.decode("utf8"))
+        assert success
     return result.stdout.decode("utf8")
 
 def clean_tmp():

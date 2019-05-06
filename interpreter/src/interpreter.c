@@ -11,6 +11,21 @@
 
 extern bool gc_needs_collection;
 
+void it_traceback(it_STACKFRAME* stackptr) {
+    printf("Traceback (most recent call first):\n");
+    while(true) {
+        if(stackptr->method->containing_clazz != NULL) {
+            printf("Method %s, of class %s, line %d\n", stackptr->method->name, stackptr->method->containing_clazz->name, stackptr->iptr->linenum);
+        } else {
+            printf("Method %s, line %d\n", stackptr->method->name, stackptr->iptr->linenum);
+        }
+
+        if(stackptr->index <= 0) {
+            break;
+        }
+        stackptr--;
+    }
+}
 void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
     stackptr->method = method;
     stackptr->iptr = stackptr->method->opcodes;
@@ -86,6 +101,8 @@ void it_execute(it_PROGRAM* prog) {
             it_STACKFRAME* oldstack = stackptr;
             stackptr++;
             if(stackptr >= stackend) {
+                stackptr--;
+                it_traceback(stackptr);
                 fatal("Stack overflow");
             }
 
@@ -116,6 +133,8 @@ void it_execute(it_PROGRAM* prog) {
             it_STACKFRAME* classcall_oldstack = stackptr;
             stackptr++;
             if(stackptr >= stackend) {
+                stackptr--;
+                it_traceback(stackptr);
                 fatal("Stack overflow");
             }
 
@@ -296,6 +315,7 @@ void it_execute(it_PROGRAM* prog) {
             ;
             it_OPCODE_DATA_ACCESS* opcode_access_data = (it_OPCODE_DATA_ACCESS*) iptr->payload;
             if(registers[opcode_access_data->clazzreg].clazz_data == NULL) {
+                it_traceback(stackptr);
                 fatal("Null pointer on access");
             }
             struct it_CLAZZ_DATA* clazz_data = registers[opcode_access_data->clazzreg].clazz_data;
@@ -306,6 +326,7 @@ void it_execute(it_PROGRAM* prog) {
             ;
             it_OPCODE_DATA_ASSIGN* opcode_assign_data = (it_OPCODE_DATA_ASSIGN*) iptr->payload;
             if(registers[opcode_assign_data->clazzreg].clazz_data == NULL) {
+                it_traceback(stackptr);
                 fatal("Null pointer on access");
             }
             registers[opcode_assign_data->clazzreg].clazz_data->itval[opcode_assign_data->property_index] = registers[opcode_assign_data->source];
@@ -328,10 +349,11 @@ void it_execute(it_PROGRAM* prog) {
             ;
             it_OPCODE_DATA_ARRACCESS* opcode_arraccess_data = (it_OPCODE_DATA_ARRACCESS*) iptr->payload;
             if(registers[opcode_arraccess_data->arrreg].array_data == NULL) {
+                it_traceback(stackptr);
                 fatal("Attempt to access null array");
             }
             if(registers[opcode_arraccess_data->indexreg].number >= registers[opcode_arraccess_data->arrreg].array_data->length) {
-                printf("Index out of bounds in %s at opcode %ld (access)\n", stackptr->method->name, (iptr - instruction_start));
+                it_traceback(stackptr);
                 fatal("Array index out of bounds");
             }
             registers[opcode_arraccess_data->elementreg] = registers[opcode_arraccess_data->arrreg].array_data->elements[registers[opcode_arraccess_data->indexreg].number];
@@ -341,10 +363,11 @@ void it_execute(it_PROGRAM* prog) {
             ;
             it_OPCODE_DATA_ARRASSIGN* opcode_arrassign_data = (it_OPCODE_DATA_ARRASSIGN*) iptr->payload;
             if(registers[opcode_arrassign_data->arrreg].array_data == NULL) {
+                it_traceback(stackptr);
                 fatal("Attempt to assign to null array");
             }
             if(registers[opcode_arrassign_data->indexreg].number >= registers[opcode_arrassign_data->arrreg].array_data->length) {
-                printf("Index out of bounds in %s at opcode %ld (assignment)\n", stackptr->method->name, (iptr - instruction_start));
+                it_traceback(stackptr);
                 fatal("Array index out of bounds");
             }
             registers[opcode_arrassign_data->arrreg].array_data->elements[registers[opcode_arrassign_data->indexreg].number] = registers[opcode_arrassign_data->elementreg];
@@ -354,12 +377,14 @@ void it_execute(it_PROGRAM* prog) {
             ;
             it_OPCODE_DATA_ARRLEN* opcode_arrlen_data = (it_OPCODE_DATA_ARRLEN*) iptr->payload;
             if(registers[opcode_arrlen_data->arrreg].array_data == NULL) {
+                it_traceback(stackptr);
                 fatal("Attempt to find length of null");
             }
             registers[opcode_arrlen_data->resultreg].number = registers[opcode_arrlen_data->arrreg].array_data->length;
             iptr++;
             continue;
         default:
+            it_traceback(stackptr);
             fatal("Unexpected opcode");
         }
     }
@@ -408,19 +433,7 @@ itval rm_exit(it_STACKFRAME* stackptr, itval* params) {
     return (itval) ((int64_t) 0);
 }
 itval rm_traceback(it_STACKFRAME* stackptr, itval* params) {
-    printf("Traceback (most recent call first):\n");
-    while(true) {
-        if(stackptr->method->containing_clazz != NULL) {
-            printf("Method %s, of class %s, line %d\n", stackptr->method->name, stackptr->method->containing_clazz->name, stackptr->iptr->linenum);
-        } else {
-            printf("Method %s, line %d\n", stackptr->method->name, stackptr->iptr->linenum);
-        }
-
-        if(stackptr->index <= 0) {
-            break;
-        }
-        stackptr--;
-    }
+    it_traceback(stackptr);
     return (itval) ((int64_t) 0);
 }
 void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it_METHOD_REPLACEMENT_PTR methodptr, char* name) {

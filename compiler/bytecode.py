@@ -39,13 +39,18 @@ class MethodBytecodeEmitter:
                 params += struct.pack("!I", param.index)
         if opcode.node is not None:
             self.current_line_num = opcode.node.line
-        ret = struct.pack("!BI", opcode.opcode.code, self.current_line_num) + params
+        ret = struct.pack("!B", opcode.opcode.code) + params
         return ret
 
     def emit(self):
         ret = b""
         for opcode in self.opcodes:
             ret += self.emit_opcode(opcode)
+        current_line_num = 0
+        for opcode in self.opcodes:
+            if opcode.node is not None:
+                current_line_num = opcode.node.line
+            ret += struct.pack("!I", current_line_num)
         return ret
 
 class SegmentEmitter:
@@ -64,7 +69,7 @@ class SegmentEmitterMethod(SegmentEmitter):
 
     def emit(self, segment):
         ret = SegmentEmitter.emit(self, segment)
-        header = struct.pack("!II", segment.num_registers, segment.signature.nargs) + encode_str(segment.signature.name)
+        header = struct.pack("!III", segment.num_registers, segment.signature.nargs, len(segment.opcodes)) + encode_str(segment.signature.name)
         body_header = b""
         body_header += encode_str("" if segment.signature.containing_class is None else segment.signature.containing_class.name)
         body_header += encode_str(segment.signature.returntype.name)

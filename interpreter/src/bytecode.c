@@ -13,7 +13,6 @@ uint32_t bc_assign_method_id(it_PROGRAM* program);
 void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it_OPCODE* opcode) {
     uint8_t opcode_num = fr_getuint8(state);
     opcode->type = opcode_num;
-    opcode->linenum = fr_getuint32(state);
     #if DEBUG
     printf("Opcode %02x\n", opcode_num);
     #endif
@@ -299,13 +298,12 @@ uint32_t bc_resolve_name(it_PROGRAM* program, char* name) {
 }
 void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* program, it_METHOD* result) {
     result->replacement_ptr = NULL;
-    uint32_t length = fr_getuint32(state);
+    fr_getuint32(state); // length
     uint32_t registerc = fr_getuint32(state);
     uint32_t nargs = fr_getuint32(state);
+    uint32_t opcodec = fr_getuint32(state);
     char* name = fr_getstr(state);
     uint32_t id = bc_resolve_name(program, name);
-    uint32_t bytecode_length = length - 12 - strlen(name);
-    size_t end_index = state->index + bytecode_length;
     #if DEBUG
     printf("Length %d\n", length);
     printf("Register count %d\n", registerc);
@@ -323,25 +321,26 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
         #endif
         result->register_types[i] = ts_get_type(typename);
     }
-    int num_opcodes = 0;
-    while(state->index < end_index) {
-        bc_parse_opcode(state, program, result, &opcode_buff[num_opcodes]);
-        num_opcodes++;
+    for(int i = 0; i < opcodec; i++) {
+        bc_parse_opcode(state, program, result, &opcode_buff[i]);
+    }
+    for(int i = 0; i < opcodec; i++) {
+        opcode_buff[i].linenum = fr_getuint32(state);
     }
     result->registerc = registerc;
     result->id = id;
     result->nargs = nargs;
-    result->opcodec = num_opcodes;
+    result->opcodec = opcodec;
     #if DEBUG
     printf("Opcodec: %d\n", result->opcodec);
     #endif
-    result->opcodes = mm_malloc(sizeof(it_OPCODE) * num_opcodes);
+    result->opcodes = mm_malloc(sizeof(it_OPCODE) * opcodec);
     #if DEBUG
-    for(int i = 0; i < num_opcodes; i++) {
+    for(int i = 0; i < opcodec; i++) {
         printf("Opcode--: %02x\n", opcode_buff[i].type);
     }
     #endif
-    memcpy(result->opcodes, opcode_buff, sizeof(it_OPCODE) * num_opcodes);
+    memcpy(result->opcodes, opcode_buff, sizeof(it_OPCODE) * opcodec);
 
     #if DEBUG
     printf("Done parsing method\n");
@@ -443,6 +442,7 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
             method->registerc = fr_getuint32(state); // num_registers
             method->id = bc_assign_method_id(program); // id
             method->nargs = fr_getuint32(state); // nargs
+            fr_getuint32(state);
             method->name = fr_getstr(state); // name
             char* containing_clazz_name = fr_getstr(state);
             if(strlen(containing_clazz_name) > 0) {
