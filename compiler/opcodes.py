@@ -66,6 +66,11 @@ class Opcode:
                     arg.looks_like_class_signature()
                 except:
                     complain_about_typechecking()
+            elif param_type == "type":
+                try:
+                    arg.looks_like_type()
+                except:
+                    complain_about_typechecking()
             else:
                 raise ValueError()
 

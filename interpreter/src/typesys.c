@@ -146,3 +146,24 @@ ts_TYPE* ts_get_type(char* name) {
     }
     return typ;
 }
+bool ts_is_compatible(ts_TYPE* type1, ts_TYPE* type2) {
+    int min_heirarchy_len = type1->barebones.heirarchy_len;
+    if(type2->barebones.heirarchy_len < min_heirarchy_len) {
+        min_heirarchy_len = type2->barebones.heirarchy_len;
+    }
+    return type1->barebones.heirarchy[min_heirarchy_len] == type2->barebones.heirarchy[min_heirarchy_len];
+}
+bool ts_instanceof(ts_TYPE* lhs, ts_TYPE* rhs) {
+    // Test if lhs instanceof rhs
+    #if DEBUG
+    printf("Asked if %s instanceof %s\n", lhs->barebones.name, rhs->barebones.name);
+    #endif
+    if(lhs->barebones.heirarchy_len < rhs->barebones.heirarchy_len) {
+        return false;
+    }
+    #if DEBUG
+    printf("rhs->heirarchy_len: %d\n", rhs->barebones.heirarchy_len);
+    printf("Types: %s and %s\n", lhs->barebones.heirarchy[rhs->barebones.heirarchy_len - 1]->barebones.name, rhs->barebones.heirarchy[rhs->barebones.heirarchy_len - 1]->barebones.name);
+    #endif
+    return lhs->barebones.heirarchy[rhs->barebones.heirarchy_len - 1] == rhs->barebones.heirarchy[rhs->barebones.heirarchy_len - 1];
+}

@@ -161,6 +161,20 @@
         "writes": [2]
     },
     {
+        "code": "0x21",
+        "mneumonic": "CAST",
+        "params": ["register", "register"],
+        "reads": [0],
+        "writes": [1]
+    },
+    {
+        "code": "0x22",
+        "mneumonic": "INSTANCEOF",
+        "params": ["register", "register", "type"],
+        "reads": [0],
+        "writes": "1"
+    },
+    {
         "code": "0x05",
         "mneumonic": "MODULO",
         "params": ["register", "register", "register"],

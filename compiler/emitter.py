@@ -206,6 +206,28 @@ class MethodEmitter:
             opcodes.append(ops["load"].ins(register, abs(nt), node=node))
             if nt < 0:
                 opcodes.append(ops["twocomp"].ins(register))
+        elif node.i("as"):
+            lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            opcodes += self.emit_expr(node[0], lhs_reg)
+            rhs_type = self.types.resolve(node[1])
+            if not lhs_reg.type.is_assignable_to(rhs_type) and not rhs_type.is_assignable_to(lhs_reg.type):
+                raise typesys.TypingError(node, "Invalid cast: LHS is incompatible with RHS")
+            if not rhs_type.is_clazz():
+                node.compile_error("Cannot cast to a type that isn't a class.")
+            if not lhs_reg.type.is_clazz():
+                node.compile_error("Cannot cast something that isn't a class.");
+            opcodes.append(ops["cast"].ins(lhs_reg, register))
+        elif node.i("instanceof"):
+            lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            opcodes += self.emit_expr(node[0], lhs_reg)
+            # result_reg = self.scope.allocate(self.types.bool_type)
+            # TODO: Potentially emit warning if RHS is incompatible with LHS type
+            rhs_type = self.types.resolve(node[1])
+            if lhs_reg.type.is_assignable_to(rhs_type):
+                node.warn("Tautology: %s always instanceof %s" % (lhs_reg.type, rhs_type))
+            if (not lhs_reg.type.is_assignable_to(rhs_type)) and (not rhs_type.is_assignable_to(lhs_reg.type)):
+                node.warn("Contradiction: there cannot exist any %s instanceof %s" % (lhs_reg.type, rhs_type))
+            opcodes.append(ops["instanceof"].ins(lhs_reg, register, rhs_type))
         elif node.of("+", "*", "^", "&", "|", "%", "/", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
             lhs = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs)
@@ -225,7 +247,7 @@ class MethodEmitter:
                 "<=": "lteq",
                 ">=": "gteq",
                 "!=": "equals",
-                # TODO: What happens if x0 is 0x1 and x1 is 0x2? Specifically for "and".
+                # TODO: What happens if x0 is 0x1 and x1 is 0x2? Specifically for "and", and acting on booleans
                 "and": "and",
                 "or": "or"
             }[node.type]].ins(lhs, rhs, register, node=node))
@@ -332,7 +354,7 @@ class MethodEmitter:
                 raise ValueError("This is a compiler bug")
             index_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             if not index_reg.type.is_numerical():
-                raise typesys.TypingError(child, "Index to array access must be numerical")
+                raise typesys.TypingError(node, "Index to array access must be numerical")
             opcodes += self.emit_expr(node[1], index_reg)
             opcodes.append(ops["arraccess"].ins(lhs_reg, index_reg, register, node=node))
         elif node.i("arrinst"):

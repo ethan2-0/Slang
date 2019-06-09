@@ -40,6 +40,8 @@
 #define OPCODE_ARRASSIGN 0x1e
 #define OPCODE_ARRLEN 0x1f
 #define OPCODE_DIV 0x20
+#define OPCODE_CAST 0x21
+#define OPCODE_INSTANCEOF 0x22
 
 typedef struct {
     uint32_t target;
@@ -173,5 +175,17 @@ typedef struct {
     uint32_t source2;
     uint32_t target;
 } it_OPCODE_DATA_DIV;
+typedef struct {
+    uint32_t source;
+    uint32_t target;
+    ts_TYPE* source_register_type;
+    ts_TYPE* target_type;
+} it_OPCODE_DATA_CAST;
+typedef struct {
+    uint32_t source;
+    uint32_t destination;
+    ts_TYPE* source_register_type;
+    ts_TYPE* predicate_type;
+} it_OPCODE_DATA_INSTANCEOF;
 
 #endif

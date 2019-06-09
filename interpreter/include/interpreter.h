@@ -66,6 +66,8 @@ int ts_get_field_index(ts_TYPE_CLAZZ* clazz, char* name);
 int ts_get_method_index(ts_TYPE_CLAZZ* clazz, char* name);
 void ts_register_type(ts_TYPE* type, char* name);
 uint32_t ts_allocate_type_id();
+bool ts_is_compatible(ts_TYPE* type1, ts_TYPE* type2);
+bool ts_instanceof(ts_TYPE* lhs, ts_TYPE* rhs);
 
 struct it_CLAZZ_DATA;
 struct it_ARRAY_DATA;
@@ -155,10 +157,8 @@ void it_replace_methods(it_PROGRAM* prog);
 void cl_arrange_phi_tables(it_PROGRAM* program);
 
 gc_OBJECT_REGISTRY* gc_register_object(itval object, size_t allocation_size, ts_CATEGORY category);
-// void gc_free(gc_OBJECT_REGISTRY* registry_entry);
 void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame);
 bool gc_needs_collection;
-// bool does_gc_need_collection();
 
 #define NUM_REPLACED_METHODS 4
 

@@ -29,7 +29,7 @@ class Token:
         return repr(self)
 
 class Toker:
-    keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null"]
+    keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null", "as", "instanceof"]
     escapes = {"n": "\n", "\\": "\\", "'": "'", "\"": "\"", "r": "\r", "0": "\0", "b": "\b", "v": "\v", "t": "\t", "f": "\f"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
@@ -226,6 +226,10 @@ class Node:
     def compile_error(self, message):
         raise ValueError("Line %s @ %s : '%s'" % (self.line, repr(self), message))
 
+    def warn(self, message):
+        # TODO: use `logging` and do this properly
+        print("Line %s @ %s: Warning: %s" % (self.line, repr(self), message))
+
 last_parser = None
 
 class Parser:
@@ -375,10 +379,16 @@ class Parser:
         else:
             self.throw(self.next())
 
-    def parse_bitwise(self):
+    def parse_cast(self):
         nod = self.parse_parens()
+        if self.peek().isn("as"):
+            nod = Node(self.expect("as"), nod, self.parse_type())
+        return nod
+
+    def parse_bitwise(self):
+        nod = self.parse_cast()
         while self.peek().type in "&^|":
-            nod = Node(self.next(), nod, self.parse_parens())
+            nod = Node(self.next(), nod, self.parse_cast())
         return nod
 
     def parse_mult(self):
@@ -397,6 +407,8 @@ class Parser:
         nod = self.parse_add()
         if self.peek().type in ["==", ">=", "<=", ">", "<", "!="]:
             nod = Node(self.next(), nod, self.parse_add())
+        if self.peek().isn("instanceof"):
+            nod = Node(self.expect("instanceof"), nod, self.parse_type())
         return nod
 
     def parse_logical(self):

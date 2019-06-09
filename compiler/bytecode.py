@@ -33,6 +33,8 @@ class MethodBytecodeEmitter:
                 params += encode_str(param.name)
             elif paramtype == "class":
                 params += encode_str(param.name)
+            elif paramtype == "type":
+                params += encode_str(param.name)
             elif paramtype == "property":
                 params += encode_str(param)
             elif paramtype == "instruction":

@@ -383,6 +383,27 @@ void it_execute(it_PROGRAM* prog) {
             registers[opcode_arrlen_data->resultreg].number = registers[opcode_arrlen_data->arrreg].array_data->length;
             iptr++;
             continue;
+        case OPCODE_CAST:
+            {
+                it_OPCODE_DATA_CAST* data = (it_OPCODE_DATA_CAST*) iptr->payload;
+                itval source = registers[data->source];
+                // We know data->source_register_type->barebones.category == ts_CATEGORY_CLAZZ
+                if(!ts_is_compatible((ts_TYPE*) source.clazz_data->phi_table, data->target_type)) {
+                    it_traceback(stackptr);
+                    fatal("Incompatible cast");
+                }
+                registers[data->target] = source;
+                iptr++;
+                continue;
+            }
+        case OPCODE_INSTANCEOF:
+            {
+                it_OPCODE_DATA_INSTANCEOF* data = (it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
+                itval source = registers[data->source];
+                registers[data->destination] = (itval) ((int64_t) ts_instanceof((ts_TYPE*) source.clazz_data->phi_table, data->predicate_type));
+                iptr++;
+                continue;
+            }
         default:
             it_traceback(stackptr);
             fatal("Unexpected opcode");

@@ -379,3 +379,21 @@ class TestReplacedMethods:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/replaced_methods/exit.slg", include_json=["../compiler/stdlib/src/stdlib.internal.json"])
         util.interpret(path, expect_fail=True)
+
+class TestInstanceofCasts:
+    def test_instanceof(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/types_instanceof_casts/instanceof.slg", no_warnings=False)
+        util.interpret(path)
+
+    def test_instanceof_incompatible_types(self):
+        util.clean_tmp()
+        util.assert_compile_succeeds(
+            "resources/types_instanceof_casts/instanceof_incompatible_types.slg",
+            message=[
+                ":StringSubclass always instanceof :stdlib.String",
+                ":stdlib.String always instanceof :stdlib.String",
+                "there cannot exist any :stdlib.String instanceof :stdlib.InputStream"
+            ],
+            no_warnings=False
+        )

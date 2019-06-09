@@ -60,8 +60,16 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
         memcpy(type->fields + type->immediate_supertype->nfields, old_fields, sizeof(ts_CLAZZ_FIELD) * type->nfields);
         free(old_fields);
         type->nfields += type->immediate_supertype->nfields;
+        type->heirarchy_len = type->immediate_supertype->heirarchy_len + 1;
+        // Yes, this is supposed to be size of a pointer
+        type->heirarchy = malloc(sizeof(ts_TYPE*) * type->heirarchy_len);
+        memcpy(type->heirarchy, type->immediate_supertype->heirarchy, sizeof(ts_TYPE*) * type->immediate_supertype->heirarchy_len);
+        type->heirarchy[type->heirarchy_len - 1] = (ts_TYPE*) type;
+    } else {
+        type->heirarchy = malloc(sizeof(ts_TYPE*) * 1);
+        type->heirarchy_len = 1;
+        type->heirarchy[0] = (ts_TYPE*) type;
     }
-    // TODO: Fix type->heirarchy
     int index = cl_get_index(program, type);
     visited[index] = true;
     #if DEBUG

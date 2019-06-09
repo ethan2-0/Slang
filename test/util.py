@@ -18,23 +18,27 @@ def do_compile(filename, outfile, include=[], include_json=[], parse_only=False)
     include_specifiers += list(itertools.chain.from_iterable([["--include-json", incl] for incl in include_json]))
     return subprocess.run(["python3", resolve_filename("../compiler/emitter.py"), "-o", outfile,] + include_specifiers + (["--parse-only"] if parse_only else []) + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-def assert_compile_succeeds(filename, message="", include=[], include_json=[], parse_only=False):
+def assert_compile_succeeds(filename, message="", include=[], include_json=[], parse_only=False, no_warnings=True):
     assert isinstance(include, list)
     assert isinstance(include_json, list)
+    if not isinstance(message, list):
+        message = [message]
     outfile = resolve_temp_path(os.path.split(filename)[1])
     completed_process = do_compile(filename, outfile, include=include, include_json=include_json, parse_only=parse_only)
     # I know, I shouldn't just coerce to utf8...
     stdout = completed_process.stdout.decode("utf8")
-    if completed_process.returncode != 0 or message not in stdout:
+    if completed_process.returncode != 0 or any(msg not in stdout for msg in message) or ("Warning" in stdout and no_warnings):
         print(stdout)
         assert False
     return outfile
 
 def assert_compile_fails(filename, message="", include=[]):
+    if not isinstance(message, list):
+        message = [message]
     outfile = resolve_temp_path(os.path.split(filename)[1])
     completed_process = do_compile(filename, outfile, include)
     stdout = completed_process.stdout.decode("utf8")
-    if completed_process.returncode == 0 or message not in stdout:
+    if completed_process.returncode == 0 or any(msg not in stdout for msg in message):
         print(stdout)
         assert False
     return outfile

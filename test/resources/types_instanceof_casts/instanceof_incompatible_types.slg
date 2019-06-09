@@ -1,0 +1,19 @@
+using stdlib;
+
+class StringSubclass extends String {
+    ctor() {}
+}
+
+entrypoint fn main() {
+    let s = "Str";
+    if(s instanceof InputStream) {
+        die("Failed 1.");
+    }
+    if(not (s instanceof String)) {
+        die("Failed 2.");
+    }
+    let subclass = s as StringSubclass;
+    if(not (subclass instanceof String)) {
+        die("Failed 3");
+    }
+}

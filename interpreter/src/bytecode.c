@@ -227,6 +227,31 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
         opcode->payload = data;
+    } else if(opcode_num == OPCODE_CAST) {
+        it_OPCODE_DATA_CAST* data = mm_malloc(sizeof(it_OPCODE_DATA_CAST));
+        data->source = fr_getuint32(state);
+        data->target = fr_getuint32(state);
+        data->target_type = method->register_types[data->target];
+        data->source_register_type = method->register_types[data->target];
+        if(data->target_type->barebones.category != ts_CATEGORY_CLAZZ) {
+            fatal("Can't cast something that isn't a class. This is a compiler bug.");
+        }
+        if(data->target_type->barebones.category != ts_CATEGORY_CLAZZ) {
+            fatal("Cannot cast to a type that isn't a class. This is a compiler bug.");
+        }
+        opcode->payload = data;
+    } else if(opcode_num == OPCODE_INSTANCEOF) {
+        it_OPCODE_DATA_INSTANCEOF* data = mm_malloc(sizeof(it_OPCODE_DATA_INSTANCEOF));
+        data->source = fr_getuint32(state);
+        data->destination = fr_getuint32(state);
+        char* typename = fr_getstr(state);
+        data->source_register_type = method->register_types[data->source];
+        data->predicate_type = ts_get_type(typename);
+        if(data->predicate_type->barebones.category != ts_CATEGORY_CLAZZ) {
+            fatal("Predicate type for instanceof must be a class. This is a compiler bug.");
+        }
+        free(typename);
+        opcode->payload = data;
     } else {
         fatal("Unrecognized opcode");
     }

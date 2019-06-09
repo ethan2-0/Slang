@@ -19,6 +19,9 @@ class AbstractType:
         # Exception isAssignableFrom RuntimeException
         return other.is_assignable_to(self)
 
+    def looks_like_type(self):
+        return True
+
     def is_numerical(self):
         return False
 
@@ -236,7 +239,11 @@ class TypeSystem:
             node.compile_error("Attempt to call something that can't be called")
 
     def decide_type(self, expr, scope):
-        if expr.of("+", "*", "-", "^", "&", "|", "%", "/") and len(expr) == 2:
+        if expr.i("as"):
+            return self.resolve(expr[1])
+        elif expr.i("instanceof"):
+            return self.bool_type
+        elif expr.of("+", "*", "-", "^", "&", "|", "%", "/") and len(expr) == 2:
             lhs_type = self.decide_type(expr[0], scope)
             rhs_type = self.decide_type(expr[1], scope)
             if not lhs_type.is_numerical():

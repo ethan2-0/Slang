@@ -1,0 +1,38 @@
+using stdlib;
+
+class Superclass {
+    ctor() {}
+}
+class Subclass1 extends Superclass {
+    ctor() {}
+}
+class Subclass11 extends Subclass1 {
+    ctor() {}
+}
+class Subclass2 extends Superclass {
+    ctor() {}
+}
+
+entrypoint fn main() {
+    let obj: Superclass;
+    obj = new Subclass1();
+    if(obj instanceof Subclass2) {
+        die("Test 1");
+    }
+    if(not (obj instanceof Subclass1)) {
+        die("Test 2");
+    }
+    if(not (obj instanceof Superclass)) {
+        die("Test 3");
+    }
+    if(obj instanceof Subclass11) {
+        die("Test 3");
+    }
+    obj = new Subclass11();
+    if(not (obj instanceof Subclass1)) {
+        die("Test 4");
+    }
+    if(not (obj instanceof Superclass)) {
+        die("Test 5");
+    }
+}
