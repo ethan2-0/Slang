@@ -443,7 +443,7 @@ class MethodEmitter:
             if not lhs_type.is_assignable_from(rhs_type):
                 raise typesys.TypingError(node, "Need RHS to be assignable to LHS: %s, %s" % (lhs_type, rhs_type))
             opcodes += chain.assign(rhs_reg, self)
-        elif node.of("+=", "*=", "-="):
+        elif node.of("+=", "*=", "-=", "/="):
             # TODO: This does the first (n - 1) parts of the chain twice
             rhs_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             opcodes += self.emit_expr(node[1], rhs_reg)
@@ -457,7 +457,8 @@ class MethodEmitter:
             opcodes.append(ops[{
                 "+=": "add",
                 "*=": "mult",
-                "-=": "add"
+                "-=": "add",
+                "/=": "div"
             }[node.type]].ins(resultreg, rhs_reg, resultreg, node=node))
             opcodes += chain.assign(resultreg, self)
         elif node.i("while"):
