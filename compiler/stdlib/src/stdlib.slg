@@ -218,35 +218,42 @@ fn exit(code: int) {
 fn getOne(): int {
     return 1;
 }
+fn abs(num: int): int {
+    if(num < 0) {
+        return num * -1;
+    }
+    return num;
+}
 fn itos_base(input: int, base: int): String {
+    // This is based on kprintn64 from the OpenBSD project
+    // https://github.com/openbsd/src/blob/master/sys/lib/libsa/printf.c
+    let symbols = "0123456789abcdefghijklmnopqrstuvwxyz";
     if(input == 0) {
         return "0";
     }
-    // TODO: Handle when input * base > max_int
-    let negative = input < 0;
-    if(negative) {
-        input *= -1;
+    let is_negative = input < 0;
+    let buff = [int: 65];
+    let index = 0;
+    while(input != 0) {
+        buff[index] = symbols.charAt(abs(input % base));
+        input /= base;
+        index++;
     }
-    let symbols = "0123456789abcdefghijklmnopqrstuvwxyz";
-    let magnitude_tmp = 1;
-    let magnitude = 0;
-    while(magnitude_tmp <= input) {
-        magnitude_tmp *= base;
-        magnitude++;
+    if(is_negative) {
+        buff[index] = '-';
+        index++;
     }
-    let resultarr = [int: magnitude + 1];
-    resultarr[0] = '-';
-    let resultptr = magnitude;
-    while(input > 0) {
-        resultarr[resultptr] = symbols.charAt(input % base);
-        input = input / base;
-        resultptr--;
+    // Our buffer is currently backwards, so reverse it into the new buffer
+    // The index here is right because it's off the end
+    let newBuff = [int: index];
+    let i = 0;
+    while(index > 0) {
+        // Do this first because index is one off the end
+        index--;
+        newBuff[i] = buff[index];
+        i++;
     }
-    if(negative) {
-        return new String(resultarr, 0, magnitude + 1);
-    } else {
-        return new String(resultarr, 1, magnitude);
-    }
+    return new String(newBuff, 0, i);
 }
 fn itos(input: int): String {
     return itos_base(input, 10);

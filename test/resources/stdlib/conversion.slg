@@ -1,31 +1,38 @@
 using stdlib;
 
-fn test_itos(): bool {
+fn test_itos() {
     if(not itos(1).equals("1")) {
-        return false;
+        die("test_itos 1");
     }
     if(not itos(0).equals("0")) {
-        return false;
+        die("test_itos 2");
     }
     if(not itos(10).equals("10")) {
-        return false;
+        println(itos(10));
+        die("test_itos 3");
     }
     if(not itos(-10).equals("-10")) {
-        return false;
+        die("test_itos 4");
     }
     if(not itos(12345).equals("12345")) {
-        return false;
+        die("test_itos 5");
     }
     if(not itos_base(314234, 36).equals("6qgq")) {
-        return false;
+        die("test_itos 6");
     }
     if(not itos_base(314234, 2).equals("1001100101101111010")) {
-        return false;
+        die("test_itos 7");
     }
     if(not itos_base(-12345, 10).equals("-12345")) {
-        return false;
+        die("test_itos 8");
     }
-    return true;
+    if(not itos(9223372036854775807).equals("9223372036854775807")) {
+        die("test_itos 9");
+    }
+    if(not itos(-9223372036854775808).equals("-9223372036854775808")) {
+        println(itos(-9223372036854775807));
+        die("test_itos 10");
+    }
 }
 fn test_stoi(): bool {
     if(not stoi("12345") == 12345) {
@@ -70,9 +77,7 @@ fn test_btos() {
     }
 }
 entrypoint fn main() {
-    if(not test_itos()) {
-        die("itos failed");
-    }
+    test_itos();
     if(not test_stoi()) {
         die("stoi failed");
     }
