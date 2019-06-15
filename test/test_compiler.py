@@ -4,62 +4,73 @@ import os.path
 
 os.chdir(os.path.dirname(__file__))
 
+class TestInterpreterCommandLineArgs:
+    def test_command_line_arguments_returnval(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/interpreter_command_line_options/returnval.slg")
+        assert "0x00000005" in util.interpret(path, "--print-return-value")
+        assert "0x00000005" not in util.interpret(path)
+
+    def test_invalid_arg(self):
+        util.clean_tmp()
+        assert "Invalid command line argument" in util.interpret("--does-not-exist", expect_fail=True)
+
 class TestInterpreterIfSemantics:
     def test_ifsemantics(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/interpreter_ifsemantics/ifsemantics.slg")
-        assert "0x00000234" in util.interpret(path)
+        assert "0x00000234" in util.interpret(path, "--print-return-value")
 
 class TestInterpreterMethodCall:
     def test_methodcall(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/interpreter_methodcall/methodcall.slg")
-        assert "0x0000002a" in util.interpret(path)
+        assert "0x0000002a" in util.interpret(path, "--print-return-value")
 
 class TestInterpreterMinimal:
     def test_minimal(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/interpreter_minimal/minimal.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
 class TestInterpreterRecursion:
     def test_recursion(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/interpreter_recursion/recursion.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
 class TestIntegrationInclude:
     def test_include(self):
         util.clean_tmp()
         lib = util.assert_compile_succeeds("resources/integration_include/lib.slg")
         main = util.assert_compile_succeeds("resources/integration_include/main.slg", include=[lib])
-        assert "0x00000003" in util.interpret(lib, main)
+        assert "0x00000003" in util.interpret(lib, main, "--print-return-value")
 
 class TestIntegrationKitchenSink:
     def test_kitchensink(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/kitchensink.slg")
-        assert "0x00100000" in util.interpret(path)
+        assert "0x00100000" in util.interpret(path, "--print-return-value")
 
     def test_linkedlist(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/linkedlist.slg")
-        assert "0x0000000a" in util.interpret(path)
+        assert "0x0000000a" in util.interpret(path, "--print-return-value")
 
     def test_forloop(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/forloop.slg")
-        assert "0x0000000a" in util.interpret(path)
+        assert "0x0000000a" in util.interpret(path, "--print-return-value")
 
     def test_whileloop(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/whileloop.slg")
-        assert "0x00000032" in util.interpret(path)
+        assert "0x00000032" in util.interpret(path, "--print-return-value")
 
     def test_nested_for_loop(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/integration_kitchensink/nestedforloop.slg")
-        assert "0x000007e9" in util.interpret(path)
+        assert "0x000007e9" in util.interpret(path, "--print-return-value")
 
 class TestClazzesBasic:
     def test_clazz(self):
@@ -111,7 +122,7 @@ class TestClazzesBasic:
     def test_clazz_call(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/classes_basic/class_call.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
 class TestClassesMethods:
     def test_classes_method(self):
@@ -143,7 +154,7 @@ class TestMethodTypes:
     def test_return_null_on_nonvoid(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/types_method_types/return_null_on_nonvoid.slg")
-        assert "0x00000000" in util.interpret(path)
+        assert "0x00000000" in util.interpret(path, "--print-return-value")
 
     def test_return_something_on_void(self):
         util.clean_tmp()
@@ -152,7 +163,7 @@ class TestMethodTypes:
     def test_no_return_on_void(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/types_method_types/no_return_on_void.slg")
-        assert "0x00000000" in util.interpret(path)
+        assert "0x00000000" in util.interpret(path, "--print-return-value")
 
     def test_no_return_on_nonvoid(self):
         util.clean_tmp()
@@ -211,12 +222,12 @@ class TestArrays:
     def test_arrays_basic(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/arrays/basic.slg")
-        assert "0x0000000f" in util.interpret(path)
+        assert "0x0000000f" in util.interpret(path, "--print-return-value")
 
     def test_arrays_misc(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/arrays/misc.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_arrays_out_of_bounds(self):
         util.clean_tmp()
@@ -226,33 +237,33 @@ class TestArrays:
     def test_arrays_2d(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/arrays/test_2d.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_arrays_zerofill(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/arrays/zerofill.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_arrays_literal_inference_inheritance(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/arrays/literal_inference_inheritance.slg")
-        assert "0x00000003" in util.interpret(path)
+        assert "0x00000003" in util.interpret(path, "--print-return-value")
 
 class TestInheritance:
     def test_inheritance_basic(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/inheritance/basic.slg")
-        assert "0x0000000c" in util.interpret(path)
+        assert "0x0000000c" in util.interpret(path, "--print-return-value")
 
     def test_inheritance_polymorphism(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/inheritance/polymorphism.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_inheritance_polymorphism(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/inheritance/polymorphism_advanced.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_inheritance_overriding_missing_override(self):
         util.clean_tmp()
@@ -282,7 +293,7 @@ class TestMethods:
     def test_methods_single_call(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/methods/single_call.slg")
-        assert "0x00000005" in util.interpret(path)
+        assert "0x00000005" in util.interpret(path, "--print-return-value")
 
     def test_inheritance_duplicate_field_different_type(self):
         util.clean_tmp()
@@ -298,40 +309,40 @@ class TestNamespaces:
         util.clean_tmp()
         lib = util.assert_compile_succeeds("resources/namespaces/basic_lib.slg")
         main = util.assert_compile_succeeds("resources/namespaces/basic_main.slg", include=[lib])
-        assert "0x0000000a" in util.interpret(lib, main)
+        assert "0x0000000a" in util.interpret(lib, main, "--print-return-value")
 
     def test_method(self):
         util.clean_tmp()
         lib = util.assert_compile_succeeds("resources/namespaces/method_lib.slg")
         main = util.assert_compile_succeeds("resources/namespaces/method_main.slg", include=[lib])
-        assert "0x00000005" in util.interpret(lib, main)
+        assert "0x00000005" in util.interpret(lib, main, "--print-return-value")
 
 class TestParser:
     def test_underscore_in_name(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/parser/underscore_in_name.slg")
-        assert "0x00000005" in util.interpret(path)
+        assert "0x00000005" in util.interpret(path, "--print-return-value")
 
     def test_escapes(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/parser/escapes.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_string_literal(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/parser/string_literal.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
 class TestStdlib:
     def test_basic(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/stdlib/basic.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_string_basic(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/stdlib/string_basic.slg")
-        assert "0x00000001" in util.interpret(path)
+        assert "0x00000001" in util.interpret(path, "--print-return-value")
 
     def test_conversion(self):
         util.clean_tmp()

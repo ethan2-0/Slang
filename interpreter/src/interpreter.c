@@ -41,7 +41,7 @@ void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
     // But that's mostly to ease debugging, I don't want to rely on it.
     memset(stackptr->registers, 0x00, stackptr->registerc * sizeof(itval));
 }
-void it_execute(it_PROGRAM* prog) {
+void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
     // Setup interpreter state
     it_STACKFRAME* stack = mm_malloc(sizeof(it_STACKFRAME) * STACKSIZE);
     it_STACKFRAME* stackptr = stack;
@@ -168,7 +168,9 @@ void it_execute(it_PROGRAM* prog) {
               // C is a barbaric language
             itval result = registers[((it_OPCODE_DATA_RETURN*) iptr->payload)->target];
             if(stackptr <= stack) {
-                printf("Returned 0x%08lx\n", result.number);
+                if(options->print_return_value) {
+                    printf("Returned 0x%08lx\n", result.number);
+                }
                 goto CLEANUP;
             }
             #if DEBUG
@@ -414,11 +416,11 @@ CLEANUP:
     // Explicitly not freeing stackptr and stackend since they're dangling pointers at this point
     return;
 }
-void it_run(it_PROGRAM* prog) {
+void it_run(it_PROGRAM* prog, it_OPTIONS* options) {
     #if DEBUG
     printf("Entering it_RUN\n");
     #endif
-    it_execute(prog);
+    it_execute(prog, options);
 }
 itval rm_print(it_STACKFRAME* stackptr, itval* params) {
     it_ARRAY_DATA* arr = params[0].array_data;

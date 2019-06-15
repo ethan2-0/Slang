@@ -148,10 +148,14 @@ typedef struct {
     ts_TYPE_CLAZZ** clazzes;
 } it_PROGRAM;
 
+typedef struct {
+    bool print_return_value;
+} it_OPTIONS;
+
 typedef struct it_METHOD it_METHOD;
 typedef struct it_ARRAY_DATA it_ARRAY_DATA;
 
-void it_run(it_PROGRAM* prog);
+void it_execute(it_PROGRAM* prog, it_OPTIONS* options);
 void it_replace_methods(it_PROGRAM* prog);
 
 void cl_arrange_phi_tables(it_PROGRAM* program);

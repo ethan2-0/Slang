@@ -504,7 +504,7 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
     printf("Exiting bc_scan_methods()\n");
     #endif
 }
-it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[]) {
+it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], it_OPTIONS* options) {
     #if DEBUG
     printf("Parsing %d files\n", fpc);
     #endif

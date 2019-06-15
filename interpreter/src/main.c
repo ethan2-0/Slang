@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include "bytecode.h"
 #include "opcodes.h"
 #include "common.h"
@@ -10,14 +11,27 @@ int main(int argc, char* argv[]) {
     if(argc < 2) {
         fatal("Not enough arguments\nInclude a bytecode file name\n");
     }
+    it_OPTIONS options;
+    options.print_return_value = false;
     FILE* fp[argc - 1];
+    int num_infiles = 0;
     for(int i = 1; i < argc; i++) {
-        fp[i - 1] = fopen(argv[i], "r");
-        if(fp[i - 1] == NULL) {
-            fatal("Error reading file.");
+        if(argv[i][0] == '-') {
+            if(strcmp(argv[i], "--print-return-value") == 0) {
+                options.print_return_value = true;
+            } else {
+                printf("Argument: %s\n", argv[i]);
+                fatal("Invalid command line argument");
+            }
+        } else {
+            fp[num_infiles] = fopen(argv[i], "r");
+            if(fp[num_infiles] == NULL) {
+                fatal("Error reading file.");
+            }
+            num_infiles++;
         }
     }
-    it_PROGRAM* prog = bc_parse_from_files(argc - 1, fp);
+    it_PROGRAM* prog = bc_parse_from_files(num_infiles, fp, &options);
     #if DEBUG
     printf("\n\nMethods: %d\n", prog->methodc);
     printf("Entrypoint: %d\n", prog->entrypoint);
@@ -31,5 +45,5 @@ int main(int argc, char* argv[]) {
     }
     #endif
     // TODO: Properly destroy `prog`
-    it_run(prog);
+    it_run(prog, &options);
 }
