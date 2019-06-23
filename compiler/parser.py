@@ -545,7 +545,9 @@ class Parser:
             if modifiers.has_child(modifier.type):
                 modifier.compile_error("Duplicate modifier %s" % modifier)
             modifiers.add(modifier)
-        return Node(self.expect("fn"), Node(self.expect("ident")), self.parse_fn_params(), self.parse_type_annotation() if self.isn(":") else Node("ident", data="void"), self.parse_statement(), modifiers)
+        self.expect("fn")
+        name = self.parse_qualified_name()
+        return Node("fn", name, self.parse_fn_params(), self.parse_type_annotation() if self.isn(":") else Node("ident", data="void"), self.parse_statement(), modifiers)
 
     def parse_ctor(self):
         return Node(self.expect("ctor"), self.parse_fn_params(), self.parse_statement())

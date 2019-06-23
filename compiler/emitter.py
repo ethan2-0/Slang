@@ -127,7 +127,7 @@ class MethodSignature:
                 method.compile_error("Can't have an entrypoint inside a class")
             if is_entrypoint and len(argnames) > 0:
                 method.compile_error("Can't have an entrypoint with arguments")
-            name = method[0].data
+            name = util.get_flattened(method[0])
             if containing_class is None and program.namespace is not None:
                 name = "%s.%s" % (program.namespace, name)
             return MethodSignature(name, signature, argnames, types.resolve(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint)
@@ -901,9 +901,9 @@ class Program:
         return self.get_entrypoint() is not None
 
     def emit_method(self, method, signature=None):
-        # method[0].data is method.name
+        # util.get_flattened(method[0]) is method name
         # TODO: Remove signature parameter and make caller call get_method_signature
-        return MethodSegment(method, signature if signature is not None else get_method_signature(method[0].data, method))
+        return MethodSegment(method, signature if signature is not None else get_method_signature(util.get_flattened(method[0]), method))
 
     def validate_overriding_rules(self):
         for signature in self.clazz_signatures:

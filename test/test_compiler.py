@@ -304,6 +304,11 @@ class TestMethods:
         path = util.assert_compile_succeeds("resources/methods/single_call.slg")
         util.interpret(path)
 
+    def test_methods_dot_name(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/methods/dot_name.slg")
+        util.interpret(path)
+
 class TestNamespaces:
     def test_basic(self):
         util.clean_tmp()

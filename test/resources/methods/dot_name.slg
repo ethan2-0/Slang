@@ -1,0 +1,18 @@
+using stdlib;
+using prefix;
+
+fn other.method.name(): int {
+    return 5;
+}
+fn prefix.method(): int {
+    return 6;
+}
+
+entrypoint fn main() {
+    if(other.method.name() != 5) {
+        die("Failed 1.");
+    }
+    if(method() != 6) {
+        die("Failed 2.");
+    }
+}
