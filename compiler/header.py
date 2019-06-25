@@ -151,6 +151,8 @@ class HeaderClazzRepresentation:
 
 
 class HeaderRepresentation:
+    # Filled in below
+    HIDDEN: "HeaderRepresentation" = None # type: ignore
     def __init__(self, methods, clazzes, hidden=False):
         self.methods = methods
         self.clazzes = clazzes

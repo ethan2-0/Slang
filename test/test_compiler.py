@@ -249,6 +249,14 @@ class TestArrays:
         path = util.assert_compile_succeeds("resources/arrays/literal_inference_inheritance.slg")
         assert "0x00000003" in util.interpret(path, "--print-return-value")
 
+    def test_arrays_literal_of_nulls(self):
+        util.clean_tmp()
+        util.assert_compile_fails("resources/arrays/literla_of_nulls.slg", "Cannot have an array literal comprising only null values, use arbitrary-length instantiation syntax instead")
+
+    def test_arrays_no_such_member_type(self):
+        util.clean_tmp()
+        util.assert_compile_fails("resources/arrays/no_such_member_type.slg", "Could not resolve type")
+
 class TestInheritance:
     def test_inheritance_basic(self):
         util.clean_tmp()

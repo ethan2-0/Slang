@@ -5,6 +5,7 @@ import parser
 import util
 import claims as clms
 from chain import Chain
+from typing import ClassVar
 
 class RegisterHandle:
     def __init__(self, id, type):
@@ -82,6 +83,7 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class MethodSignature:
+    sequential_id: ClassVar[int] = 0
     def __init__(self, name, args, argnames, returntype, is_ctor=False, containing_class=None, is_override=False, is_entrypoint=False):
         assert type(is_ctor) is type(False)
         self.name = name
@@ -149,7 +151,6 @@ class MethodSignature:
                 continue
             ret.append(MethodSignature.from_node(method, types, program))
         return ret
-MethodSignature.sequential_id = 0
 
 def get_method_signature(name, top_, is_real_top=False):
     # I really need to change this. This should instead accept a reference to
@@ -1086,5 +1087,5 @@ if __name__ == "__main__":
         import binascii
         print(binascii.hexlify(outbytes).decode("ascii"))
 
-    with open(args.output, "wb") as f:
+    with open(args.output, "wb") as f: # type: ignore
         f.write(outbytes)
