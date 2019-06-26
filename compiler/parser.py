@@ -1,59 +1,61 @@
 import string
+from typing import NoReturn, Optional, Tuple, List, NewType, Any, Dict, Union, Iterator
 
 class ParseError(ValueError):
-    def __init__(self, explanation, line, chr):
+    def __init__(self, explanation: str, line: int, chr: int):
         ValueError.__init__(self, "%s (near line %s, char %s)" % (explanation, line, chr))
 
 class Token:
-    def __init__(self, type, data=None):
+    def __init__(self, type: str, data: Optional[str]=None) -> None:
         self.type = type
         self.data = data
 
-    def isn(self, type, data=None):
+    def isn(self, type: str, data: Optional[str]=None) -> bool:
         if self.type != type:
             return False
         if data is not None and self.data != data:
             return False
         return True
 
-    def of(self, *types):
+    def of(self, *types: str) -> bool:
         for type in types:
             if self.isn(type):
                 return True
         return False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "%s(%s)" % (self.type, self.data if self.data is not None else "")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
+TokerState = NewType("TokerState", Tuple[int, int, int])
 class Toker:
     keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null", "as", "instanceof"]
     escapes = {"n": "\n", "\\": "\\", "'": "'", "\"": "\"", "r": "\r", "0": "\0", "b": "\b", "v": "\v", "t": "\t", "f": "\f"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
-    def __init__(self, src):
+    def __init__(self, src: str) -> None:
         self.src = src
         self.ptr = 0
         self.line = 0
         self.chn = 0
 
-    def ch(self, num=1):
+    def ch(self, num: int=1) -> str:
         return self.src[self.ptr:self.ptr + num]
 
     @property
-    def chi(self):
+    def chi(self) -> int:
         return self.ptr - self.chn
 
-    def adv(self, num=1):
+    def adv(self, num: int=1) -> str:
         self.ptr += num
         return self.src[self.ptr - num:self.ptr]
 
-    def is_eof(self):
+    def is_eof(self) -> bool:
         return self.ptr >= len(self.src)
 
-    def tokenize_string_body_ch(self):
+    def tokenize_string_body_ch(self) -> str:
         ch = self.adv()
         ret = None
         if ch == "\\":
@@ -63,7 +65,7 @@ class Toker:
             self.throw("Invalid escape sequence: '\\%s'" % ch)
         return ch
 
-    def next(self):
+    def next(self) -> Token:
         if self.is_eof():
             return Token("EOF")
 
@@ -117,24 +119,27 @@ class Toker:
         else:
             raise ValueError("Unexpected character '%s'" % self.ch())
 
-    def throw(self, explanation):
+    def throw(self, explanation: str) -> NoReturn:
         raise ParseError(explanation, self.line, self.chi)
 
-    def get_state(self):
-        return (self.ptr, self.line, self.chn)
+    def get_state(self) -> TokerState:
+        return TokerState((self.ptr, self.line, self.chn))
 
-    def set_state(self, state):
+    def set_state(self, state: TokerState):
         self.ptr, self.line, self.chn = state
 
-    def peek(self, num=1):
+    def peek(self, num: int=1) -> Token:
         state = self.get_state()
         ret = None
         for i in range(num):
             ret = self.next()
         self.set_state(state)
+        if ret is None:
+            self.throw("Unexpected EOF")
+        assert ret is not None
         return ret
 
-    def isn(self, type, data=None, num=1):
+    def isn(self, type: str, data: str=None, num: int=1) -> bool:
         peek = self.peek(num)
         if peek.type != type:
             return False
@@ -142,7 +147,7 @@ class Toker:
             return False
         return True
 
-    def expect(self, type, data=None):
+    def expect(self, type: str, data: str=None) -> Token:
         next = self.next()
         if next.type != type:
             self.throw("Expected '%s', got '%s'" % (type, next.type))
@@ -150,40 +155,49 @@ class Toker:
             self.throw("Found '%s' but expected data of '%s' as opposed to '%s'" % (type, data, next.data))
         return next
 
+last_parser: "Optional[Parser]" = None
+
 class Node:
-    def __init__(self, typ, *children, data=None):
+    def __init__(self, typ: Union[str, Token], *children: "Node", data: str=None) -> None:
+        assert last_parser is not None
         self.line = last_parser.toker.line
         for child in children:
             if type(child) is not Node:
                 raise ValueError("Unexpected type %s of child (expected %s)" % (type(child), Node))
             if child.line < self.line:
                 self.line = child.line
-        if type(typ) is Token:
+        if isinstance(typ, Token):
             self.type = typ.type
             self.data = typ.data
-        elif type(typ) is str:
+        elif isinstance(typ, str):
             self.type = typ
             self.data = data
         else:
             raise ValueError("Unexpected type %s of typ (expected str or Token)" % type(typ))
         self.children = list(children)
-        self.xattrs = dict()
+        self.xattrs: Dict[Any, Any] = dict()
 
-    def __repr__(self):
+    @property
+    def data_strict(self) -> str:
+        if self.data is None:
+            raise ValueError("Node %s: expected non-null data")
+        return self.data
+
+    def __repr__(self) -> str:
         return "%s(%s)%s" % (self.type,
             self.data if self.data is not None else "",
             " %s" % self.xattrs if len(self.xattrs) > 0 else "")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
-    def output(self, indent=0):
+    def output(self, indent: int=0) -> None:
         print("%s %s%s" % (self.line, "    " * indent, repr(self)))
         for child in self.children:
             child.output(indent=indent + 1)
 
-    def __getitem__(self, index):
-        if type(index) is str:
+    def __getitem__(self, index: Union[str, int]) -> "Node":
+        if isinstance(index, str):
             for child in self.children:
                 if child.type == index:
                     return child
@@ -191,13 +205,13 @@ class Node:
         else:
             return self.children[index]
 
-    def has_child(self, type):
+    def has_child(self, type: str) -> bool:
         for child in self.children:
             if child.type == type:
                 return True
         return False
 
-    def add(self, *children):
+    def add(self, *children: "Node") -> None:
         for child in children:
             if type(child) is not Node:
                 raise ValueError("Unexpected type %s of child (expected %s)" % (type(child), Node))
@@ -205,66 +219,64 @@ class Node:
                 self.line = child.line
         self.children += list(children)
 
-    def isn(self, type):
+    def isn(self, type: str) -> bool:
         return self.type == type
 
-    def i(self, type):
+    def i(self, type: str) -> bool:
         return self.isn(type)
 
-    def of(self, *types):
+    def of(self, *types: str) -> bool:
         for typ in types:
             if self.i(typ):
                 return True
         return False
 
-    def __iter__(self):
+    def __iter__(self) -> "Iterator[Node]":
         return iter(self.children)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.children)
 
-    def compile_error(self, message):
+    def compile_error(self, message: str) -> NoReturn:
         raise ValueError("Line %s @ %s : '%s'" % (self.line, repr(self), message))
 
-    def warn(self, message):
+    def warn(self, message: str) -> None:
         # TODO: use `logging` and do this properly
         print("Line %s @ %s: Warning: %s" % (self.line, repr(self), message))
 
-last_parser = None
-
 class Parser:
     method_modifiers = ["override", "entrypoint"]
-    def __init__(self, toker):
+    def __init__(self, toker: Toker) -> None:
         self.toker = toker
         global last_parser
         last_parser = self
 
-    def next(self):
+    def next(self) -> Token:
         return self.toker.next()
 
-    def peek(self, num=1):
+    def peek(self, num: int=1) -> Token:
         return self.toker.peek(num)
 
-    def isn(self, type, data=None, num=1):
+    def isn(self, type: str, data: Optional[str]=None, num=1) -> bool:
         return self.toker.isn(type, data, num)
 
-    def expect(self, type, data=None):
+    def expect(self, type: str, data: str=None) -> Token:
         return self.toker.expect(type, data)
 
-    def throw(self, explanation):
-        if type(explanation) is Token:
+    def throw(self, explanation: Union[str, Token]) -> NoReturn:
+        if isinstance(explanation, Token):
             self.toker.throw("Unexpected token %s" % explanation)
         else:
             self.toker.throw(explanation)
 
-    def parse_qualified_name(self):
+    def parse_qualified_name(self) -> Node:
         lhs = Node(self.expect("ident"))
         if self.isn("."):
             self.expect(".")
             return Node(".", lhs, self.parse_qualified_name())
         return lhs
 
-    def parse_chain(self):
+    def parse_chain(self) -> Node:
         ret = Node("chain")
         ret.add(Node(self.expect("ident")))
         while self.isn(".") or self.isn("(") or self.isn("["):
@@ -282,7 +294,7 @@ class Parser:
                 self.throw("Couldn't parse property chain")
         return ret
 
-    def parse_type(self):
+    def parse_type(self) -> Node:
         if self.isn("["):
             self.expect("[")
             lhs = Node("[", self.parse_type())
@@ -300,11 +312,11 @@ class Parser:
             self.expect(">")
         return lhs
 
-    def parse_type_annotation(self):
+    def parse_type_annotation(self) -> Node:
         self.expect(":")
         return self.parse_type()
 
-    def parse_fn_params(self):
+    def parse_fn_params(self) -> Node:
         self.expect("(")
         nod = Node("fnparams")
         should_loop = not self.isn(")")
@@ -319,7 +331,7 @@ class Parser:
         self.expect(")")
         return nod
 
-    def parse_parens(self):
+    def parse_parens(self) -> Node:
         if self.isn("("):
             self.expect("(")
             ret = self.parse_expr()
@@ -379,31 +391,31 @@ class Parser:
         else:
             self.throw(self.next())
 
-    def parse_cast(self):
+    def parse_cast(self) -> Node:
         nod = self.parse_parens()
         if self.peek().isn("as"):
             nod = Node(self.expect("as"), nod, self.parse_type())
         return nod
 
-    def parse_bitwise(self):
+    def parse_bitwise(self) -> Node:
         nod = self.parse_cast()
         while self.peek().type in "&^|":
             nod = Node(self.next(), nod, self.parse_cast())
         return nod
 
-    def parse_mult(self):
+    def parse_mult(self) -> Node:
         nod = self.parse_bitwise()
         while self.isn("*") or self.isn("/") or self.isn("%"):
             nod = Node(self.next(), nod, self.parse_bitwise())
         return nod
 
-    def parse_add(self):
+    def parse_add(self) -> Node:
         nod = self.parse_mult()
         while self.isn("+") or self.isn("-"):
             nod = Node(self.next(), nod, self.parse_mult())
         return nod
 
-    def parse_comparison(self):
+    def parse_comparison(self) -> Node:
         nod = self.parse_add()
         if self.peek().type in ["==", ">=", "<=", ">", "<", "!="]:
             nod = Node(self.next(), nod, self.parse_add())
@@ -411,16 +423,16 @@ class Parser:
             nod = Node(self.expect("instanceof"), nod, self.parse_type())
         return nod
 
-    def parse_logical(self):
+    def parse_logical(self) -> Node:
         nod = self.parse_comparison()
         while self.peek().type in ["and", "or"]:
             nod = Node(self.next(), nod, self.parse_comparison())
         return nod
 
-    def parse_expr(self):
+    def parse_expr(self) -> Node:
         return self.parse_logical()
 
-    def parse_fcall_params(self):
+    def parse_fcall_params(self) -> List[Node]:
         ret = []
         self.expect("(")
         while not self.isn(")"):
@@ -430,7 +442,7 @@ class Parser:
         self.expect(")")
         return ret
 
-    def parse_fcall(self):
+    def parse_fcall(self) -> Node:
         nod = Node("call", Node(self.expect("ident")), *self.parse_fcall_params())
 
         while self.isn(";"):
@@ -438,7 +450,7 @@ class Parser:
 
         return nod
 
-    def parse_statement(self):
+    def parse_statement(self) -> Node:
         tok = self.peek()
         if tok.isn("{"):
             self.next()
@@ -506,6 +518,8 @@ class Parser:
                 while self.isn(";"):
                     self.expect(";")
                 return ret
+            # We know this is true because of the definition of token_after_chain
+            assert token_after_chain is not None
 
             if token_after_chain.isn("="):
                 chain = self.parse_chain()
@@ -538,7 +552,7 @@ class Parser:
         else:
             self.throw(tok)
 
-    def parse_fn(self):
+    def parse_fn(self) -> Node:
         modifiers = Node("modifiers")
         while self.peek().of(*Parser.method_modifiers):
             modifier = Node(self.next())
@@ -549,10 +563,10 @@ class Parser:
         name = self.parse_qualified_name()
         return Node("fn", name, self.parse_fn_params(), self.parse_type_annotation() if self.isn(":") else Node("ident", data="void"), self.parse_statement(), modifiers)
 
-    def parse_ctor(self):
+    def parse_ctor(self) -> Node:
         return Node(self.expect("ctor"), self.parse_fn_params(), self.parse_statement())
 
-    def parse_class(self):
+    def parse_class(self) -> Node:
         nod = Node(self.expect("class"), Node(self.expect("ident")))
         if self.isn("extends"):
             nod.add(Node(self.expect("extends"), self.parse_type()))
@@ -574,7 +588,7 @@ class Parser:
         self.expect("}")
         return nod
 
-    def parse_using(self):
+    def parse_using(self) -> Node:
         self.expect("using")
         ret = Node("using", Node(self.expect("ident")))
         while self.isn("."):
@@ -583,7 +597,7 @@ class Parser:
         self.expect(";")
         return ret
 
-    def parse_namespace(self):
+    def parse_namespace(self) -> Node:
         self.expect("namespace")
         ret = Node("namespace", Node(self.expect("ident")))
         while self.isn("."):
@@ -592,7 +606,7 @@ class Parser:
         self.expect(";")
         return ret
 
-    def parse(self):
+    def parse(self) -> Node:
         global last_parser
         last_parser = self
         nod = Node("top")
@@ -609,7 +623,7 @@ class Parser:
                 self.throw(self.next())
         return nod
 
-def parse_type(data):
+def parse_type(data) -> Node:
     return Parser(Toker(data)).parse_type()
 
 if __name__ == "__main__":
