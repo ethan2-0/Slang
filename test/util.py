@@ -16,7 +16,7 @@ def resolve_temp_path(temp_path):
 def do_compile(filename, outfile, include=[], include_json=[], parse_only=False):
     include_specifiers = list(itertools.chain.from_iterable([["--include", incl] for incl in include]))
     include_specifiers += list(itertools.chain.from_iterable([["--include-json", incl] for incl in include_json]))
-    return subprocess.run(["python3", resolve_filename("../compiler/emitter.py"), "-o", outfile,] + include_specifiers + (["--parse-only"] if parse_only else []) + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return subprocess.run(["python3", resolve_filename("../compiler/compiler.py"), "-o", outfile,] + include_specifiers + (["--parse-only"] if parse_only else []) + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 def assert_compile_succeeds(filename, message="", include=[], include_json=[], parse_only=False, no_warnings=True):
     assert isinstance(include, list)

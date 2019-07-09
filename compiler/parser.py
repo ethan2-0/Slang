@@ -125,7 +125,7 @@ class Toker:
     def get_state(self) -> TokerState:
         return TokerState((self.ptr, self.line, self.chn))
 
-    def set_state(self, state: TokerState):
+    def set_state(self, state: TokerState) -> None:
         self.ptr, self.line, self.chn = state
 
     def peek(self, num: int=1) -> Token:
@@ -257,7 +257,7 @@ class Parser:
     def peek(self, num: int=1) -> Token:
         return self.toker.peek(num)
 
-    def isn(self, type: str, data: Optional[str]=None, num=1) -> bool:
+    def isn(self, type: str, data: Optional[str]=None, num: int=1) -> bool:
         return self.toker.isn(type, data, num)
 
     def expect(self, type: str, data: str=None) -> Token:
@@ -623,7 +623,9 @@ class Parser:
                 self.throw(self.next())
         return nod
 
-def parse_type(data) -> Node:
+def parse_type(data: str) -> Node:
+    if not isinstance(data, str):
+        raise ValueError("This is a compiler bug.")
     return Parser(Toker(data)).parse_type()
 
 if __name__ == "__main__":

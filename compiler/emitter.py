@@ -1,3 +1,5 @@
+# Import as another name since "opcodes" is used frequently as a variable name
+import opcodes as opcodes_module
 from opcodes import opcodes as ops
 import header
 import typesys
@@ -5,72 +7,78 @@ import parser
 import util
 import claims as clms
 from chain import Chain
-from typing import ClassVar
+from typing import ClassVar, List, Optional, Union, TypeVar, Dict, cast, Tuple, Generic, NoReturn
 
 class RegisterHandle:
-    def __init__(self, id, type):
+    def __init__(self, id: int, type: "typesys.AbstractType") -> None:
         self.id = id
         self.type = type
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "RegisterHandle(id=%s, type=%s)" % (self.id, self.type)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "$%s" % self.id
 
-    def looks_like_register_handle(self):
+    def looks_like_register_handle(self) -> None:
         pass
 
-def flatten_ident_nodes(parent):
-    return ".".join([child.data for child in parent])
+def flatten_ident_nodes(parent: parser.Node) -> str:
+    return ".".join([child.data_strict for child in parent])
 
-def annotate(opcodes, annotation):
-    if type(opcodes) is list:
-        if len(opcodes) > 0:
-            opcodes[0].annotate(annotation)
-        return opcodes
+AnnotateOpcodesGenericType = TypeVar("AnnotateOpcodesGenericType", "List[opcodes_module.OpcodeInstance]", "opcodes_module.OpcodeInstance")
+def annotate(opcode: AnnotateOpcodesGenericType, annotation: str) -> AnnotateOpcodesGenericType:
+    if isinstance(opcode, list):
+        if len(opcode) > 0:
+            opcode[0].annotate(annotation)
+        return opcode
+    elif isinstance(opcode, opcodes_module.OpcodeInstance):
+        opcode.annotate(annotation)
+        return opcode
     else:
-        opcodes.annotate(annotation)
-        return opcodes
+        # This is impossible
+        raise ValueError()
 
 class Scopes:
-    def __init__(self):
-        self.locals = [dict()]
+    def __init__(self) -> None:
+        self.locals: List[Dict[str, RegisterHandle]] = [dict()]
         self.register_ids = 0
-        self.registers = []
+        self.registers: List[RegisterHandle] = []
 
-    def push(self):
+    def push(self) -> None:
         self.locals.append(dict())
 
-    def pop(self):
+    def pop(self) -> None:
         self.locals.pop()
 
-    def allocate(self, typ):
+    def allocate(self, typ: "typesys.AbstractType") -> RegisterHandle:
         ret = RegisterHandle(self.register_ids, typ)
         self.registers.append(ret)
         self.register_ids += 1
         return ret
 
-    def resolve(self, key, node):
+    def resolve(self, key: str, node: parser.Node) -> RegisterHandle:
         for local in reversed(self.locals):
             if key in local:
                 return local[key]
         node.compile_error("Referenced local before declaration: %s" % key)
+        # Unreachable
+        return None # type: ignore
 
-    def assign(self, key, register, node):
+    def assign(self, key: str, register: RegisterHandle, node: parser.Node) -> None:
         for local in reversed(self.locals):
             if key in local:
                 local[key] = register
                 return
         node.compile_error("Assigned local before declaration: %s" % key)
 
-    def exists(self, key):
+    def exists(self, key: str) -> bool:
         for local in reversed(self.locals):
             if key in local:
                 return True
         return False
 
-    def let(self, key, register, node):
+    def let(self, key: str, register: RegisterHandle, node: parser.Node) -> None:
         if not isinstance(node, parser.Node):
             raise ValueError("Expected Node, got %s" % type(node))
 
@@ -84,8 +92,10 @@ class Scopes:
 
 class MethodSignature:
     sequential_id: ClassVar[int] = 0
-    def __init__(self, name, args, argnames, returntype, is_ctor=False, containing_class=None, is_override=False, is_entrypoint=False):
-        assert type(is_ctor) is type(False)
+    def __init__(
+                self, name: str, args: "List[typesys.AbstractType]", argnames: "List[str]",
+                returntype: "typesys.AbstractType", is_ctor: bool=False, containing_class: "ClazzSignature"=None,
+                is_override: bool=False, is_entrypoint: bool=False) -> None:
         self.name = name
         self.args = args
         self.argnames = argnames
@@ -98,16 +108,16 @@ class MethodSignature:
         MethodSignature.sequential_id += 1
 
     @property
-    def nargs(self):
+    def nargs(self) -> int:
         return len(self.args)
 
-    def looks_like_method_handle(self):
+    def looks_like_method_handle(self) -> None:
         pass
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "MethodSignature(name='%s', nargs=%s, id=%s)" % (self.name, len(self.args), self.id)
 
-    def __str__(self):
+    def __str__(self) -> str:
         modifiers = ("override " if self.is_override else "") + ("entrypoint " if self.is_entrypoint else "")
         args_str = ", ".join(["%s: %s" % (name, typ.name) for typ, name in zip(self.args, self.argnames)])
         prefix = "%s." % self.containing_class.name if self.containing_class is not None else ""
@@ -116,31 +126,37 @@ class MethodSignature:
         return "%sfn %s%s(%s): %s" % (modifiers, prefix, self.name, args_str, self.returntype.name)
 
     @staticmethod
-    def from_node(method, types, program, this_type=None, containing_class=None):
+    def from_node(method: parser.Node, types: "typesys.TypeSystem", program: "Program",
+            this_type: "Optional[typesys.ClazzType]"=None, containing_class: "Optional[ClazzSignature]"=None) -> "MethodSignature":
         if containing_class is None and method["modifiers"].has_child("override"):
             method.compile_error("Can't both be an override method and not have a containing class")
 
         if method.i("fn"):
-            signature = ([] if this_type is None else [this_type]) + [types.resolve(arg[1]) for arg in method[1]]
-            argnames = ([] if this_type is None else ["this"]) + [arg[0].data for arg in method[1]]
+            signature: "List[typesys.AbstractType]" = cast(List[typesys.AbstractType], [] if this_type is None else [this_type]) + [types.resolve_strict(arg[1]) for arg in method[1]]
+            argnames = ([] if this_type is None else ["this"]) + [arg[0].data_strict for arg in method[1]]
             is_override = method["modifiers"].has_child("override")
             is_entrypoint = method["modifiers"].has_child("entrypoint")
             if is_entrypoint and containing_class is not None:
                 method.compile_error("Can't have an entrypoint inside a class")
             if is_entrypoint and len(argnames) > 0:
                 method.compile_error("Can't have an entrypoint with arguments")
-            name = util.get_flattened(method[0])
+            name = util.nonnull(util.get_flattened(method[0]))
             if containing_class is None and program.namespace is not None:
                 name = "%s.%s" % (program.namespace, name)
-            return MethodSignature(name, signature, argnames, types.resolve(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint)
+            return MethodSignature(name, signature, argnames, types.resolve_strict(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint)
         elif method.i("ctor"):
-            signature = [this_type] + [types.resolve(arg[1]) for arg in method[0]]
-            argnames = ["this"] + [arg[0].data for arg in method[0]]
+            signature = cast(List[typesys.AbstractType], [this_type]) + [types.resolve_strict(arg[1]) for arg in method[0]]
+            argnames = ["this"] + [arg[0].data_strict for arg in method[0]]
+            assert containing_class is not None
             assert type(containing_class.name) is str
             return MethodSignature("@@ctor.%s" % containing_class.name, signature, argnames, types.void_type, is_ctor=True, containing_class=containing_class, is_override=False)
+        else:
+            raise ValueError("This is a compiler bug.")
+            # Unreachable
+            return None # type: ignore
 
     @staticmethod
-    def scan(top, types):
+    def scan(top: parser.Node, types: "typesys.TypeSystem") -> "List[MethodSignature]":
         # TODO: Fix this when removing top.xattrs["program"]
         program = top.xattrs["program"]
         if program is None:
@@ -152,11 +168,18 @@ class MethodSignature:
             ret.append(MethodSignature.from_node(method, types, program))
         return ret
 
-def get_method_signature(name, top_, is_real_top=False):
+def get_method_signature(name: str, top_: parser.Node, is_real_top: bool=False) -> MethodSignature:
+    ret = get_method_signature_optional(name, top_, is_real_top=is_real_top)
+    if ret is None:
+        raise ValueError("Could not find method signature '%s'" % name)
+    return ret
+
+def get_method_signature_optional(name: str, top_: parser.Node, is_real_top: bool=False) -> Optional[MethodSignature]:
     # I really need to change this. This should instead accept a reference to
     # the Program object, which should in turn have a list of method
     # signatures. But everything involved here is too tightly coupled, so it's
     # a major chunk of work.
+    # TODO: This is horribly ugly, should get rid of this
     top = top_
     if not is_real_top:
         top = top_.xattrs["top"]
@@ -168,19 +191,29 @@ def get_method_signature(name, top_, is_real_top=False):
     for signature in top.xattrs["signatures"]:
         if signature.name in ["%s.%s" % (path, name) if path != "" else name for path in search_paths]:
             return signature
+    return None
 
-class MethodEmitter:
-    def __init__(self, top, program, signature):
+class SegmentEmitter:
+    pass
+
+class MethodEmitter(SegmentEmitter):
+    def __init__(self, top: parser.Node, program: "Program", signature: MethodSignature):
         self.top = top
-        self.opcodes = []
+        # This is used to cache the final list of opcodes after emitting the method.
+        # This is empty until the moment the method has been emitted.
+        self.opcodes: List[opcodes_module.OpcodeInstance] = []
         self.scope = Scopes()
         self.program = program
         self.types = program.types
         self.signature = signature
+        # This is assigned to later. Technically this is uninitialized leaving
+        # the constructor, but nothing that accesses it will be called before
+        # it's initialized.
+        self.return_type: typesys.AbstractType
 
-    def emit_to_method_signature(self, node, opcodes):
-        if util.get_flattened(node) is not None and self.program.get_method_signature(util.get_flattened(node)) is not None:
-            return self.program.get_method_signature(util.get_flattened(node)), None
+    def emit_to_method_signature(self, node: parser.Node, opcodes: "List[opcodes_module.OpcodeInstance]") -> Tuple[MethodSignature, Optional[RegisterHandle]]:
+        if util.get_flattened(node) is not None and self.program.get_method_signature_optional(util.nonnull(util.get_flattened(node))) is not None:
+            return self.program.get_method_signature(util.nonnull(util.get_flattened(node))), None
         if node.i("ident"):
             node.compile_error("Attempt to call an identifier that doesn't resolve to a method")
         elif node.i("."):
@@ -189,28 +222,37 @@ class MethodEmitter:
                 raise ValueError("This is a compiler bug")
             if not typ.is_clazz():
                 node.compile_error("Cannot perform access on something that isn't an instance of a class")
-            if typ.type_of_property(node[1].data) is not None:
+                # Unreachable
+                return None # type: ignore
+            assert isinstance(typ, typesys.ClazzType)
+            if typ.type_of_property(node[1].data_strict) is not None:
                 node.compile_error("Attempt to call a property")
-            elif typ.method_signature(node[1].data) is not None:
+                # Unreachable
+                return None # type: ignore
+            elif typ.method_signature(node[1].data_strict) is not None:
                 reg = self.scope.allocate(typ)
                 opcodes += self.emit_expr(node[0], reg)
-                return typ.method_signature(node[1].data), reg
+                return typ.method_signature(node[1].data_strict), reg
             else:
                 node.compile_error("Attempt to perform property access that doesn't make sense")
+                # Unreachable
+                return None # type: ignore
         else:
             node.compile_error("Attempt to call something that can't be called")
+            # Unreachable
+            return None # type: ignore
 
-    def emit_expr(self, node, register):
+    def emit_expr(self, node: parser.Node, register: RegisterHandle) -> List[opcodes_module.OpcodeInstance]:
         opcodes = []
         if node.i("number"):
-            nt = int(node.data)
+            nt = int(node.data_strict)
             opcodes.append(ops["load"].ins(register, abs(nt), node=node))
             if nt < 0:
                 opcodes.append(ops["twocomp"].ins(register))
         elif node.i("as"):
             lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs_reg)
-            rhs_type = self.types.resolve(node[1])
+            rhs_type = self.types.resolve_strict(node[1])
             if not lhs_reg.type.is_assignable_to(rhs_type) and not rhs_type.is_assignable_to(lhs_reg.type):
                 raise typesys.TypingError(node, "Invalid cast: LHS is incompatible with RHS")
             if not rhs_type.is_clazz():
@@ -223,7 +265,7 @@ class MethodEmitter:
             opcodes += self.emit_expr(node[0], lhs_reg)
             # result_reg = self.scope.allocate(self.types.bool_type)
             # TODO: Potentially emit warning if RHS is incompatible with LHS type
-            rhs_type = self.types.resolve(node[1])
+            rhs_type = self.types.resolve_strict(node[1])
             if lhs_reg.type.is_assignable_to(rhs_type):
                 node.warn("Tautology: %s always instanceof %s" % (lhs_reg.type, rhs_type))
             if (not lhs_reg.type.is_assignable_to(rhs_type)) and (not rhs_type.is_assignable_to(lhs_reg.type)):
@@ -267,7 +309,7 @@ class MethodEmitter:
             opcodes.append(ops["load"].ins(reg, 0xffffffff, node=node))
             opcodes.append(ops["xor"].ins(reg, register, register, node=node))
         elif node.i("ident"):
-            opcodes.append(annotate(ops["mov"].ins(self.scope.resolve(node.data, node), register, node=node), "access %s" % node.data))
+            opcodes.append(annotate(ops["mov"].ins(self.scope.resolve(node.data_strict, node), register, node=node), "access %s" % node.data))
         elif node.i("true"):
             opcodes.append(ops["load"].ins(register, 1, node=node))
         elif node.i("false"):
@@ -288,10 +330,10 @@ class MethodEmitter:
                 opcodes.append(ops["twocomp"].ins(rhs, node=node))
                 opcodes.append(ops["add"].ins(lhs, rhs, register, node=node))
         elif node.i("call"):
-            emitted_opcodes = []
-            signature, lhs_reg = self.emit_to_method_signature(node[0], emitted_opcodes)
+            emitted_opcodes: List[opcodes_module.OpcodeInstance] = []
+            signature, optional_lhs_reg = self.emit_to_method_signature(node[0], emitted_opcodes)
             opcodes += emitted_opcodes
-            is_clazz_call = lhs_reg is not None
+            is_clazz_call = optional_lhs_reg is not None
 
             param_registers = []
 
@@ -309,11 +351,14 @@ class MethodEmitter:
             for reg, index in param_registers:
                 opcodes.append(ops["param"].ins(reg, index, node=node))
             if is_clazz_call:
-                opcodes.append(ops["classcall"].ins(lhs_reg, signature, register, node=node))
+                opcodes.append(ops["classcall"].ins(util.nonnull(optional_lhs_reg), signature, register, node=node))
             else:
                 opcodes.append(ops["call"].ins(signature, register, node=node))
         elif node.i("new"):
-            clazz_signature = self.types.resolve(node[0]).signature
+            typ = self.types.resolve_strict(node[0])
+            if not isinstance(typ, typesys.ClazzType):
+                node[0].compile_error("Attempt to instantiate a type that isn't a class")
+            clazz_signature = typ.signature
             result_register = self.scope.allocate(self.types.decide_type(node, self.scope))
             opcodes.append(ops["new"].ins(clazz_signature, result_register, node=node))
             # TODO: Support multiple constructors and method overloading
@@ -340,7 +385,7 @@ class MethodEmitter:
             opcodes.append(annotate(ops["load"].ins(arrlen_reg, len(node), node=node), "array instantiation length"))
             opcodes.append(ops["arralloc"].ins(register, arrlen_reg, node=node))
             index_reg = self.scope.allocate(self.types.int_type)
-            element_reg = self.scope.allocate(register.type.parent_type)
+            element_reg = self.scope.allocate(cast(typesys.ArrayType, register.type).parent_type)
             for i, elm in zip(range(len(node)), node):
                 opcodes.append(annotate(ops["load"].ins(index_reg, i, node=node), "array instantiation index"))
                 opcodes += self.emit_expr(elm, element_reg)
@@ -350,7 +395,7 @@ class MethodEmitter:
             opcodes += self.emit_expr(node[0], lhs_reg)
             if not lhs_reg.type.is_array():
                 raise typesys.TypingError(node[0], "Cannot do array access on something that isn't an array")
-            if not lhs_reg.type.parent_type.is_assignable_to(register.type):
+            if not cast(typesys.ArrayType, lhs_reg.type).parent_type.is_assignable_to(register.type):
                 # This should have already been caught by typechecking further up
                 raise ValueError("This is a compiler bug")
             index_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
@@ -361,30 +406,29 @@ class MethodEmitter:
         elif node.i("arrinst"):
             quantity_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             if not quantity_reg.type.is_numerical():
-                raise typesys.TypingError("Array lengths must be numerical")
+                raise typesys.TypingError(node, "Array lengths must be numerical")
             opcodes += self.emit_expr(node[1], quantity_reg)
             opcodes.append(ops["arralloc"].ins(register, quantity_reg, node=node))
         elif node.i("#"):
             arr_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             if not arr_reg.type.is_array():
-                raise typesys.TypingError("Can't decide length of something that isn't an array")
+                raise typesys.TypingError(node, "Can't decide length of something that isn't an array")
             opcodes += self.emit_expr(node[0], arr_reg)
             opcodes.append(ops["arrlen"].ins(arr_reg, register, node=node))
         elif node.i("."):
-            lhs_reg = None
             if node[0].i("ident"):
-                lhs_reg = self.scope.resolve(node[0].data, node[0])
+                lhs_reg = self.scope.resolve(node[0].data_strict, node[0])
             else:
                 # node, register
                 lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
                 opcodes += self.emit_expr(node[0], lhs_reg)
-            opcodes.append(ops["access"].ins(lhs_reg, node[1].data, register, node=node))
+            opcodes.append(ops["access"].ins(lhs_reg, node[1].data_strict, register, node=node))
         else:
             node.compile_error("Unexpected")
         return opcodes
 
-    def emit_statement(self, node):
-        opcodes = []
+    def emit_statement(self, node: parser.Node) -> Tuple[List[opcodes_module.OpcodeInstance], clms.ClaimSpace]:
+        opcodes: List[opcodes_module.OpcodeInstance] = []
         claims = clms.ClaimSpace()
         if node.i("statements"):
             self.scope.push()
@@ -399,27 +443,25 @@ class MethodEmitter:
             # Notice that a variable may have only exactly one let statement
             # in a given scope. So we can typecheck just with that register's
             # type, we don't have to associate with the scope directly.
-            type = None
             if len(node) > 2:
                 type = self.types.decide_type(node[2], self.scope)
                 if not node[1].i("infer_type"):
                     inferred_type = type
                     # This is the declared type
-                    type = self.types.resolve(node[1])
+                    type = self.types.resolve_strict(node[1])
                     if not inferred_type.is_assignable_to(type):
                         raise typesys.TypingError(node, "'%s' is not assignable to '%s'" % (inferred_type, type))
             else:
                 if node[1].i("infer_type"):
                     node.compile_error("Variables declared without assignment must be given explicit type")
-                type = self.types.resolve(node[1])
+                type = self.types.resolve_strict(node[1])
 
             reg = self.scope.allocate(type)
-            self.scope.let(node[0].data, reg, node)
+            self.scope.let(node[0].data_strict, reg, node)
 
             if len(node) > 2:
                 opcodes += annotate(self.emit_expr(node[2], reg), "let %s" % node[0].data)
         elif node.i("return"):
-            reg = None
             if len(node.children) > 0:
                 stated_return_type = self.types.decide_type(node[0], self.scope)
                 if not self.return_type.is_assignable_from(stated_return_type):
@@ -463,73 +505,73 @@ class MethodEmitter:
             }[node.type]].ins(resultreg, rhs_reg, resultreg, node=node))
             opcodes += chain.assign(resultreg, self)
         elif node.i("while"):
-            result = []
+            result_opcodes: List[opcodes_module.OpcodeInstance] = []
             condition_register = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             if not condition_register.type.is_boolean():
                 raise typesys.TypingError(node, "Condition of a while loop must be boolean")
             conditional = self.emit_expr(node[0], condition_register)
             # For now, we can't be sure whether the content of a while loop is ever run
-            statement, _unused_claims = self.emit_statement(node[1])
+            statement_opcodes, _unused_claims = self.emit_statement(node[1])
             nop = ops["nop"].ins()
-            result += conditional
-            result.append(ops["jf"].ins(condition_register, nop, node=node))
-            result += statement
-            result.append(ops["goto"].ins(conditional[0], node=node))
-            result.append(nop)
-            opcodes += result
+            result_opcodes += conditional
+            result_opcodes.append(ops["jf"].ins(condition_register, nop, node=node))
+            result_opcodes += statement_opcodes
+            result_opcodes.append(ops["goto"].ins(conditional[0], node=node))
+            result_opcodes.append(nop)
+            opcodes += result_opcodes
         elif node.i("for"):
-            result = []
+            result_opcodes = []
             setup_statement, setup_claim_space = self.emit_statement(node[0])
-            result += annotate(setup_statement, "for loop setup")
+            result_opcodes += annotate(setup_statement, "for loop setup")
             claims.add_claims_conservative(*setup_claim_space.claims)
 
             condition_register = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             if not condition_register.type.is_boolean():
                 raise typesys.TypingError(node, "Condition of a for loop must be boolean")
             conditional = annotate(self.emit_expr(node[1], condition_register), "for loop condition")
-            result += conditional
+            result_opcodes += conditional
             end_nop = ops["nop"].ins(node=node)
-            result.append(ops["jf"].ins(condition_register, end_nop, node=node))
+            result_opcodes.append(ops["jf"].ins(condition_register, end_nop, node=node))
 
             # For now, we don't know whether the body of a for loop will ever be run
             body_statement, _unused_body_claim_space = self.emit_statement(node[3])
-            result += annotate(body_statement, "for loop body")
+            result_opcodes += annotate(body_statement, "for loop body")
 
             # For now, we don't know whether the each-time part of a for loop will ever be run
             each_time_statement, _unused_setup_claim_space = self.emit_statement(node[2])
             eachtime = annotate(each_time_statement, "for loop each time")
-            result += eachtime
+            result_opcodes += eachtime
 
-            result.append(annotate(ops["goto"].ins(conditional[0], node=node), "for loop loop"))
-            result.append(end_nop)
+            result_opcodes.append(annotate(ops["goto"].ins(conditional[0], node=node), "for loop loop"))
+            result_opcodes.append(end_nop)
 
-            opcodes += result
+            opcodes += result_opcodes
         elif node.i("if"):
-            result = []
+            result_opcodes = []
             condition_register = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             if not condition_register.type.is_boolean():
                 raise typesys.TypingError(node, "Condition of an if statement must be boolean")
             conditional = annotate(self.emit_expr(node[0], condition_register), "if predicate")
             true_path_statement, true_path_claims = self.emit_statement(node[1])
-            statement = annotate(true_path_statement, "if true path")
+            statement_opcodes = annotate(true_path_statement, "if true path")
             nop = ops["nop"].ins(node=node)
-            result += conditional
-            result.append(ops["jf"].ins(condition_register, nop, node=node))
-            result += statement
+            result_opcodes += conditional
+            result_opcodes.append(ops["jf"].ins(condition_register, nop, node=node))
+            result_opcodes += statement_opcodes
             else_end_nop = ops["NOP"].ins(node=node)
             if len(node) > 2:
-                result.append(ops["goto"].ins(else_end_nop, node=node)) #
-            result.append(nop)
+                result_opcodes.append(ops["goto"].ins(else_end_nop, node=node)) #
+            result_opcodes.append(nop)
             if len(node) > 2:
                 false_path_statement, false_path_claims = self.emit_statement(node[2])
-                result += annotate(false_path_statement, "if false path")
-                result.append(else_end_nop)
+                result_opcodes += annotate(false_path_statement, "if false path")
+                result_opcodes.append(else_end_nop)
                 # We know that the intersection of the claims of the true and
                 # false path will always be true.
                 claims.add_claims_conservative(*true_path_claims.intersection(false_path_claims).claims)
-            opcodes += result
+            opcodes += result_opcodes
         elif node.of("++", "--"):
-            var = self.scope.resolve(node[0].data, node)
+            var = self.scope.resolve(node[0].data_strict, node)
             if not var.type.is_numerical():
                 raise typesys.TypingError(node, "Subject of increment/decrement must be numerical")
             reg = self.scope.allocate(self.types.int_type)
@@ -541,18 +583,15 @@ class MethodEmitter:
             node.compile_error("Unexpected (this is a compiler bug)")
         return opcodes, claims
 
-    def encode(self, opcodes):
-        pass
-
-    def convert_strings(self):
-        def replace(parent, index):
-            s = parent[index].data
+    def convert_strings(self) -> None:
+        def replace(parent: parser.Node, index: int) -> None:
+            s = parent[index].data_strict
             array_node = parser.Node("[")
             nod = None
             if len(s) > 0:
                 for ch in s:
-                    array_node.add(parser.Node("number", data=ord(ch)))
-                nod = parser.Node("new", parser.Node("ident", data="stdlib.String"), array_node, parser.Node("number", data=0), parser.Node("number", data=len(s)))
+                    array_node.add(parser.Node("number", data=str(ord(ch))))
+                nod = parser.Node("new", parser.Node("ident", data="stdlib.String"), array_node, parser.Node("number", data="0"), parser.Node("number", data=str(len(s))))
             else:
                 nod = parser.Node(
                     "new",
@@ -560,14 +599,14 @@ class MethodEmitter:
                     parser.Node(
                         "arrinst",
                         parser.Node("ident", data="int"),
-                        parser.Node("number", data=0)
+                        parser.Node("number", data="0")
                     ),
-                    parser.Node("number", data=0),
-                    parser.Node("number", data=0)
+                    parser.Node("number", data="0"),
+                    parser.Node("number", data="0")
                 )
             parent.children[index] = nod
 
-        def convert_strings_inner(nod):
+        def convert_strings_inner(nod: parser.Node) -> None:
             for i in range(len(nod)):
                 if nod[i].i("string"):
                     replace(nod, i)
@@ -577,7 +616,7 @@ class MethodEmitter:
         if self.top.has_child("statements"):
             convert_strings_inner(self.top["statements"])
 
-    def emit(self):
+    def emit(self) -> List[opcodes_module.OpcodeInstance]:
         self.return_type = self.signature.returntype
         # This caused a bug at some point
         assert self.top.i("fn") or self.top.i("ctor")
@@ -594,36 +633,33 @@ class MethodEmitter:
                 self.top[3].compile_error("Non-void method might not return")
         return opcodes
 
-class Method:
-    def __init__(self, root, emitter):
-        self.root = root
-        self.emitter = emitter
+SegmentEmitterTypeVariable = TypeVar("SegmentEmitterTypeVariable", bound=SegmentEmitter)
 
-class Segment:
-    def __init__(self, humantype, realtype):
+class Segment(Generic[SegmentEmitterTypeVariable]):
+    def __init__(self, humantype: str, realtype: int) -> None:
         self.humantype = humantype
         self.realtype = realtype
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Segment(type='%s', code=%s)" % (self.humantype, self.realtype)
 
-    def print_(self, emitter):
+    def print_(self, emitter: SegmentEmitterTypeVariable) -> None:
         print(str(self))
 
-    def evaluate(self, program):
+    def evaluate(self, program: "Program") -> None:
         pass
 
-class MethodSegment(Segment):
-    def __init__(self, method, signature):
+class MethodSegment(Segment[MethodEmitter]):
+    def __init__(self, method: parser.Node, signature: MethodSignature) -> None:
         Segment.__init__(self, "method", 0x00)
         self.method = method
         self.signature = signature
-        self.opcodes = None
-        self.num_registers = None
-        self.scope = None
-        self.opcodes = None
+        self.opcodes: List[opcodes_module.OpcodeInstance]
+        self.num_registers: int
+        self.scope: Scopes
+        self.emitter: MethodEmitter
 
-    def emit_opcodes(self, program):
+    def emit_opcodes(self, program: "Program") -> List[opcodes_module.OpcodeInstance]:
         emitter = MethodEmitter(self.method, program, self.signature)
         ret = emitter.emit()
         # TODO: This is spaghetti code
@@ -633,45 +669,47 @@ class MethodSegment(Segment):
         self.opcodes = ret
         return ret
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "MethodSegment(type='%s', typecode=%s, signature=%s)" % (self.humantype, self.realtype, self.signature)
 
-    def print_(self, emitter):
+    def print_(self, emitter: MethodEmitter) -> None:
         Segment.print_(self, emitter)
         print("Registers:", ", ".join([repr(register) for register in self.emitter.scope.registers]))
         for opcode, index in zip(self.opcodes, range(len(self.opcodes))):
             print("%6d: %s" % (index, str(opcode)))
 
-    def evaluate(self, program):
+    def evaluate(self, program: "Program") -> None:
         self.opcodes = self.emit_opcodes(program)
 
-class MetadataSegment(Segment):
-    def __init__(self, entrypoint=None, headers=header.HeaderRepresentation.HIDDEN):
+# We need to provide an argument to Segment but there's no MetadataEmitter
+class MetadataSegment(Segment[SegmentEmitter]):
+    def __init__(self, entrypoint: Optional[MethodSignature]=None, headers: header.HeaderRepresentation=header.HeaderRepresentation.HIDDEN) -> None:
         Segment.__init__(self, "metadata", 0x01)
         self.entrypoint = entrypoint
         self.headers = headers
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "MetadataSegment(type='%s', typecode=%s, entrypoint=%s)" % (self.humantype, self.realtype, self.entrypoint)
 
-    def print_(self, emitter):
+    def print_(self, emitter: SegmentEmitter) -> None:
         Segment.print_(self, emitter)
         print("    entrypoint=%s" % self.entrypoint)
         print("    headers omitted for brevity")
 
-    def has_entrypoint(self):
+    def has_entrypoint(self) -> bool:
         return self.entrypoint is not None
 
-    def evaluate(self, program):
+    def evaluate(self, program: "Program") -> None:
         Segment.evaluate(self, program)
 
 class ClazzField:
-    def __init__(self, name, type):
+    def __init__(self, name: str, type: typesys.AbstractType) -> None:
         self.name = name
         self.type = type
 
 class ClazzSignature:
-    def __init__(self, name, fields, method_signatures, ctor_signatures, parent_signature, is_included=False):
+    def __init__(self, name: str, fields: List[ClazzField], method_signatures: List[MethodSignature],
+                ctor_signatures: List[MethodSignature], parent_signature: "Optional[ClazzSignature]", is_included: bool=False) -> None:
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
@@ -681,11 +719,11 @@ class ClazzSignature:
             raise ValueError("Invalid type for parent_signature %s (expected ClazzSignature or NoneType)" % type(parent_signature))
         self.parent_signature = parent_signature
 
-    def validate_overriding_rules(self):
+    def validate_overriding_rules(self) -> None:
         if self.is_included:
             return
 
-        def throw(signature):
+        def throw(signature: MethodSignature) -> NoReturn:
             raise ValueError("Method '%s' violates overriding rules on class '%s'" % (signature.name, self.name))
 
         for signature in self.method_signatures:
@@ -700,9 +738,10 @@ class ClazzSignature:
                 if self.parent_signature is None:
                     throw(signature)
                 # `parent_sig` is a method signature (as opposed to a class signature)
-                parent_sig = self.parent_signature.get_method_signature_by_name(signature.name)
+                parent_sig = util.nonnull(self.parent_signature).get_method_signature_by_name(signature.name)
                 if parent_sig is None:
                     throw(signature)
+                assert parent_sig is not None
                 if not parent_sig.returntype.is_assignable_to(signature.returntype):
                     throw(signature)
                 if len(signature.args) != len(parent_sig.args):
@@ -717,7 +756,7 @@ class ClazzSignature:
                 if self.parent_signature.get_field_by_name(field.name) is not None:
                     raise ValueError("Duplicate field in both child and parent class named '%s'" % field.name)
 
-    def get_method_signature_by_name(self, name):
+    def get_method_signature_by_name(self, name: str) -> Optional[MethodSignature]:
         for signature in self.method_signatures:
             if signature.name == name:
                 return signature
@@ -727,7 +766,7 @@ class ClazzSignature:
 
         return None
 
-    def get_field_by_name(self, name):
+    def get_field_by_name(self, name: str) -> Optional[ClazzField]:
         for field in self.fields:
             if field.name == name:
                 return field
@@ -737,77 +776,42 @@ class ClazzSignature:
 
         return None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "ClazzSignature(name='%s')" % self.name
 
-    def looks_like_class_signature(self):
+    def looks_like_class_signature(self) -> None:
         pass
 
-class ClazzSegment(Segment):
-    def __init__(self, emitter):
-        Segment.__init__(self, "class", 0x02)
-        self.emitter = emitter
-        self.signature = emitter.signature
-        self.name = self.signature.name
-        self.fields = self.signature.fields
-        self.method_signatures = self.signature.method_signatures
-
-    @property
-    def parent_signature(self):
-        return self.signature.parent_signature
-
-    def __str__(self):
-        return "ClazzSegment(type='%s', typecode=%s, name='%s', nfields=%s, nmethods=%s, superclass=%s)" \
-            % (self.humantype,
-            self.realtype,
-            self.name,
-            len(self.fields),
-            len(self.method_signatures),
-            "'%s'" % self.parent_signature.name if self.parent_signature is not None else "None")
-
-    def print_(self, emitter):
-        Segment.print_(self, emitter)
-        for method in self.method_signatures:
-            print("    %s" % method)
-        for field in self.fields:
-            print("    %s: %s" % (field.name, field.type.name))
-
-    def evaluate(self, program):
-        Segment.evaluate(self, program)
-        for field in self.emitter.top["classbody"]:
-            if field.i("fn") or field.i("ctor"):
-                signature = field.xattrs["signature"]
-                method = program.emit_method(field, signature=signature)
-                program.segments.append(method)
-                program.methods.append(method)
-
-class ClazzEmitter:
-    def __init__(self, top, program):
+class ClazzEmitter(SegmentEmitter):
+    def __init__(self, top: parser.Node, program: "Program") -> None:
         self.top = top
         self.program = program
-        self.signature = None
+        self.signature: ClazzSignature
         self.is_signature_no_fields = False
+        self.fields: List[ClazzField]
+        self.method_signatures: List[MethodSignature]
+        self.ctor_signatures: List[MethodSignature]
 
     @property
-    def unqualified_name(self):
-        return self.top[0].data
+    def unqualified_name(self) -> str:
+        return self.top[0].data_strict
 
     @property
-    def name(self):
+    def name(self) -> str:
         return ("%s." % self.program.namespace if self.program.namespace is not None else "") + self.unqualified_name
 
-    def _emit_field(self, node):
-        return ClazzField(node[0].data, self.program.types.resolve(node[1]))
+    def _emit_field(self, node: parser.Node) -> ClazzField:
+        return ClazzField(node[0].data_strict, self.program.types.resolve_strict(node[1]))
 
-    def emit_signature_no_fields(self):
+    def emit_signature_no_fields(self) -> ClazzSignature:
         self.is_signature_no_fields = True
         self.signature = ClazzSignature(self.name, [], [], [], None)
         return self.signature
 
-    def emit_signature(self):
+    def emit_signature(self) -> ClazzSignature:
         if self.signature is not None and not self.is_signature_no_fields:
             return self.signature
         self.fields = []
@@ -848,35 +852,74 @@ class ClazzEmitter:
         self.is_signature_no_fields = False
         return self.signature
 
-    def add_superclass_to_signature(self):
+    def add_superclass_to_signature(self) -> None:
         if len(self.top["extends"]) > 0:
             # Since we have a reference to this class's signature, we can
             # just update it in-place.
             parent_type = self.program.types.resolve(self.top["extends"][0])
-            if parent_type is None or not parent_type.is_clazz():
+            if parent_type is None or not isinstance(parent_type, typesys.ClazzType):
                 self.top["extends"].compile_error("Tried to extend a nonexisting class")
             self.signature.parent_signature = parent_type.signature
         # Otherwise, the superclass remains as `None`.
 
-    def emit(self):
+    def emit(self) -> "ClazzSegment":
         self.emit_signature()
         return ClazzSegment(self)
 
+class ClazzSegment(Segment[ClazzEmitter]):
+    def __init__(self, emitter: ClazzEmitter) -> None:
+        Segment.__init__(self, "class", 0x02)
+        self.emitter = emitter
+        self.signature = emitter.signature
+        self.name = self.signature.name
+        self.fields = self.signature.fields
+        self.method_signatures = self.signature.method_signatures
+
+    @property
+    def parent_signature(self) -> Optional[ClazzSignature]:
+        return self.signature.parent_signature
+
+    def __str__(self) -> str:
+        return "ClazzSegment(type='%s', typecode=%s, name='%s', nfields=%s, nmethods=%s, superclass=%s)" \
+            % (self.humantype,
+            self.realtype,
+            self.name,
+            len(self.fields),
+            len(self.method_signatures),
+            "'%s'" % self.parent_signature.name if self.parent_signature is not None else "None")
+
+    def print_(self, emitter: ClazzEmitter) -> None:
+        Segment.print_(self, emitter)
+        for method in self.method_signatures:
+            print("    %s" % method)
+        for field in self.fields:
+            print("    %s: %s" % (field.name, field.type.name))
+
+    def evaluate(self, program: "Program") -> None:
+        Segment.evaluate(self, program)
+        for field in self.emitter.top["classbody"]:
+            if field.i("fn") or field.i("ctor"):
+                signature = field.xattrs["signature"]
+                method = program.emit_method(field, signature=signature)
+                program.segments.append(method)
+                program.methods.append(method)
+
 class Program:
-    def __init__(self, emitter):
-        self.methods = []
+    def __init__(self, emitter: "Emitter") -> None:
+        self.methods: List[MethodSegment] = []
         self.emitter = emitter
         self.top = emitter.top
         self.top.xattrs["program"] = self
-        self.segments = []
-        self.types = typesys.TypeSystem(self)
-        self.clazzes = []
-        self.clazz_signatures = []
-        self.using_directives = []
-        self.namespace = None
+        self.segments: List[Segment] = []
+        self.types: typesys.TypeSystem = typesys.TypeSystem(self)
+        self.clazzes: List[ClazzSegment] = []
+        self.clazz_signatures: List[ClazzSignature] = []
+        self.using_directives: List[str] = []
+        self.namespace: Optional[str] = None
+        self.clazz_emitters: List[ClazzEmitter]
 
     @property
-    def search_paths(self):
+    def search_paths(self) -> List[str]:
         search_paths = [""]
         if self.namespace is not None:
             search_paths.append("%s." % self.namespace)
@@ -884,33 +927,31 @@ class Program:
             search_paths.append("%s." % using_directive)
         return search_paths
 
-    def get_entrypoint(self):
+    def get_entrypoint(self) -> Optional[MethodSignature]:
         for method in self.methods:
             if method.signature.is_entrypoint:
                 return method.signature
         return None
 
-    def get_method_signature(self, name):
+    def get_method_signature(self, name: str) -> MethodSignature:
         return get_method_signature(name, self.top, is_real_top=True)
 
-    def get_clazz_signature(self, name):
-        for signature in self.clazz_signatures:
-            if signature.name == name:
-                return signature
+    def get_method_signature_optional(self, name: str) -> Optional[MethodSignature]:
+        return get_method_signature_optional(name, self.top, is_real_top=True)
 
-    def has_entrypoint(self):
+    def has_entrypoint(self) -> bool:
         return self.get_entrypoint() is not None
 
-    def emit_method(self, method, signature=None):
+    def emit_method(self, method: parser.Node, signature: MethodSignature=None) -> MethodSegment:
         # util.get_flattened(method[0]) is method name
         # TODO: Remove signature parameter and make caller call get_method_signature
-        return MethodSegment(method, signature if signature is not None else get_method_signature(util.get_flattened(method[0]), method))
+        return MethodSegment(method, signature if signature is not None else get_method_signature(util.nonnull(util.get_flattened(method[0])), method))
 
-    def validate_overriding_rules(self):
+    def validate_overriding_rules(self) -> None:
         for signature in self.clazz_signatures:
             signature.validate_overriding_rules()
 
-    def evaluate(self):
+    def evaluate(self) -> None:
         for emitter in self.clazz_emitters:
             segment = emitter.emit()
             self.clazzes.append(segment)
@@ -920,32 +961,28 @@ class Program:
                 method = self.emit_method(toplevel)
                 self.methods.append(method)
                 self.segments.append(method)
-        # for clazz in self.clazzes:
-        #     methods = clazz.emit_methods()
-        #     self.methods += methods
-        #     self.segments += methods
         self.validate_overriding_rules()
         for clazz in self.clazzes:
             clazz.evaluate(self)
         for method in self.methods:
             method.evaluate(self)
 
-    def get_header_representation(self):
+    def get_header_representation(self) -> header.HeaderRepresentation:
         return header.HeaderRepresentation.from_program(self)
 
-    def add_metadata(self):
+    def add_metadata(self) -> None:
         if self.has_entrypoint():
             self.segments.append(MetadataSegment(entrypoint=self.get_entrypoint(), headers=self.get_header_representation()))
         else:
             self.segments.append(MetadataSegment(headers=self.get_header_representation()))
 
-    def prescan(self):
+    def prescan(self) -> None:
         for toplevel in self.top:
             if toplevel.i("namespace"):
                 self.namespace = flatten_ident_nodes(toplevel)
             elif toplevel.i("using"):
                 self.using_directives.append(flatten_ident_nodes(toplevel))
-        clazz_emitters = []
+        clazz_emitters: List[ClazzEmitter] = []
         for toplevel in self.top:
             if not toplevel.i("class"):
                 continue
@@ -969,36 +1006,39 @@ class Program:
             self.emitter.top.xattrs["signatures"] = []
         self.emitter.top.xattrs["signatures"] += MethodSignature.scan(self.emitter.top, self.types)
 
-    def add_include(self, headers):
+    def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
             self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, is_included=True))
         for method in headers.methods:
             self.emitter.top.xattrs["signatures"].append(MethodSignature(
                 method.name,
-                [self.types.resolve(parser.parse_type(arg.type)) for arg in method.args],
+                [self.types.resolve_strict(parser.parse_type(arg.type)) for arg in method.args],
                 [arg.name for arg in method.args],
-                self.types.resolve(parser.parse_type(method.returntype))
+                self.types.resolve_strict(parser.parse_type(method.returntype))
             ))
         for clazz in headers.clazzes:
             methods = []
-            for method in clazz.methods:
-                methods.append(get_method_signature(method.name, self.top, is_real_top=True))
+            for clazz_method in clazz.methods:
+                methods.append(get_method_signature(clazz_method.name, self.top, is_real_top=True))
             ctors = []
             for ctor in clazz.ctors:
                 ctors.append(get_method_signature(ctor.name, self.top, is_real_top=True))
             fields = []
             for field in clazz.fields:
-                fields.append(ClazzField(field.name, self.types.resolve(parser.parse_type(field.type))))
-            clazz = ClazzSignature(clazz.name, fields, methods, ctors, self.types.resolve(parser.parse_type(clazz.parent)).signature if clazz.parent is not None else None, is_included=True)
-            self.clazz_signatures.append(clazz)
-            self.types.update_signature(clazz)
+                fields.append(ClazzField(field.name, self.types.resolve_strict(parser.parse_type(field.type))))
+            parent_type = self.types.resolve_strict(parser.parse_type(clazz.parent)) if clazz.parent is not None else None
+            assert isinstance(parent_type, typesys.ClazzType) or parent_type is None
+            # util.nonnull is correct here because of the previous two lines
+            clazz_signature = ClazzSignature(clazz.name, fields, methods, ctors, util.nonnull(parent_type).signature if clazz.parent is not None else None, is_included=True)
+            self.clazz_signatures.append(clazz_signature)
+            self.types.update_signature(clazz_signature)
 
 class Emitter:
-    def __init__(self, top):
+    def __init__(self, top: parser.Node) -> None:
         self.top = top
         self.top.xattrs["signatures"] = []
 
-    def emit_program(self):
+    def emit_program(self) -> Program:
         for method in self.top:
             method.xattrs["top"] = self.top
 
@@ -1006,86 +1046,6 @@ class Emitter:
 
         return program
 
-    def emit_bytes(self, program):
+    def emit_bytes(self, program: Program) -> bytes:
         import bytecode
         return bytecode.emit(program.segments)
-
-if __name__ == "__main__":
-    import argparse
-    import os.path
-    argparser = argparse.ArgumentParser()
-    argparser.add_argument("file")
-    argparser.add_argument("--no-metadata", action="store_true", help="don't include metadata")
-    argparser.add_argument("--ast", action="store_true", help="display AST (for debugging)")
-    argparser.add_argument("--ast-after", action="store_true", help="display AST after bytecode generation (for debugging)")
-    argparser.add_argument("--segments", action="store_true", help="display segments (for debugging)")
-    argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
-    argparser.add_argument("--headers", action="store_true", help="display headers (for debugging)")
-    argparser.add_argument("--signatures", action="store_true", help="display signatures (for debugging)")
-    argparser.add_argument("--directives", action="store_true", help="display using and namespace directives (for debugging)")
-    argparser.add_argument("--parse-only", action="store_true", help="parse only, don't compile (for debugging)")
-    argparser.add_argument("--no-stdlib", action="store_true", help="don't link against standard library")
-    argparser.add_argument("-o", "--output", metavar="file", help="file for bytecode output")
-    argparser.add_argument("-i", "--include", metavar="file", action="append", help="files to link against")
-    argparser.add_argument("-j", "--include-json", metavar="file", action="append", help="json to link against")
-    args = argparser.parse_args()
-
-    if args.output is None:
-        args.output = "%s.slb" % args.file[:-4]
-
-    with open(args.file, "r") as f:
-        tree = parser.Parser(parser.Toker("\n" + f.read())).parse()
-
-    if args.ast:
-        tree.output()
-
-    if args.parse_only:
-        import sys
-        sys.exit(0)
-
-    emitter = Emitter(tree)
-    program = emitter.emit_program()
-    if args.include:
-        for include in args.include:
-            program.add_include(header.from_slb(include))
-
-    if args.include_json:
-        for include in args.include_json:
-            program.add_include(header.from_json(include))
-
-    if not args.no_stdlib:
-        compiler_dir = os.path.dirname(__file__)
-        program.add_include(header.from_slb(os.path.join(compiler_dir, "stdlib/bin/stdlib.slb")))
-
-    program.prescan()
-    if args.directives:
-        if program.namespace is not None:
-            print("Namespace: '%s'" % program.namespace)
-        for using_directive in program.using_directives:
-            print("Using: '%s'" % using_directive)
-    if args.signatures:
-        for signature in program.top.xattrs["signatures"]:
-            print("    %s" % signature)
-    program.evaluate()
-
-    if not args.no_metadata:
-        program.add_metadata()
-
-    if args.segments:
-        for segment in program.segments:
-            segment.print_(emitter)
-
-    if args.headers:
-        import json
-        print(json.dumps(program.get_header_representation().serialize(), indent=4))
-    if args.ast_after:
-        tree.output()
-
-    outbytes = emitter.emit_bytes(program)
-
-    if args.hexdump:
-        import binascii
-        print(binascii.hexlify(outbytes).decode("ascii"))
-
-    with open(args.output, "wb") as f: # type: ignore
-        f.write(outbytes)

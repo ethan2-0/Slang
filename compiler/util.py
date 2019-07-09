@@ -1,4 +1,7 @@
-def get_flattened(nod):
+from typing import Optional, TypeVar
+import parser
+
+def get_flattened(nod: parser.Node) -> Optional[str]:
     if "flattened" in nod.xattrs:
         return nod.xattrs["flattened"]
     if nod.i("ident"):
@@ -13,3 +16,12 @@ def get_flattened(nod):
         return ret
     else:
         return None
+
+NonNullTypeVar = TypeVar("NonNullTypeVar")
+def nonnull(var: Optional[NonNullTypeVar], error: Optional[Exception]=None) -> NonNullTypeVar:
+    if var is None:
+        if error is not None:
+            raise error
+        else:
+            raise ValueError("Unexpected null value")
+    return var

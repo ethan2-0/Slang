@@ -1,12 +1,19 @@
 import slbparser
 import json
+import emitter
+import typesys
+import util
+from typing import NewType, Dict, Union, List, Any, Optional
+
+# Can't make this more specific: https://github.com/python/mypy/issues/731
+JsonObject = Dict[str, Any]
 
 class HeaderMethodArgumentRepresentation:
-    def __init__(self, name, type):
+    def __init__(self, name: str, type: str):
         self.name = name
         self.type = type
 
-    def serialize(self):
+    def serialize(self) -> JsonObject:
         return {
             "type": "argument",
             "name": self.name,
@@ -14,18 +21,19 @@ class HeaderMethodArgumentRepresentation:
         }
 
     @staticmethod
-    def from_argument(argname, type):
+    def from_argument(argname: str, type: str) -> "HeaderMethodArgumentRepresentation":
         return HeaderMethodArgumentRepresentation(argname, type)
 
     @staticmethod
-    def unserialize(input):
+    def unserialize(input: JsonObject) -> "HeaderMethodArgumentRepresentation":
         if input["type"] != "argument":
             raise ValueError("Asked to unserialize type '%s' as argument" % input["type"])
 
         return HeaderMethodArgumentRepresentation(input["name"], input["argtype"])
 
 class HeaderMethodRepresentation:
-    def __init__(self, name, args, returntype, containing_clazz, is_ctor, entrypoint=False, is_override=False):
+    def __init__(self, name: str, args: List[HeaderMethodArgumentRepresentation], returntype: str,
+                containing_clazz: Optional[str], is_ctor: bool, entrypoint: bool, is_override: bool):
         self.name = name
         self.args = args
         self.returntype = returntype
@@ -35,10 +43,10 @@ class HeaderMethodRepresentation:
         self.is_override = False
 
     @property
-    def numargs(self):
+    def numargs(self) -> int:
         return len(self.args)
 
-    def serialize(self):
+    def serialize(self) -> JsonObject:
         return {
             "type": "method",
             "name": self.name,
@@ -52,8 +60,8 @@ class HeaderMethodRepresentation:
         }
 
     @staticmethod
-    def from_method(method, program):
-        entrypoint_id = program.get_entrypoint().id if program.has_entrypoint() else None
+    def from_method(method: "emitter.MethodSegment", program: "emitter.Program") -> "HeaderMethodRepresentation":
+        entrypoint_id = util.nonnull(program.get_entrypoint()).id if program.has_entrypoint() else None
         return HeaderMethodRepresentation(method.signature.name,
             [HeaderMethodArgumentRepresentation.from_argument(arg, argtype.name) for arg, argtype in zip(method.signature.argnames, method.signature.args)],
             method.signature.returntype.name,
@@ -64,60 +72,61 @@ class HeaderMethodRepresentation:
             is_override=method.signature.is_override)
 
     @staticmethod
-    def unserialize(input):
+    def unserialize(input: JsonObject) -> "HeaderMethodRepresentation":
         if input["type"] != "method":
             raise ValueError("Asked to unserialize type '%s' as method" % input["type"])
 
         return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"], input["containingclass"], is_ctor=input["ctor"], entrypoint=False, is_override=input["override"])
 
 class HeaderClazzFieldRepresentation:
-    def __init__(self, name, type):
+    def __init__(self, name: str, type: str):
         self.name = name
         self.type = type
 
-    def serialize(self):
+    def serialize(self) -> JsonObject:
         return {
             "type": "field",
             "name": self.name,
-            "fieldtype": self.type.name
+            "fieldtype": self.type
         }
 
     @staticmethod
-    def from_field(field):
-        return HeaderClazzFieldRepresentation(field.name, field.type)
+    def from_field(field: "emitter.ClazzField") -> "HeaderClazzFieldRepresentation":
+        return HeaderClazzFieldRepresentation(field.name, field.type.name)
 
     @staticmethod
-    def unserialize(input):
+    def unserialize(input: JsonObject) -> "HeaderClazzFieldRepresentation":
         if input["type"] != "field":
             raise ValueError("Asked to unserialize type '%s' as field" % input["type"])
 
         return HeaderClazzFieldRepresentation(input["name"], input["fieldtype"])
 
 class HeaderClazzMethodRepresentation:
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
 
-    def serialize(self):
+    def serialize(self) -> JsonObject:
         return {
             "type": "classmethod",
             "name": self.name
         }
 
     @staticmethod
-    def unserialize(input):
+    def unserialize(input: JsonObject) -> "HeaderClazzMethodRepresentation":
         if input["type"] != "classmethod":
             raise ValueError("Asked to unserialize type '%s' as a classmethod" % input["type"])
         return HeaderClazzMethodRepresentation(input["name"])
 
 class HeaderClazzRepresentation:
-    def __init__(self, name, fields, methods, ctors, parent):
+    def __init__(self, name: str, fields: List[HeaderClazzFieldRepresentation], methods: List[HeaderClazzMethodRepresentation],
+                ctors: List[HeaderClazzMethodRepresentation], parent: Optional[str]):
         self.name = name
         self.fields = fields
         self.methods = methods
         self.ctors = ctors
         self.parent = parent
 
-    def serialize(self):
+    def serialize(self) -> JsonObject:
         return {
             "type": "class",
             "name": self.name,
@@ -128,7 +137,7 @@ class HeaderClazzRepresentation:
         }
 
     @staticmethod
-    def from_clazz_signature(signature):
+    def from_clazz_signature(signature: "emitter.ClazzSignature") -> "HeaderClazzRepresentation":
         return HeaderClazzRepresentation(
             signature.name,
             [HeaderClazzFieldRepresentation.from_field(field) for field in signature.fields],
@@ -138,7 +147,7 @@ class HeaderClazzRepresentation:
         )
 
     @staticmethod
-    def unserialize(input):
+    def unserialize(input: JsonObject) -> "HeaderClazzRepresentation":
         if input["type"] != "class":
             raise ValueError("Asked to unserialize type '%s' as a class" % input["type"])
         return HeaderClazzRepresentation(
@@ -153,12 +162,12 @@ class HeaderClazzRepresentation:
 class HeaderRepresentation:
     # Filled in below
     HIDDEN: "HeaderRepresentation" = None # type: ignore
-    def __init__(self, methods, clazzes, hidden=False):
+    def __init__(self, methods: List[HeaderMethodRepresentation], clazzes: List[HeaderClazzRepresentation], hidden: bool=False):
         self.methods = methods
         self.clazzes = clazzes
         self.hidden = hidden
 
-    def serialize(self):
+    def serialize(self) -> JsonObject:
         if self.hidden:
             return {
                 "hidden": True
@@ -171,14 +180,14 @@ class HeaderRepresentation:
         }
 
     @staticmethod
-    def from_program(program):
+    def from_program(program: "emitter.Program") -> "HeaderRepresentation":
         return HeaderRepresentation(
             [HeaderMethodRepresentation.from_method(method, program) for method in program.methods],
             [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures if not clazz.is_included]
         )
 
     @staticmethod
-    def unserialize(input):
+    def unserialize(input: JsonObject) -> "HeaderRepresentation":
         if len(input) <= 0 or "hidden" in input and input["hidden"] == True:
             raise ValueError("Asked to unserialize missing or hidden input")
 
@@ -192,15 +201,17 @@ class HeaderRepresentation:
 
 HeaderRepresentation.HIDDEN = HeaderRepresentation([], [], hidden=True)
 
-def from_json(fname):
+def from_json(fname: str) -> "HeaderRepresentation":
     file_data = None
     with open(fname, "r") as f:
         file_data = f.read()
     return HeaderRepresentation.unserialize(json.loads(file_data))
 
-def from_slb(fname):
+def from_slb(fname: str) -> HeaderRepresentation:
     file_data = None
     with open(fname, "rb") as f:
         file_data = slbparser.extract_headers(f.read())
+    if file_data is None:
+        raise ValueError("Attempt to read headers from slb that has no metadata segment")
 
     return HeaderRepresentation.unserialize(json.loads(file_data))

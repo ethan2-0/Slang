@@ -3,7 +3,7 @@
 import util
 import parser
 import emitter
-from typing import Optional, List
+from typing import Optional, List, cast
 
 class TypingError(Exception):
     def __init__(self, node: parser.Node, error: str) -> None:
@@ -21,30 +21,27 @@ class AbstractType:
         # Exception isAssignableFrom RuntimeException
         return other.is_assignable_to(self)
 
-    def looks_like_type(self):
-        return True
-
-    def is_numerical(self):
+    def is_numerical(self) -> bool:
         return False
 
-    def is_boolean(self):
+    def is_boolean(self) -> bool:
         return False
 
-    def is_void(self):
+    def is_void(self) -> bool:
         return False
 
-    def is_clazz(self):
+    def is_clazz(self) -> bool:
         # Contract: This returns true iff isinstance(self, ClazzType)
         return False
 
-    def is_array(self):
+    def is_array(self) -> bool:
         # Contract: This returns true iff isinstance(self, ArrayType)
         return False
 
     def resolves(self, node: parser.Node, program: "emitter.Program") -> bool:
         def flatten_qualified(nod: parser.Node) -> str:
             if nod.i("ident"):
-                return nod.data
+                return nod.data_strict
             else:
                 return "%s.%s" % (flatten_qualified(nod[0]), flatten_qualified(nod[1]))
 
@@ -165,7 +162,7 @@ class ArrayType(AbstractType):
     def resolves(self, node: parser.Node, program: "emitter.Program") -> bool:
         return node.i("[]") and self.parent_type.resolves(node[0], program)
 
-    def is_array(self):
+    def is_array(self) -> bool:
         return True
 
 class TypeSystem:
@@ -240,8 +237,8 @@ class TypeSystem:
         return typ
 
     def resolve_to_signature(self, node: parser.Node, scope: "emitter.Scopes") -> "emitter.MethodSignature":
-        if util.get_flattened(node) is not None and self.program.get_method_signature(util.get_flattened(node)) is not None:
-            return self.program.get_method_signature(util.get_flattened(node))
+        if util.get_flattened(node) is not None and self.program.get_method_signature_optional(util.nonnull(util.get_flattened(node))) is not None:
+            return self.program.get_method_signature(util.nonnull(util.get_flattened(node)))
         if node.i("ident"):
             node.compile_error("Attempt to call an identifier that doesn't resolve to a method")
             # Unreachable
@@ -255,12 +252,12 @@ class TypeSystem:
                 # Unreachable
                 return None # type: ignore
             assert isinstance(typ, ClazzType)
-            if typ.type_of_property(node[1].data) is not None:
+            if typ.type_of_property(node[1].data_strict) is not None:
                 node.compile_error("Attempt to call a property")
                 # Unreachable
                 return None # type: ignore
-            elif typ.method_signature(node[1].data) is not None:
-                return typ.method_signature(node[1].data)
+            elif typ.method_signature(node[1].data_strict) is not None:
+                return typ.method_signature(node[1].data_strict)
             else:
                 node.compile_error("Attempt to perform property access that doesn't make sense (perhaps the property doesn't exist or is spelled wrong?)")
                 # Unreachabe
@@ -330,7 +327,7 @@ class TypeSystem:
                 raise TypingError(expr[0], "Type %s is not numerical" % type)
             return self.int_type
         elif expr.i("ident"):
-            return scope.resolve(expr.data, expr).type
+            return scope.resolve(expr.data_strict, expr).type
         elif expr.of("true", "false"):
             return self.bool_type
         elif expr.i("null"):
@@ -396,12 +393,13 @@ class TypeSystem:
                 raise TypingError(expr[0], "Type %s is not a class" % ret)
             return ret
         elif expr.i("."):
+            # Ternary operator to satisfy typechecker (if-else statement would effectively require phi node which is ugly)
             lhs_typ: AbstractType = \
-                (scope.resolve(expr[0].data, expr[0]).type) if expr[0].i("ident") \
+                (scope.resolve(expr[0].data_strict, expr[0]).type) if expr[0].i("ident") \
                 else self.decide_type(expr[0], scope)
             if not lhs_typ.is_clazz():
                 expr.compile_error("Attempt to access an attribute of something that isn't a class")
             assert isinstance(lhs_typ, ClazzType)
-            return lhs_typ.type_of_property(expr[1].data)
+            return lhs_typ.type_of_property(expr[1].data_strict)
         else:
             raise ValueError("Expression not accounted for in typesys. This is a compiler bug.")
