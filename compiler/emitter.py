@@ -126,13 +126,13 @@ class MethodSignature:
         return "%sfn %s%s(%s): %s" % (modifiers, prefix, self.name, args_str, self.returntype.name)
 
     @staticmethod
-    def from_node(method: parser.Node, types: "typesys.TypeSystem", program: "Program",
+    def from_node(method: parser.Node, program: "Program",
             this_type: "Optional[typesys.ClazzType]"=None, containing_class: "Optional[ClazzSignature]"=None) -> "MethodSignature":
         if containing_class is None and method["modifiers"].has_child("override"):
             method.compile_error("Can't both be an override method and not have a containing class")
 
         if method.i("fn"):
-            signature: "List[typesys.AbstractType]" = cast(List[typesys.AbstractType], [] if this_type is None else [this_type]) + [types.resolve_strict(arg[1]) for arg in method[1]]
+            signature: "List[typesys.AbstractType]" = cast(List[typesys.AbstractType], [] if this_type is None else [this_type]) + [program.types.resolve_strict(arg[1]) for arg in method[1]]
             argnames = ([] if this_type is None else ["this"]) + [arg[0].data_strict for arg in method[1]]
             is_override = method["modifiers"].has_child("override")
             is_entrypoint = method["modifiers"].has_child("entrypoint")
@@ -143,55 +143,26 @@ class MethodSignature:
             name = util.nonnull(util.get_flattened(method[0]))
             if containing_class is None and program.namespace is not None:
                 name = "%s.%s" % (program.namespace, name)
-            return MethodSignature(name, signature, argnames, types.resolve_strict(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint)
+            return MethodSignature(name, signature, argnames, program.types.resolve_strict(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint)
         elif method.i("ctor"):
-            signature = cast(List[typesys.AbstractType], [this_type]) + [types.resolve_strict(arg[1]) for arg in method[0]]
+            signature = cast(List[typesys.AbstractType], [this_type]) + [program.types.resolve_strict(arg[1]) for arg in method[0]]
             argnames = ["this"] + [arg[0].data_strict for arg in method[0]]
             assert containing_class is not None
             assert type(containing_class.name) is str
-            return MethodSignature("@@ctor.%s" % containing_class.name, signature, argnames, types.void_type, is_ctor=True, containing_class=containing_class, is_override=False)
+            return MethodSignature("@@ctor.%s" % containing_class.name, signature, argnames, program.types.void_type, is_ctor=True, containing_class=containing_class, is_override=False)
         else:
             raise ValueError("This is a compiler bug.")
             # Unreachable
             return None # type: ignore
 
     @staticmethod
-    def scan(top: parser.Node, types: "typesys.TypeSystem") -> "List[MethodSignature]":
-        # TODO: Fix this when removing top.xattrs["program"]
-        program = top.xattrs["program"]
-        if program is None:
-            raise ValueError("This is a compiler bug.")
+    def scan(top: parser.Node, program: "Program") -> "List[MethodSignature]":
         ret = []
         for method in top:
             if not method.i("fn"):
                 continue
-            ret.append(MethodSignature.from_node(method, types, program))
+            ret.append(MethodSignature.from_node(method, program))
         return ret
-
-def get_method_signature(name: str, top_: parser.Node, is_real_top: bool=False) -> MethodSignature:
-    ret = get_method_signature_optional(name, top_, is_real_top=is_real_top)
-    if ret is None:
-        raise ValueError("Could not find method signature '%s'" % name)
-    return ret
-
-def get_method_signature_optional(name: str, top_: parser.Node, is_real_top: bool=False) -> Optional[MethodSignature]:
-    # I really need to change this. This should instead accept a reference to
-    # the Program object, which should in turn have a list of method
-    # signatures. But everything involved here is too tightly coupled, so it's
-    # a major chunk of work.
-    # TODO: This is horribly ugly, should get rid of this
-    top = top_
-    if not is_real_top:
-        top = top_.xattrs["top"]
-
-    program = top.xattrs["program"]
-    search_paths = [""]
-    search_paths.append(program.namespace)
-    search_paths += program.using_directives
-    for signature in top.xattrs["signatures"]:
-        if signature.name in ["%s.%s" % (path, name) if path != "" else name for path in search_paths]:
-            return signature
-    return None
 
 class SegmentEmitter:
     pass
@@ -823,7 +794,6 @@ class ClazzEmitter(SegmentEmitter):
             elif field.i("fn"):
                 signature = MethodSignature.from_node(
                     field,
-                    self.program.types,
                     self.program,
                     this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # At this point in execution, `this.signature` is the blank
@@ -835,7 +805,6 @@ class ClazzEmitter(SegmentEmitter):
             elif field.i("ctor"):
                 signature = MethodSignature.from_node(
                     field,
-                    self.program.types,
                     self.program,
                     this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # Same comment as above
@@ -909,7 +878,6 @@ class Program:
         self.methods: List[MethodSegment] = []
         self.emitter = emitter
         self.top = emitter.top
-        self.top.xattrs["program"] = self
         self.segments: List[Segment] = []
         self.types: typesys.TypeSystem = typesys.TypeSystem(self)
         self.clazzes: List[ClazzSegment] = []
@@ -917,6 +885,7 @@ class Program:
         self.using_directives: List[str] = []
         self.namespace: Optional[str] = None
         self.clazz_emitters: List[ClazzEmitter]
+        self.method_signatures: List[MethodSignature] = []
 
     @property
     def search_paths(self) -> List[str]:
@@ -934,10 +903,21 @@ class Program:
         return None
 
     def get_method_signature(self, name: str) -> MethodSignature:
-        return get_method_signature(name, self.top, is_real_top=True)
+        ret = self.get_method_signature_optional(name)
+        if ret is None:
+            raise ValueError("Could not find method signature '%s'" % name)
+        return ret
 
     def get_method_signature_optional(self, name: str) -> Optional[MethodSignature]:
-        return get_method_signature_optional(name, self.top, is_real_top=True)
+        search_paths = [""]
+        if self.namespace is not None:
+            search_paths.append(self.namespace)
+        search_paths += self.using_directives
+        for signature in self.method_signatures:
+            if signature.name in ["%s.%s" % (path, name) if path != "" else name for path in search_paths]:
+                return signature
+        return None
+        # return get_method_signature_optional(name, self.top, is_real_top=True)
 
     def has_entrypoint(self) -> bool:
         return self.get_entrypoint() is not None
@@ -945,7 +925,7 @@ class Program:
     def emit_method(self, method: parser.Node, signature: MethodSignature=None) -> MethodSegment:
         # util.get_flattened(method[0]) is method name
         # TODO: Remove signature parameter and make caller call get_method_signature
-        return MethodSegment(method, signature if signature is not None else get_method_signature(util.nonnull(util.get_flattened(method[0])), method))
+        return MethodSegment(method, signature if signature is not None else self.get_method_signature(util.nonnull(util.get_flattened(method[0]))))
 
     def validate_overriding_rules(self) -> None:
         for signature in self.clazz_signatures:
@@ -1002,15 +982,14 @@ class Program:
         for emitter in clazz_emitters:
             emitter.add_superclass_to_signature()
         self.clazz_emitters = clazz_emitters
-        if "signatures" not in self.emitter.top.xattrs:
-            self.emitter.top.xattrs["signatures"] = []
-        self.emitter.top.xattrs["signatures"] += MethodSignature.scan(self.emitter.top, self.types)
+        self.method_signatures += MethodSignature.scan(self.emitter.top, self)
 
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
             self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, is_included=True))
         for method in headers.methods:
-            self.emitter.top.xattrs["signatures"].append(MethodSignature(
+            # elw
+            self.method_signatures.append(MethodSignature(
                 method.name,
                 [self.types.resolve_strict(parser.parse_type(arg.type)) for arg in method.args],
                 [arg.name for arg in method.args],
@@ -1019,10 +998,10 @@ class Program:
         for clazz in headers.clazzes:
             methods = []
             for clazz_method in clazz.methods:
-                methods.append(get_method_signature(clazz_method.name, self.top, is_real_top=True))
+                methods.append(self.get_method_signature(clazz_method.name))
             ctors = []
             for ctor in clazz.ctors:
-                ctors.append(get_method_signature(ctor.name, self.top, is_real_top=True))
+                ctors.append(self.get_method_signature(ctor.name))
             fields = []
             for field in clazz.fields:
                 fields.append(ClazzField(field.name, self.types.resolve_strict(parser.parse_type(field.type))))
@@ -1036,15 +1015,9 @@ class Program:
 class Emitter:
     def __init__(self, top: parser.Node) -> None:
         self.top = top
-        self.top.xattrs["signatures"] = []
 
     def emit_program(self) -> Program:
-        for method in self.top:
-            method.xattrs["top"] = self.top
-
-        program = Program(self)
-
-        return program
+        return Program(self)
 
     def emit_bytes(self, program: Program) -> bytes:
         import bytecode
