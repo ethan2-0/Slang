@@ -421,3 +421,22 @@ class TestInstanceofCasts:
             ],
             no_warnings=False
         )
+
+class TestInterpreterDuplicateMethodOrClass:
+    def test_duplicate_class(self):
+        util.clean_tmp()
+        main_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/main.slg")
+        duplicate_class_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/duplicate_class.slg")
+        assert "Duplicate class name: 'DuplicateClass'" in util.interpret(main_path, duplicate_class_path, expect_fail=True)
+
+    def test_duplicate_method(self):
+        util.clean_tmp()
+        main_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/main.slg")
+        duplicate_method_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/duplicate_method.slg")
+        assert "Duplicate method name and containing class: 'duplicate_method'" in util.interpret(main_path, duplicate_method_path, expect_fail=True)
+
+    def test_not_duplicate_method(self):
+        util.clean_tmp()
+        main_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/main.slg")
+        not_duplicate_method_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/not_duplicate_method.slg")
+        util.interpret(main_path, not_duplicate_method_path, expect_fail=False)

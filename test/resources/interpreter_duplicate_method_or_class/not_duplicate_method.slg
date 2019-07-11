@@ -1,0 +1,8 @@
+class TestClass {
+    ctor() {}
+    // When I was first implementing this I had a bug where a class method with
+    // the same name as a global method would be detected as a duplicate method
+    fn duplicate_method() {
+        // Do nothing
+    }
+}

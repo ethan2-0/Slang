@@ -400,6 +400,13 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
             clazz->heirarchy[0] = (ts_TYPE*) clazz;
             clazz->nfields = -1;
             clazz->fields = NULL;
+            // Check for duplicate class names
+            for(int i = 0; i < program->clazz_index; i++) {
+                if(strcmp(program->clazzes[i]->name, clazz->name) == 0) {
+                    printf("Duplicate class name: '%s'\n", clazz->name);
+                    fatal("Duplicate class name");
+                }
+            }
             ts_register_type((ts_TYPE*) clazz, strdup(clazzname));
             program->clazzes[program->clazz_index++] = clazz;
             free(clazzname);
@@ -476,6 +483,18 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
                 method->containing_clazz = NULL;
             }
             free(containing_clazz_name);
+            // Make sure there are no duplicate method names
+            for(int i = 0; i < methodindex - 1; i++) {
+                if(strcmp(method->name, program->methods[i].name) == 0 && method->containing_clazz == program->methods[i].containing_clazz) {
+                    printf("Duplicate method name and containing class: '%s'", method->name);
+                    if(method->containing_clazz != NULL) {
+                        printf(" from class '%s'\n", method->containing_clazz->name);
+                    } else {
+                        printf(" with no containing class\n");
+                    }
+                    fatal("Duplicate method name");
+                }
+            }
             #if DEBUG
             printf("Method name is %s\n", method->name);
             #endif

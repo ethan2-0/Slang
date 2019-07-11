@@ -1,0 +1,11 @@
+entrypoint fn main() {
+    // Do nothing
+}
+fn duplicate_method() {
+    // Do nothing
+}
+class DuplicateClass {
+    ctor() {
+        // Do nothing
+    }
+}
