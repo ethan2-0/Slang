@@ -287,9 +287,6 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             // Do nothing
             iptr++;
             continue;
-        case OPCODE_SEP:
-            iptr++;
-            continue;
         case OPCODE_LOAD:
             registers[((it_OPCODE_DATA_LOAD*) iptr->payload)->target].number = ((it_OPCODE_DATA_LOAD*) iptr->payload)->data;
             iptr++;

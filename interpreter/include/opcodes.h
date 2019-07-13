@@ -28,7 +28,6 @@
 #define OPCODE_OR 0x12
 #define OPCODE_MOV 0x13
 #define OPCODE_NOP 0x14
-#define OPCODE_SEP 0x15
 #define OPCODE_LOAD 0x16
 #define OPCODE_LT 0x17
 #define OPCODE_NEW 0x18

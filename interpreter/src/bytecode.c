@@ -147,10 +147,6 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         // NOP
         // Do nothing
         ;
-    } else if(opcode_num == OPCODE_SEP) {
-        // SEP
-        // This is a NOP that takes an integer parameter.
-        fr_getuint64(state);
     } else if(opcode_num == OPCODE_LT) {
         // LT
         it_OPCODE_DATA_LT* data = mm_malloc(sizeof(it_OPCODE_DATA_LT));
