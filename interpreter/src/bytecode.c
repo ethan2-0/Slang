@@ -326,11 +326,9 @@ void bc_parse_method(fr_STATE* state, it_OPCODE* opcode_buff, it_PROGRAM* progra
     char* name = fr_getstr(state);
     uint32_t id = bc_resolve_name(program, name);
     #if DEBUG
-    printf("Length %d\n", length);
     printf("Register count %d\n", registerc);
     printf("Id %d\n", id);
     printf("Nargs %d\n", nargs);
-    printf("End index %d\n", end_index);
     #endif
     free(fr_getstr(state));
     result->returntype = ts_get_type(fr_getstr(state));

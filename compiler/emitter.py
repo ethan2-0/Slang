@@ -6,7 +6,6 @@ import typesys
 import parser
 import util
 import claims as clms
-from chain import Chain
 from typing import ClassVar, List, Optional, Union, TypeVar, Dict, cast, Tuple, Generic, NoReturn
 
 class RegisterHandle:
@@ -398,6 +397,43 @@ class MethodEmitter(SegmentEmitter):
             node.compile_error("Unexpected")
         return opcodes
 
+    def assign_to_expr(self, expr: parser.Node, value: RegisterHandle) -> List[opcodes_module.OpcodeInstance]:
+        opcodes: List[opcodes_module.OpcodeInstance] = []
+        if expr.i("ident"):
+            lhs_reg = self.scope.resolve(expr.data_strict, expr)
+            if not value.type.is_assignable_to(lhs_reg.type):
+                raise typesys.TypingError(expr, "Attempt to make incompatible assignment: %s, %s" % (lhs_reg.type, value.type))
+            opcodes.append(ops["mov"].ins(value, lhs_reg))
+        elif expr.i("."):
+            expr_lhs = expr[0]
+            expr_lhs_type = self.types.decide_type(expr_lhs, self.scope)
+            if not isinstance(expr_lhs_type, typesys.ClazzType):
+                raise typesys.TypingError(expr, "Attempt to access property of something that isn't a class: %s" % expr_lhs_type)
+            expr_lhs_reg = self.scope.allocate(expr_lhs_type)
+            opcodes += self.emit_expr(expr_lhs, expr_lhs_reg)
+            if not expr[1].i("ident"):
+                raise ValueError("This is a compiler bug.")
+            if not expr_lhs_type.type_of_property(expr[1].data_strict).is_assignable_from(value.type):
+                raise typesys.TypingError(expr, "Incompatible types in class property assignment: %s, %s" % (expr_lhs_type, value.type))
+            opcodes.append(ops["assign"].ins(expr_lhs_reg, expr[1].data_strict, value))
+        elif expr.i("access"):
+            expr_lhs = expr[0]
+            expr_lhs_type = self.types.decide_type(expr_lhs, self.scope)
+            if not isinstance(expr_lhs_type, typesys.ArrayType):
+                raise typesys.TypingError(expr, "Attempt to index something that isn't an array: %s" % expr_lhs_type)
+            if not expr_lhs_type.parent_type.is_assignable_from(value.type):
+                raise typesys.TypingError(expr, "Attempt to assign incompatible type as array element: %s, %s" % (expr_lhs_type.parent_type, value.type))
+            expr_lhs_reg = self.scope.allocate(expr_lhs_type)
+            opcodes += self.emit_expr(expr_lhs, expr_lhs_reg)
+            expr_index = expr[1]
+            index_type = self.types.decide_type(expr_index, self.scope)
+            if not isinstance(index_type, typesys.IntType):
+                raise typesys.TypingError(expr_index, "Attempt to index an array by something that isn't an integer: %s" % index_type)
+            index_reg = self.scope.allocate(index_type)
+            opcodes += self.emit_expr(expr_index, index_reg)
+            opcodes.append(ops["arrassign"].ins(expr_lhs_reg, index_reg, value))
+        return opcodes
+
     def emit_statement(self, node: parser.Node) -> Tuple[List[opcodes_module.OpcodeInstance], clms.ClaimSpace]:
         opcodes: List[opcodes_module.OpcodeInstance] = []
         claims = clms.ClaimSpace()
@@ -446,35 +482,33 @@ class MethodEmitter(SegmentEmitter):
                 opcodes.append(ops["zero"].ins(reg, node=node))
             claims.add_claims(clms.ClaimReturns())
             opcodes.append(ops["return"].ins(reg, node=node))
-        elif node.i("chain"):
-            opcodes += Chain(node, self.scope, ops).access(None, self, no_output=True)
+        elif node.i("expr"):
+            reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            opcodes += self.emit_expr(node[0], reg)
         elif node.i("assignment"):
+            lhs_type = self.types.decide_type(node[0], self.scope)
             rhs_type = self.types.decide_type(node[1], self.scope)
-            rhs_reg = self.scope.allocate(rhs_type)
-            opcodes += self.emit_expr(node[1], rhs_reg)
-            chain = Chain(node[0], self.scope, ops)
-            lhs_type = chain.decide_type()
             if not lhs_type.is_assignable_from(rhs_type):
                 raise typesys.TypingError(node, "Need RHS to be assignable to LHS: %s, %s" % (lhs_type, rhs_type))
-            opcodes += chain.assign(rhs_reg, self)
+            value_reg = self.scope.allocate(rhs_type)
+            opcodes += self.emit_expr(node[1], value_reg)
+            opcodes += self.assign_to_expr(node[0], value_reg)
         elif node.of("+=", "*=", "-=", "/="):
-            # TODO: This does the first (n - 1) parts of the chain twice
+            lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
+            opcodes += self.emit_expr(node[0], lhs_reg)
             rhs_reg = self.scope.allocate(self.types.decide_type(node[1], self.scope))
             opcodes += self.emit_expr(node[1], rhs_reg)
-            chain = Chain(node[0], self.scope, ops)
-            resultreg = self.scope.allocate(chain.decide_type())
-            opcodes += chain.access(resultreg, self)
-            if not resultreg.type.is_numerical() or not rhs_reg.type.is_numerical():
-                raise typesys.TypingError(node, "LHS and RHS of arithmetic must be numerical, not '%s' and '%s'" % (resultreg.type.name, rhs_reg.type.name))
+            if not lhs_reg.type.is_numerical() or not rhs_reg.type.is_numerical():
+                raise typesys.TypingError(node, "LHS and RHS of arithmetic must be numerical, not %s and %s" % (lhs_reg.type, rhs_reg.type))
             if node.i("-="):
                 opcodes.append(ops["twocomp"].ins(rhs_reg, node=node))
             opcodes.append(ops[{
                 "+=": "add",
-                "*=": "mult",
                 "-=": "add",
+                "*=": "mult",
                 "/=": "div"
-            }[node.type]].ins(resultreg, rhs_reg, resultreg, node=node))
-            opcodes += chain.assign(resultreg, self)
+            }[node.type]].ins(lhs_reg, rhs_reg, lhs_reg, node=node))
+            opcodes += self.assign_to_expr(node[0], lhs_reg)
         elif node.i("while"):
             result_opcodes: List[opcodes_module.OpcodeInstance] = []
             condition_register = self.scope.allocate(self.types.decide_type(node[0], self.scope))
@@ -542,14 +576,25 @@ class MethodEmitter(SegmentEmitter):
                 claims.add_claims_conservative(*true_path_claims.intersection(false_path_claims).claims)
             opcodes += result_opcodes
         elif node.of("++", "--"):
-            var = self.scope.resolve(node[0].data_strict, node)
-            if not var.type.is_numerical():
-                raise typesys.TypingError(node, "Subject of increment/decrement must be numerical")
+            # var = self.scope.resolve(node[0].data_strict, node)
+            # if not var.type.is_numerical():
+            #     raise typesys.TypingError(node, "Subject of increment/decrement must be numerical")
+            # reg = self.scope.allocate(self.types.int_type)
+            # opcodes.append(ops["load"].ins(reg, 1, node=node))
+            # if node.i("--"):
+            #     opcodes.append(ops["twocomp"].ins(reg, node=node))
+            # opcodes.append(ops["add"].ins(var, reg, var, node=node))
+            lhs_type = self.types.decide_type(node[0], self.scope)
+            if not lhs_type.is_numerical():
+                raise typesys.TypingError(node, "Attempt to increment something that isn't numerical: %s" % lhs_type)
+            lhs_reg = self.scope.allocate(lhs_type)
+            opcodes += annotate(self.emit_expr(node[0], lhs_reg), "++ expression")
             reg = self.scope.allocate(self.types.int_type)
             opcodes.append(ops["load"].ins(reg, 1, node=node))
             if node.i("--"):
                 opcodes.append(ops["twocomp"].ins(reg, node=node))
-            opcodes.append(ops["add"].ins(var, reg, var, node=node))
+            opcodes.append(ops["add"].ins(reg, lhs_reg, reg))
+            opcodes += self.assign_to_expr(node[0], reg)
         else:
             node.compile_error("Unexpected (this is a compiler bug)")
         return opcodes, claims

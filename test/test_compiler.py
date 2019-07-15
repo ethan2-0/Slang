@@ -212,7 +212,7 @@ class TestTypesWrongOperatorTypes:
 
     def test_increment_bool(self):
         util.clean_tmp()
-        util.assert_compile_fails("resources/types_wrong_operator_types/increment_bool.slg", "must be numerical")
+        util.assert_compile_fails("resources/types_wrong_operator_types/increment_bool.slg", "to increment something that isn't numerical")
 
     def test_inplace_with_bool(self):
         util.clean_tmp()
@@ -345,6 +345,16 @@ class TestParser:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/parser/string_literal.slg")
         assert "0x00000001" in util.interpret(path, "--print-return-value")
+
+    def test_call_expr_in_parens(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/parser/call_expr_in_parens.slg")
+        util.interpret(path)
+
+    def test_no_semicolons(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/parser/no_semicolons.slg")
+        util.interpret(path)
 
 class TestStdlib:
     def test_basic(self):

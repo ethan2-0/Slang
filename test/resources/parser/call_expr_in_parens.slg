@@ -1,0 +1,7 @@
+using stdlib;
+
+entrypoint fn main() {
+    if(("abc").charAt(1) != 'b') {
+        die("Failed.");
+    }
+}

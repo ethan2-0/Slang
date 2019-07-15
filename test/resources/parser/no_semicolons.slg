@@ -1,0 +1,15 @@
+namespace test
+using stdlib
+
+class Test {
+    classvar: Test
+    ctor(classvar: Test) {
+        this.classvar = classvar
+    }
+}
+
+entrypoint fn main() {
+    let num: int = 5
+    num += 5
+    println(itos(num))
+}
