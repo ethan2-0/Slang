@@ -78,6 +78,9 @@ class Scopes:
         return False
 
     def let(self, key: str, register: RegisterHandle, node: parser.Node) -> None:
+        # Note that Scopes doesn't know anything about static variables. So we
+        # could theoretically let a static variable. Callers are responsible
+        # for avoiding that.
         if not isinstance(node, parser.Node):
             raise ValueError("Expected Node, got %s" % type(node))
 
@@ -88,6 +91,44 @@ class Scopes:
             node.compile_error("Redeclaring local: %s" % key)
 
         self.locals[len(self.locals) - 1][key] = register
+
+class StaticVariable:
+    def __init__(self, variable_set: "StaticVariableSet", name: str, type: typesys.AbstractType, initializer: Union[None, int, List[int]]) -> None:
+        self.variable_set = variable_set
+        self.name = name
+        self.type = type
+        self.initializer = initializer
+
+    def __str__(self) -> str:
+        return "static %s: %s" % (self.name, self.type.name)
+
+class StaticVariableSet:
+    def __init__(self, program: "Program") -> None:
+        self.program = program
+        self.variables: Dict[str, StaticVariable] = dict()
+
+    def add_variable(self, variable: StaticVariable) -> None:
+        self.variables[variable.name] = variable
+
+    def has_variable(self, name: str) -> bool:
+        for search_path in self.program.search_paths:
+            if "%s%s" % (search_path, name) in self.variables:
+                return True
+        return False
+
+    def resolve_variable(self, name: str, node: Optional[parser.Node] = None) -> StaticVariable:
+        ret = self.resolve_variable_optional(name)
+        if ret is None:
+            if node is not None:
+                node.compile_error("Attempt to resolve nonexistent static variable '%s'" % name)
+            raise ValueError("Attempt to resolve nonexistent static variable '%s'" % name)
+        return ret
+
+    def resolve_variable_optional(self, name: str) -> Optional[StaticVariable]:
+        for search_path in self.program.search_paths:
+            if "%s%s" % (search_path, name) in self.variables:
+                return self.variables["%s%s" % (search_path, name)]
+        return None
 
 class MethodSignature:
     sequential_id: ClassVar[int] = 0
@@ -278,6 +319,11 @@ class MethodEmitter(SegmentEmitter):
             reg = self.scope.allocate(self.types.int_type)
             opcodes.append(ops["load"].ins(reg, 0xffffffff, node=node))
             opcodes.append(ops["xor"].ins(reg, register, register, node=node))
+        # All of these conditions go on one line so as not to disturb the
+        # if-else flow. This is here because, were it any lower, we'd get
+        # problems in the .i("ident") part, for example.
+        elif node.of("ident", ".") and util.get_flattened(node) is not None and self.program.static_variables.has_variable(util.nonnull(util.get_flattened(node))):
+            opcodes.append(ops["staticvarget"].ins(self.program.static_variables.resolve_variable(util.nonnull(util.get_flattened(node))).name, register, node=node))
         elif node.i("ident"):
             opcodes.append(annotate(ops["mov"].ins(self.scope.resolve(node.data_strict, node), register, node=node), "access %s" % node.data))
         elif node.i("true"):
@@ -399,7 +445,13 @@ class MethodEmitter(SegmentEmitter):
 
     def assign_to_expr(self, expr: parser.Node, value: RegisterHandle) -> List[opcodes_module.OpcodeInstance]:
         opcodes: List[opcodes_module.OpcodeInstance] = []
-        if expr.i("ident"):
+        if expr.of("ident", ".") and util.get_flattened(expr) is not None \
+                and self.program.static_variables.has_variable(util.nonnull(util.get_flattened(expr))):
+            static_variable = self.program.static_variables.resolve_variable(util.nonnull(util.get_flattened(expr)))
+            if not static_variable.type.is_assignable_from(value.type):
+                raise typesys.TypingError(expr, "Attempt to make incompatible assignment to static variable: %s, %s" % (static_variable.type, value.type))
+            opcodes.append(ops["staticvarset"].ins(value, static_variable.name))
+        elif expr.i("ident"):
             lhs_reg = self.scope.resolve(expr.data_strict, expr)
             if not value.type.is_assignable_to(lhs_reg.type):
                 raise typesys.TypingError(expr, "Attempt to make incompatible assignment: %s, %s" % (lhs_reg.type, value.type))
@@ -880,6 +932,22 @@ class ClazzEmitter(SegmentEmitter):
         self.emit_signature()
         return ClazzSegment(self)
 
+class StaticVariableSegment(Segment[SegmentEmitter]):
+    def __init__(self, static_variables: StaticVariableSet) -> None:
+        Segment.__init__(self, "staticvars", 0x03)
+        self.static_variables = static_variables
+
+    def __str__(self) -> str:
+        return "StaticVariableSegment()"
+
+    def print_(self, emitter: SegmentEmitter) -> None:
+        Segment.print_(self, emitter)
+        for variable in self.static_variables.variables.values():
+            print("    %s" % variable)
+
+    def evaluate(self, program: "Program") -> None:
+        Segment.evaluate(self, program)
+
 class ClazzSegment(Segment[ClazzEmitter]):
     def __init__(self, emitter: ClazzEmitter) -> None:
         Segment.__init__(self, "class", 0x02)
@@ -931,6 +999,7 @@ class Program:
         self.namespace: Optional[str] = None
         self.clazz_emitters: List[ClazzEmitter]
         self.method_signatures: List[MethodSignature] = []
+        self.static_variables: StaticVariableSet = StaticVariableSet(self)
 
     @property
     def search_paths(self) -> List[str]:
@@ -954,12 +1023,9 @@ class Program:
         return ret
 
     def get_method_signature_optional(self, name: str) -> Optional[MethodSignature]:
-        search_paths = [""]
-        if self.namespace is not None:
-            search_paths.append(self.namespace)
-        search_paths += self.using_directives
+        search_paths = self.search_paths
         for signature in self.method_signatures:
-            if signature.name in ["%s.%s" % (path, name) if path != "" else name for path in search_paths]:
+            if signature.name in ["%s%s" % (path, name) if path != "" else name for path in search_paths]:
                 return signature
         return None
         # return get_method_signature_optional(name, self.top, is_real_top=True)
@@ -991,6 +1057,7 @@ class Program:
             clazz.evaluate(self)
         for method in self.methods:
             method.evaluate(self)
+        self.segments.append(StaticVariableSegment(self.static_variables))
 
     def get_header_representation(self) -> header.HeaderRepresentation:
         return header.HeaderRepresentation.from_program(self)
@@ -1000,6 +1067,19 @@ class Program:
             self.segments.append(MetadataSegment(entrypoint=self.get_entrypoint(), headers=self.get_header_representation()))
         else:
             self.segments.append(MetadataSegment(headers=self.get_header_representation()))
+
+    def prescan_static_variables(self) -> None:
+        for toplevel in self.top:
+            if toplevel.i("static"):
+                unqualified_variable_name = util.nonnull(util.get_flattened(toplevel[0]))
+                self.static_variables.add_variable(
+                    StaticVariable(
+                        self.static_variables,
+                        "%s.%s" % (self.namespace, unqualified_variable_name) if self.namespace is not None else unqualified_variable_name,
+                        self.types.resolve_strict(toplevel[1]),
+                        None
+                    )
+                )
 
     def prescan(self) -> None:
         for toplevel in self.top:
@@ -1028,6 +1108,7 @@ class Program:
             emitter.add_superclass_to_signature()
         self.clazz_emitters = clazz_emitters
         self.method_signatures += MethodSignature.scan(self.emitter.top, self)
+        self.prescan_static_variables()
 
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:

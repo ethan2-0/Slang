@@ -133,6 +133,7 @@ struct it_METHOD {
     ts_TYPE_CLAZZ* containing_clazz;
     it_METHOD_REPLACEMENT_PTR replacement_ptr;
 };
+struct sv_STATIC_VAR;
 typedef struct {
     // This is the number of methods
     int methodc;
@@ -146,7 +147,24 @@ typedef struct {
     int clazz_index;
     // This is a pointer to an array of pointers of classes
     ts_TYPE_CLAZZ** clazzes;
+
+    int static_varsc;
+    // This is a pointer to the start of the array of static variables
+    struct sv_STATIC_VAR* static_vars;
+    int static_var_index;
 } it_PROGRAM;
+
+typedef struct sv_STATIC_VAR {
+    ts_TYPE* type;
+    char* name;
+    // TODO: Including the value in here is terrible for cache locality
+    itval value;
+} sv_STATIC_VAR;
+
+void sv_add_static_var(it_PROGRAM* program, ts_TYPE* type, char* name);
+sv_STATIC_VAR* sv_get_var_by_name(it_PROGRAM* program, char* name);
+bool sv_has_var(it_PROGRAM* program, char* name);
+uint32_t sv_get_static_var_index_by_name(it_PROGRAM* program, char* name);
 
 typedef struct {
     bool print_return_value;
@@ -161,7 +179,7 @@ void it_replace_methods(it_PROGRAM* prog);
 void cl_arrange_phi_tables(it_PROGRAM* program);
 
 gc_OBJECT_REGISTRY* gc_register_object(itval object, size_t allocation_size, ts_CATEGORY category);
-void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame);
+void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame);
 bool gc_needs_collection;
 
 #define NUM_REPLACED_METHODS 4

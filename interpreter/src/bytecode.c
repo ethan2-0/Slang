@@ -248,7 +248,22 @@ void bc_parse_opcode(fr_STATE* state, it_PROGRAM* program, it_METHOD* method, it
         }
         free(typename);
         opcode->payload = data;
+    } else if(opcode_num == OPCODE_STATICVARGET) {
+        it_OPCODE_DATA_STATICVARGET* data = mm_malloc(sizeof(it_OPCODE_DATA_STATICVARGET));
+        char* source_var_name = fr_getstr(state);
+        data->source_var = sv_get_static_var_index_by_name(program, source_var_name);
+        data->destination = fr_getuint32(state);
+        free(source_var_name);
+        opcode->payload = data;
+    } else if(opcode_num == OPCODE_STATICVARSET) {
+        it_OPCODE_DATA_STATICVARSET* data = mm_malloc(sizeof(it_OPCODE_DATA_STATICVARSET));
+        data->source = fr_getuint32(state);
+        char* dest_var_name = fr_getstr(state);
+        data->destination_var = sv_get_static_var_index_by_name(program, dest_var_name);
+        free(dest_var_name);
+        opcode->payload = data;
     } else {
+        printf("Opcode: %2x\n", opcode_num);
         fatal("Unrecognized opcode");
     }
 }
@@ -256,6 +271,7 @@ typedef struct {
     int num_methods;
     uint32_t entrypoint_id;
     int num_clazzes;
+    int num_static_variables;
 } bc_PRESCAN_RESULTS;
 bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
     #if DEBUG
@@ -264,6 +280,7 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
     bc_PRESCAN_RESULTS* results = mm_malloc(sizeof(bc_PRESCAN_RESULTS));
     results->num_methods = 0;
     results->num_clazzes = 0;
+    results->num_static_variables = 0;
 
     if(fr_getuint32(state) != 0xcf702b56) {
         fatal("Incorrect bytecode file magic number");
@@ -286,6 +303,12 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
             uint32_t length = fr_getuint32(state);
             fr_advance(state, (int) length);
             results->num_clazzes++;
+        } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
+            uint32_t length = fr_getuint32(state);
+            results->num_static_variables = fr_getuint32(state);
+            fr_advance(state, (int) length - 4);
+        } else {
+            fatal("Unrecognized segment type");
         }
     }
 
@@ -294,6 +317,34 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
     printf("Exiting bc_prescan\n");
     #endif
     return results;
+}
+void bc_scan_static_vars(it_PROGRAM* program, fr_STATE* state) {
+    while(!fr_iseof(state)) {
+        uint8_t segment_type = fr_getuint8(state);
+        if(segment_type == SEGMENT_TYPE_METHOD) {
+            uint32_t length = fr_getuint32(state);
+            fr_advance(state, (int) length);
+        } else if(segment_type == SEGMENT_TYPE_METADATA) {
+            free(fr_getstr(state));
+            free(fr_getstr(state));
+        } else if(segment_type == SEGMENT_TYPE_CLASS) {
+            uint32_t length = fr_getuint32(state);
+            fr_advance(state, (int) length);
+        } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
+            fr_getuint32(state); // Length
+            uint32_t num_static_vars = fr_getuint32(state);
+            for(int i = 0; i < num_static_vars; i++) {
+                char* name = fr_getstr(state);
+                char* typename = fr_getstr(state);
+                ts_TYPE* type = ts_get_type(typename);
+                sv_add_static_var(program, type, strdup(name));
+                free(name);
+                free(typename);
+            }
+        } else {
+            fatal("Unrecognized segment type");
+        }
+    }
 }
 uint32_t bc_assign_method_id(it_PROGRAM* program) {
     return program->method_id++;
@@ -370,6 +421,8 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
         uint8_t segment_type = fr_getuint8(state);
         if(segment_type == SEGMENT_TYPE_METHOD) {
             fr_advance(state, fr_getuint32(state));
+        } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
+            fr_advance(state, fr_getuint32(state));
         } else if(segment_type == SEGMENT_TYPE_METADATA) {
             free(fr_getstr(state));
             free(fr_getstr(state));
@@ -405,6 +458,8 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
             program->clazzes[program->clazz_index++] = clazz;
             free(clazzname);
             free(parentname);
+        } else {
+            fatal("Unrecognized segment type");
         }
     }
     fr_rewind(state);
@@ -412,6 +467,8 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
         if(segment_type == SEGMENT_TYPE_METHOD) {
+            fr_advance(state, fr_getuint32(state));
+        } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
             fr_advance(state, fr_getuint32(state));
         } else if(segment_type == SEGMENT_TYPE_METADATA) {
             free(fr_getstr(state));
@@ -447,6 +504,8 @@ void bc_scan_types(it_PROGRAM* program, bc_PRESCAN_RESULTS* prescan, fr_STATE* s
             #endif
             free(supertype_name);
             free(clazzname);
+        } else {
+            fatal("Unrecognized segment type");
         }
     }
 }
@@ -503,14 +562,14 @@ void bc_scan_methods(it_PROGRAM* program, fr_STATE* state, int offset) {
                 program->entrypoint = bc_resolve_name(program, name);
             }
             free(fr_getstr(state));
+        } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
+            uint32_t length = fr_getuint32(state);
+            fr_advance(state, (int) length);
         } else if(segment_type == SEGMENT_TYPE_CLASS) {
             uint32_t length = fr_getuint32(state);
             fr_advance(state, (int) length);
         } else {
-            #if DEBUG
-            printf("Segment type %02x\n", segment_type);
-            #endif
-            fatal("Unknown segment type");
+            fatal("Unrecognized segment type");
         }
     }
     #if DEBUG
@@ -534,26 +593,25 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], it_OPTIONS* options) {
     result->method_id = 0;
     result->methodc = NUM_REPLACED_METHODS;
     result->entrypoint = -1;
+    result->static_varsc = 0;
     for(int i = 0; i < num_files; i++) {
         prescan[i] = bc_prescan(state[i]);
         fr_rewind(state[i]);
         // Ignore the magic number
         fr_getuint32(state[i]);
         result->methodc += prescan[i]->num_methods;
+        result->static_varsc += prescan[i]->num_static_variables;
     }
     result->clazzesc = 0;
     for(int i = 0; i < num_files; i++) {
         result->clazzesc += prescan[i]->num_clazzes;
     }
+    result->static_vars = mm_malloc(sizeof(sv_STATIC_VAR) * result->static_varsc);
     #if DEBUG
     printf("%d methods\n", result->methodc);
     #endif
     result->methods = mm_malloc(sizeof(it_METHOD) * result->methodc);
     result->clazzes = mm_malloc(sizeof(ts_TYPE_CLAZZ*) * result->clazzesc);
-    // typedef struct {
-    //     int num_methods;
-    //     uint32_t entrypoint_id;
-    // } bc_PRESCAN_RESULTS;
     for(int i = 0; i < num_files; i++) {
         bc_scan_types(result, prescan[i], state[i]);
         fr_rewind(state[i]);
@@ -566,6 +624,12 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], it_OPTIONS* options) {
     for(int i = 0, method_index = 0; i < num_files; i++) {
         bc_scan_methods(result, state[i], method_index);
         method_index += prescan[i]->num_methods;
+        fr_rewind(state[i]);
+        // Ignore the magic number
+        fr_getuint32(state[i]);
+    }
+    for(int i = 0; i < num_files; i++) {
+        bc_scan_static_vars(result, state[i]);
         fr_rewind(state[i]);
         // Ignore the magic number
         fr_getuint32(state[i]);
@@ -599,6 +663,10 @@ it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], it_OPTIONS* options) {
             } else if(segment_type == SEGMENT_TYPE_CLASS) {
                 uint32_t length = fr_getuint32(state[i]);
                 fr_advance(state[i], (int) length);
+            } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
+                fr_advance(state[i], fr_getuint32(state[i]));
+            } else {
+                fatal("Unrecognized segment type");
             }
         }
     }

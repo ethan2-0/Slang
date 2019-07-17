@@ -326,6 +326,10 @@ class TypeSystem:
             if not type.is_numerical():
                 raise TypingError(expr[0], "Type %s is not numerical" % type)
             return self.int_type
+        elif expr.of("ident", ".") \
+                and util.get_flattened(expr) is not None \
+                and self.program.static_variables.has_variable(util.nonnull(util.get_flattened(expr))):
+            return self.program.static_variables.resolve_variable(util.nonnull(util.get_flattened(expr))).type
         elif expr.i("ident"):
             return scope.resolve(expr.data_strict, expr).type
         elif expr.of("true", "false"):

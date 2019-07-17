@@ -172,7 +172,21 @@
         "mneumonic": "INSTANCEOF",
         "params": ["register", "register", "type"],
         "reads": [0],
-        "writes": "1"
+        "writes": [1]
+    },
+    {
+        "code": "0x23",
+        "mneumonic": "STATICVARGET",
+        "params": ["staticvar", "register"],
+        "reads": [0],
+        "writes": [1]
+    },
+    {
+        "code": "0x24",
+        "mneumonic": "STATICVARSET",
+        "params": ["register", "staticvar"],
+        "reads": [0],
+        "writes": [1]
     },
     {
         "code": "0x05",
@@ -220,10 +234,5 @@
         "code": "0x14",
         "mneumonic": "NOP",
         "params": []
-    },
-    {
-        "code": "0x15",
-        "mneumonic": "SEP",
-        "params": ["int"]
     }
 ]

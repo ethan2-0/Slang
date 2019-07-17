@@ -75,9 +75,6 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
         printf("\n");
         printf("Type %02x, iptr %d\n", iptr->type, iptr - instruction_start);
         #endif
-        if(gc_needs_collection) {
-            gc_collect(stack, stackptr);
-        }
         switch(iptr->type) {
         case OPCODE_PARAM:
             params[((it_OPCODE_DATA_PARAM*) iptr->payload)->target] = registers[((it_OPCODE_DATA_PARAM*) iptr->payload)->source];
@@ -301,6 +298,9 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             continue;
         case OPCODE_NEW:
             ;
+            if(gc_needs_collection) {
+                gc_collect(prog, stack, stackptr);
+            }
             it_OPCODE_DATA_NEW* opcode_new_data = (it_OPCODE_DATA_NEW*) iptr->payload;
             size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(itval) * opcode_new_data->clazz->nfields;
             registers[opcode_new_data->dest].clazz_data = mm_malloc(new_allocation_size);
@@ -333,6 +333,9 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             continue;
         case OPCODE_ARRALLOC:
             ;
+            if(gc_needs_collection) {
+                gc_collect(prog, stack, stackptr);
+            }
             it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (it_OPCODE_DATA_ARRALLOC*) iptr->payload;
             uint64_t length = registers[opcode_arralloc_data->lengthreg].number;
             size_t arralloc_allocation_size = sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1);
@@ -400,6 +403,20 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
                 it_OPCODE_DATA_INSTANCEOF* data = (it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
                 itval source = registers[data->source];
                 registers[data->destination] = (itval) ((int64_t) ts_instanceof((ts_TYPE*) source.clazz_data->phi_table, data->predicate_type));
+                iptr++;
+                continue;
+            }
+        case OPCODE_STATICVARGET:
+            {
+                it_OPCODE_DATA_STATICVARGET* data = (it_OPCODE_DATA_STATICVARGET*) iptr->payload;
+                registers[data->destination] = prog->static_vars[data->source_var].value;
+                iptr++;
+                continue;
+            }
+        case OPCODE_STATICVARSET:
+            {
+                it_OPCODE_DATA_STATICVARSET* data = (it_OPCODE_DATA_STATICVARSET*) iptr->payload;
+                prog->static_vars[data->destination_var].value = registers[data->source];
                 iptr++;
                 continue;
             }

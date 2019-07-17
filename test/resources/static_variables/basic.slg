@@ -1,0 +1,33 @@
+using stdlib;
+namespace abc;
+
+static variable: int;
+static variable2: [Cls];
+static variable3.other: Cls;
+
+class Cls {
+    num: int;
+    ctor(num: int) {
+        this.num = num;
+    }
+    fn get_num(): int {
+        return this.num;
+    }
+}
+
+entrypoint fn main() {
+    variable = 5;
+    variable3.other = new Cls(variable);
+    if(variable3.other.num != 5) {
+        die("Failed 1");
+    }
+    variable2 = [Cls: 100];
+    for(let i = 0; i < #variable2; i++) {
+        variable2[i] = new Cls(i);
+    }
+    for(let i = 0; i < #variable2; i++) {
+        if(variable2[i].get_num() != i) {
+            die("Failed 2");
+        }
+    }
+}

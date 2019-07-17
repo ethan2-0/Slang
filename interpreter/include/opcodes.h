@@ -7,6 +7,7 @@
 #define SEGMENT_TYPE_METHOD 0x00
 #define SEGMENT_TYPE_METADATA 0x01
 #define SEGMENT_TYPE_CLASS 0x02
+#define SEGMENT_TYPE_STATIC_VARIABLES 0x03
 
 #define OPCODE_ZERO 0x01
 #define OPCODE_ADD 0x02
@@ -41,6 +42,8 @@
 #define OPCODE_DIV 0x20
 #define OPCODE_CAST 0x21
 #define OPCODE_INSTANCEOF 0x22
+#define OPCODE_STATICVARGET 0x23
+#define OPCODE_STATICVARSET 0x24
 
 typedef struct {
     uint32_t target;
@@ -186,5 +189,13 @@ typedef struct {
     ts_TYPE* source_register_type;
     ts_TYPE* predicate_type;
 } it_OPCODE_DATA_INSTANCEOF;
+typedef struct {
+    uint32_t source_var;
+    uint32_t destination;
+} it_OPCODE_DATA_STATICVARGET;
+typedef struct {
+    uint32_t source;
+    uint32_t destination_var;
+} it_OPCODE_DATA_STATICVARSET;
 
 #endif

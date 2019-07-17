@@ -7,6 +7,7 @@ import struct
 SEGMENT_TYPE_METHOD = 0x00
 SEGMENT_TYPE_METADATA = 0x01
 SEGMENT_TYPE_CLASS = 0x02
+SEGMENT_TYPE_STATICVARS = 0x03
 
 
 class BytesReader:
@@ -54,6 +55,9 @@ def extract_headers(slb_bytes: bytes) -> Optional[str]:
             reader.get_str() # entrypoint
             return reader.get_str() # headers
         elif segment_type == SEGMENT_TYPE_CLASS:
+            length = reader.get_uint32()
+            reader.ptr += length
+        elif segment_type == SEGMENT_TYPE_STATICVARS:
             length = reader.get_uint32()
             reader.ptr += length
         else:

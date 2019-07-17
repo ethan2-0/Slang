@@ -69,8 +69,11 @@ class Opcode:
             elif param_type == "type":
                 if not isinstance(arg, typesys.AbstractType):
                     complain_about_typechecking()
+            elif param_type == "staticvar":
+                if not isinstance(arg, str):
+                    complain_about_typechecking()
             else:
-                raise ValueError()
+                raise ValueError("This is a compiler bug.")
 
         return OpcodeInstance(self, args, node)
 

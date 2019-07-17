@@ -450,3 +450,9 @@ class TestInterpreterDuplicateMethodOrClass:
         main_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/main.slg")
         not_duplicate_method_path = util.assert_compile_succeeds("resources/interpreter_duplicate_method_or_class/not_duplicate_method.slg")
         util.interpret(main_path, not_duplicate_method_path, expect_fail=False)
+
+class TestStaticVariables:
+    def test_basic(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/static_variables/basic.slg", no_warnings=False)
+        util.interpret(path)

@@ -31,7 +31,7 @@ class Token:
 
 TokerState = NewType("TokerState", Tuple[int, int, int])
 class Toker:
-    keywords = ["using", "namespace", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null", "as", "instanceof"]
+    keywords = ["using", "namespace", "static", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null", "as", "instanceof"]
     escapes = {"n": "\n", "\\": "\\", "'": "'", "\"": "\"", "r": "\r", "0": "\0", "b": "\b", "v": "\v", "t": "\t", "f": "\f"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
@@ -180,7 +180,7 @@ class Node:
     @property
     def data_strict(self) -> str:
         if self.data is None:
-            raise ValueError("Node %s: expected non-null data")
+            raise ValueError("Node %s: expected non-null data" % self)
         return self.data
 
     def __repr__(self) -> str:
@@ -565,6 +565,12 @@ class Parser:
             self.expect(";")
         return ret
 
+    def parse_static(self) -> Node:
+        ret = Node(self.expect("static"), self.parse_qualified_name(), self.parse_type_annotation())
+        while self.isn(";"):
+            self.expect(";")
+        return ret
+
     def parse(self) -> Node:
         global last_parser
         last_parser = self
@@ -578,6 +584,8 @@ class Parser:
                 nod.add(self.parse_using())
             elif self.isn("namespace"):
                 nod.add(self.parse_namespace())
+            elif self.isn("static"):
+                nod.add(self.parse_static())
             else:
                 self.throw(self.next())
         return nod

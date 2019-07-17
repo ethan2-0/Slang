@@ -52,6 +52,10 @@ class MethodBytecodeEmitter:
             elif paramtype == "instruction":
                 assert isinstance(param, opcodes.OpcodeInstance)
                 params += struct.pack("!I", param.index)
+            elif paramtype == "staticvar":
+                assert isinstance(param, str)
+                params += encode_str(param)
+
         if opcode.node is not None:
             self.current_line_num = opcode.node.line
         ret = struct.pack("!B", opcode.opcode.code) + params
@@ -124,14 +128,30 @@ class SegmentEmitterClazz(SegmentEmitter[emitter.ClazzSegment]):
             body += encode_str(field.type.name)
         return ret + struct.pack("!I", len(body)) + body
 
-emitters: List[SegmentEmitter] = [SegmentEmitterMetadata(), SegmentEmitterMethod(), SegmentEmitterClazz()]
+class SegmentEmitterStaticVariables(SegmentEmitter[emitter.StaticVariableSegment]):
+    def __init__(self) -> None:
+        SegmentEmitter.__init__(self, "staticvars")
+
+    def emit(self, segment: emitter.StaticVariableSegment) -> bytes:
+        ret = SegmentEmitter.emit(self, segment)
+        body = bytes()
+        body += struct.pack("!I", len(segment.static_variables.variables))
+        for variable in segment.static_variables.variables.values():
+            body += encode_str(variable.name) + encode_str(variable.type.name)
+        return ret + struct.pack("!I", len(body)) + body
+
+emitters: List[SegmentEmitter] = [SegmentEmitterMetadata(), SegmentEmitterMethod(), SegmentEmitterClazz(), SegmentEmitterStaticVariables()]
 
 def emit(segments: List[emitter.Segment]) -> bytes:
     ret = binascii.unhexlify(b"cf702b56")
     for segment in segments:
+        handled_segment = False
         for emitter in emitters:
             if not emitter.handles(segment):
                 continue
+            handled_segment = True
             ret += emitter.emit(segment)
             break
+        if not handled_segment:
+            raise ValueError("This is a compiler bug.")
     return ret

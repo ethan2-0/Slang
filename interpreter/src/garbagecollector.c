@@ -121,11 +121,14 @@ gc_OBJECT_REGISTRY* gc_pop_from_queue(gc_QUEUE_ENTRY_PROPERTIES* properties) {
     return ret;
 }
 static int gc_current_pass = 0;
-void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
+void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
+    printf("Garbage collecting\n");
     gc_current_pass++;
     gc_QUEUE_ENTRY_PROPERTIES properties;
     properties.start = NULL;
     properties.end = NULL;
+    // This exists to catch bugs. It was initially debugging code but
+    // it's cheap enough to leave in just in case.
     int add_parity = 0;
     for(it_STACKFRAME* currentptr = stack; currentptr <= current_frame; currentptr++) {
         it_METHOD* method = currentptr->method;
@@ -142,6 +145,20 @@ void gc_collect(it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
                 add_parity++;
                 gc_add_to_queue(currentptr->registers[i].clazz_data->gc_registry_entry, &properties);
             }
+        }
+    }
+    for(int i = 0; i < program->static_varsc; i++) {
+        ts_CATEGORY category = program->static_vars[i].type->barebones.category;
+        if(category == ts_CATEGORY_ARRAY) {
+            add_parity++;
+            it_ARRAY_DATA* array_data = program->static_vars[i].value.array_data;
+            gc_add_to_queue(array_data->gc_registry_entry, &properties);
+        } else if(category == ts_CATEGORY_CLAZZ) {
+            add_parity++;
+            struct it_CLAZZ_DATA* clazz_data = program->static_vars[i].value.clazz_data;
+            gc_add_to_queue(clazz_data->gc_registry_entry, &properties);
+        } else {
+            // Do nothing
         }
     }
     while(properties.start != NULL) {
