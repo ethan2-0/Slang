@@ -318,6 +318,36 @@ bc_PRESCAN_RESULTS* bc_prescan(fr_STATE* state) {
     #endif
     return results;
 }
+itval bc_create_staticvar_value(it_PROGRAM* program, fr_STATE* state, ts_TYPE* type) {
+    if(type->barebones.category == ts_CATEGORY_PRIMITIVE) {
+        itval ret;
+        ret.number = fr_getuint64(state);
+        return ret;
+    } else if(type->barebones.category == ts_CATEGORY_ARRAY) {
+        uint64_t length = fr_getuint64(state);
+        size_t allocation_size = sizeof(it_ARRAY_DATA) + (length == 0 ? 0 : (length - 1) * sizeof(itval));
+        it_ARRAY_DATA* array_data = mm_malloc(allocation_size);
+        array_data->length = length;
+        array_data->type = (ts_TYPE_ARRAY*) type;
+        for(uint64_t i = 0; i < length; i++) {
+            array_data->elements[i] = bc_create_staticvar_value(program, state, type->array.parent_type);
+        }
+        itval ret;
+        ret.array_data = array_data;
+        ret.array_data->gc_registry_entry = gc_register_object(ret, allocation_size, ts_CATEGORY_ARRAY);
+        return ret;
+    } else if(type->barebones.category == ts_CATEGORY_CLAZZ) {
+        itval ret;
+        ret.clazz_data = NULL;
+        fr_getuint64(state);
+        return ret;
+    } else {
+        fatal("Unrecognized category in bc_create_staticvar_value(...)");
+    }
+    itval ret;
+    ret.number = 0;
+    return ret; // Unreachable
+}
 void bc_scan_static_vars(it_PROGRAM* program, fr_STATE* state) {
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
@@ -337,7 +367,8 @@ void bc_scan_static_vars(it_PROGRAM* program, fr_STATE* state) {
                 char* name = fr_getstr(state);
                 char* typename = fr_getstr(state);
                 ts_TYPE* type = ts_get_type(typename);
-                sv_add_static_var(program, type, strdup(name));
+                itval value = bc_create_staticvar_value(program, state, type);
+                sv_add_static_var(program, type, strdup(name), value);
                 free(name);
                 free(typename);
             }

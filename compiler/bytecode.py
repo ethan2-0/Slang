@@ -6,6 +6,7 @@ import opcodes
 import emitter
 import typesys
 import util
+import interpreter
 
 def encode_str(s: str) -> bytes:
     return struct.pack("!I", len(s.encode("utf8"))) + s.encode("utf8")
@@ -132,12 +133,28 @@ class SegmentEmitterStaticVariables(SegmentEmitter[emitter.StaticVariableSegment
     def __init__(self) -> None:
         SegmentEmitter.__init__(self, "staticvars")
 
+    def emit_interpreter_value(self, value: interpreter.AbstractInterpreterValue) -> bytes:
+        # Note that this encoding is self-terminating
+        if isinstance(value, interpreter.InterpreterValueInteger):
+            return struct.pack("!Q", value.value)
+        elif isinstance(value, interpreter.InterpreterValueBoolean):
+            return struct.pack("!Q", 1) if value.value else struct.pack("!Q", 0)
+        elif isinstance(value, interpreter.InterpreterValueNull):
+            return struct.pack("!Q", 0)
+        elif isinstance(value, interpreter.InterpreterValueArray):
+            ret = struct.pack("!Q", len(value.value))
+            for elm in value.value:
+                ret += self.emit_interpreter_value(elm)
+            return ret
+        else:
+            raise ValueError("This is a compiler bug")
+
     def emit(self, segment: emitter.StaticVariableSegment) -> bytes:
         ret = SegmentEmitter.emit(self, segment)
         body = bytes()
         body += struct.pack("!I", len(segment.static_variables.variables))
         for variable in segment.static_variables.variables.values():
-            body += encode_str(variable.name) + encode_str(variable.type.name)
+            body += encode_str(variable.name) + encode_str(variable.type.name) + self.emit_interpreter_value(variable.initializer)
         return ret + struct.pack("!I", len(body)) + body
 
 emitters: List[SegmentEmitter] = [SegmentEmitterMetadata(), SegmentEmitterMethod(), SegmentEmitterClazz(), SegmentEmitterStaticVariables()]

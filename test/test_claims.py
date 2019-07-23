@@ -1,10 +1,10 @@
+import sys
 import os.path
-import importlib.util
 
-claimspath = os.path.normpath(os.path.join(os.path.dirname(__file__), "../compiler/claims.py"))
-import_spec = importlib.util.spec_from_file_location("claims", claimspath)
-claims = importlib.util.module_from_spec(import_spec)
-import_spec.loader.exec_module(claims)
+initial_sys_path = sys.path
+sys.path = [os.path.join(os.path.dirname(__file__), "../compiler")] + sys.path
+import claims
+sys.path = initial_sys_path
 
 class TestClaim:
     def test_claim_equivalence(self):

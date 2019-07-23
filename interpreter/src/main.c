@@ -19,6 +19,8 @@ int main(int argc, char* argv[]) {
         if(argv[i][0] == '-') {
             if(strcmp(argv[i], "--print-return-value") == 0) {
                 options.print_return_value = true;
+            } else if(strcmp(argv[i], "--gc-verbose") == 0) {
+                options.gc_verbose = true;
             } else {
                 printf("Argument: %s\n", argv[i]);
                 fatal("Invalid command line argument");

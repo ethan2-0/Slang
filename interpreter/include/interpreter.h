@@ -161,25 +161,27 @@ typedef struct sv_STATIC_VAR {
     itval value;
 } sv_STATIC_VAR;
 
-void sv_add_static_var(it_PROGRAM* program, ts_TYPE* type, char* name);
+void sv_add_static_var(it_PROGRAM* program, ts_TYPE* type, char* name, itval value);
 sv_STATIC_VAR* sv_get_var_by_name(it_PROGRAM* program, char* name);
 bool sv_has_var(it_PROGRAM* program, char* name);
 uint32_t sv_get_static_var_index_by_name(it_PROGRAM* program, char* name);
 
 typedef struct {
     bool print_return_value;
+    bool gc_verbose;
 } it_OPTIONS;
 
 typedef struct it_METHOD it_METHOD;
 typedef struct it_ARRAY_DATA it_ARRAY_DATA;
 
+void it_run(it_PROGRAM* prog, it_OPTIONS* options);
 void it_execute(it_PROGRAM* prog, it_OPTIONS* options);
 void it_replace_methods(it_PROGRAM* prog);
 
 void cl_arrange_phi_tables(it_PROGRAM* program);
 
 gc_OBJECT_REGISTRY* gc_register_object(itval object, size_t allocation_size, ts_CATEGORY category);
-void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame);
+void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame, it_OPTIONS* options);
 bool gc_needs_collection;
 
 #define NUM_REPLACED_METHODS 4

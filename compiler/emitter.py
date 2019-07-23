@@ -6,6 +6,7 @@ import typesys
 import parser
 import util
 import claims as clms
+import interpreter
 from typing import ClassVar, List, Optional, Union, TypeVar, Dict, cast, Tuple, Generic, NoReturn
 
 class RegisterHandle:
@@ -93,7 +94,7 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class StaticVariable:
-    def __init__(self, variable_set: "StaticVariableSet", name: str, type: typesys.AbstractType, initializer: Union[None, int, List[int]]) -> None:
+    def __init__(self, variable_set: "StaticVariableSet", name: str, type: typesys.AbstractType, initializer: interpreter.AbstractInterpreterValue) -> None:
         self.variable_set = variable_set
         self.name = name
         self.type = type
@@ -1000,6 +1001,7 @@ class Program:
         self.clazz_emitters: List[ClazzEmitter]
         self.method_signatures: List[MethodSignature] = []
         self.static_variables: StaticVariableSet = StaticVariableSet(self)
+        self.interpreter = interpreter.Interpreter(self)
 
     @property
     def search_paths(self) -> List[str]:
@@ -1072,12 +1074,15 @@ class Program:
         for toplevel in self.top:
             if toplevel.i("static"):
                 unqualified_variable_name = util.nonnull(util.get_flattened(toplevel[0]))
+                value: interpreter.AbstractInterpreterValue = self.interpreter.null
+                if len(toplevel) == 3:
+                    value = self.interpreter.eval_expr(toplevel[2])
                 self.static_variables.add_variable(
                     StaticVariable(
                         self.static_variables,
                         "%s.%s" % (self.namespace, unqualified_variable_name) if self.namespace is not None else unqualified_variable_name,
                         self.types.resolve_strict(toplevel[1]),
-                        None
+                        value
                     )
                 )
 

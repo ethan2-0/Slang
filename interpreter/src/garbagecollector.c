@@ -12,7 +12,7 @@
 static gc_OBJECT_REGISTRY* gc_first_registry = NULL;
 static gc_OBJECT_REGISTRY* gc_last_registry = NULL;
 static gc_OBJECT_REGISTRY* gc_current_empty = NULL;
-static size_t gc_registry_size = 64;
+static int64_t gc_registry_size = 64;
 
 void gc_grow_registry() {
     #if DEBUG
@@ -121,8 +121,11 @@ gc_OBJECT_REGISTRY* gc_pop_from_queue(gc_QUEUE_ENTRY_PROPERTIES* properties) {
     return ret;
 }
 static int gc_current_pass = 0;
-void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame) {
-    printf("Garbage collecting\n");
+void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame, it_OPTIONS* options) {
+    size_t starting_heap_size = gc_heap_size;
+    if(options->gc_verbose) {
+        printf("Garbage collecting, starting heap size is %ld\n", gc_heap_size);
+    }
     gc_current_pass++;
     gc_QUEUE_ENTRY_PROPERTIES properties;
     properties.start = NULL;
@@ -149,6 +152,10 @@ void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* curren
     }
     for(int i = 0; i < program->static_varsc; i++) {
         ts_CATEGORY category = program->static_vars[i].type->barebones.category;
+        // Note that itval.array_data == NULL iff itval.clazz_data == NULL
+        if(program->static_vars[i].value.array_data == NULL) {
+            continue;
+        }
         if(category == ts_CATEGORY_ARRAY) {
             add_parity++;
             it_ARRAY_DATA* array_data = program->static_vars[i].value.array_data;
@@ -224,5 +231,11 @@ void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* curren
     gc_next_collection_size = gc_heap_size * 2;
     if(gc_next_collection_size < (1 << 24)) {
         gc_next_collection_size = 1 << 24;
+    }
+    if(options->gc_verbose) {
+        printf("Finished collection, heap size is %ld (freed %ld bytes or %4f%%)\n",
+                gc_heap_size,
+                starting_heap_size - gc_heap_size,
+                (double) 100 * ((double) 1 - (double) gc_heap_size / (double) starting_heap_size));
     }
 }

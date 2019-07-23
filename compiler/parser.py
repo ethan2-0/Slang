@@ -159,8 +159,11 @@ last_parser: "Optional[Parser]" = None
 
 class Node:
     def __init__(self, typ: Union[str, Token], *children: "Node", data: str=None) -> None:
-        assert last_parser is not None
-        self.line = last_parser.toker.line
+        if last_parser is not None:
+            self.line = last_parser.toker.line
+        else:
+            # This only really occurs in testing so it's not a big deal
+            self.line = -1
         for child in children:
             if type(child) is not Node:
                 raise ValueError("Unexpected type %s of child (expected %s)" % (type(child), Node))
@@ -566,7 +569,11 @@ class Parser:
         return ret
 
     def parse_static(self) -> Node:
+        # Notably, we don't support type inference for static variables.
         ret = Node(self.expect("static"), self.parse_qualified_name(), self.parse_type_annotation())
+        if self.isn("="):
+            self.expect("=")
+            ret.add(self.parse_expr())
         while self.isn(";"):
             self.expect(";")
         return ret

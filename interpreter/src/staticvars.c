@@ -4,10 +4,10 @@
 #include "interpreter.h"
 #include "common.h"
 
-void sv_add_static_var(it_PROGRAM* program, ts_TYPE* type, char* name) {
+void sv_add_static_var(it_PROGRAM* program, ts_TYPE* type, char* name, itval value) {
     program->static_vars[program->static_var_index].type = type;
     program->static_vars[program->static_var_index].name = name;
-    program->static_vars[program->static_var_index].value.number = 0;
+    program->static_vars[program->static_var_index].value = value;
     program->static_var_index++;
 }
 sv_STATIC_VAR* sv_get_var_by_name(it_PROGRAM* program, char* name) {

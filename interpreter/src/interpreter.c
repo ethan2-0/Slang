@@ -299,7 +299,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
         case OPCODE_NEW:
             ;
             if(gc_needs_collection) {
-                gc_collect(prog, stack, stackptr);
+                gc_collect(prog, stack, stackptr, options);
             }
             it_OPCODE_DATA_NEW* opcode_new_data = (it_OPCODE_DATA_NEW*) iptr->payload;
             size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(itval) * opcode_new_data->clazz->nfields;
@@ -334,7 +334,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
         case OPCODE_ARRALLOC:
             ;
             if(gc_needs_collection) {
-                gc_collect(prog, stack, stackptr);
+                gc_collect(prog, stack, stackptr, options);
             }
             it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (it_OPCODE_DATA_ARRALLOC*) iptr->payload;
             uint64_t length = registers[opcode_arralloc_data->lengthreg].number;

@@ -1,6 +1,16 @@
-import util
 import os
 import os.path
+import sys
+
+# Pytest maintains the same interpreter instance throughout all test suites as
+# long as it's in the same invocation of pytest. So we need to clear out `util`
+# (from ../compiler) so we can use our own `util`.
+try:
+    del sys.modules["util"]
+except AttributeError:
+    pass
+
+import util
 
 os.chdir(os.path.dirname(__file__))
 
@@ -456,3 +466,13 @@ class TestStaticVariables:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/static_variables/basic.slg", no_warnings=False)
         util.interpret(path)
+
+    def test_initializer(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/static_variables/initializer.slg", no_warnings=False)
+        util.interpret(path)
+
+    def test_initializer_garbage_collection(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/static_variables/initializer_garbage_collection.slg", no_warnings=False)
+        assert "Garbage collecting" in util.interpret(path, "--gc-verbose")
