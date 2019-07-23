@@ -14,6 +14,10 @@ class AbstractInterpreterValue(Generic[T]):
     def equals(self, other: "AbstractInterpreterValue") -> bool:
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def human_representation(self) -> str:
+        raise NotImplementedError
+
 InterpreterValueAny = AbstractInterpreterValue[typesys.AbstractType]
 
 class InterpreterValueInteger(AbstractInterpreterValue[typesys.IntType]):
@@ -26,6 +30,9 @@ class InterpreterValueInteger(AbstractInterpreterValue[typesys.IntType]):
             return False
         return other.value == self.value
 
+    def human_representation(self) -> str:
+        return str(self.value)
+
 class InterpreterValueBoolean(AbstractInterpreterValue[typesys.BoolType]):
     def __init__(self, typ: typesys.BoolType, value: bool) -> None:
         AbstractInterpreterValue.__init__(self, typ)
@@ -36,12 +43,18 @@ class InterpreterValueBoolean(AbstractInterpreterValue[typesys.BoolType]):
             return False
         return other.value == self.value
 
+    def human_representation(self) -> str:
+        return "true" if self.value else "false"
+
 class InterpreterValueNull(AbstractInterpreterValue[typesys.VoidType]):
     def __init__(self, typ: typesys.VoidType) -> None:
         AbstractInterpreterValue.__init__(self, typ)
 
     def equals(self, other: AbstractInterpreterValue) -> bool:
         return isinstance(other, InterpreterValueNull)
+
+    def human_representation(self) -> str:
+        return "null"
 
 class InterpreterValueArray(AbstractInterpreterValue[typesys.ArrayType]):
     def __init__(self, typ: typesys.ArrayType, value: List[AbstractInterpreterValue]) -> None:
@@ -50,6 +63,9 @@ class InterpreterValueArray(AbstractInterpreterValue[typesys.ArrayType]):
 
     def equals(self, other: AbstractInterpreterValue) -> bool:
         return other is self
+
+    def human_representation(self) -> str:
+        return "[%s]" % ", ".join(value.human_representation() for value in self.value)
 
 class Interpreter:
     def __init__(self, program: "emitter.Program") -> None:

@@ -192,6 +192,15 @@ class TypeSystem:
         else:
             return None
 
+    def get_string_type(self) -> Optional[ClazzType]:
+        typ = self.resolve(parser.parse_type("stdlib.String"), fail_silent=True)
+        if typ is None:
+            return typ
+        if not isinstance(typ, ClazzType):
+            # Since an identifier can only resolve to a class
+            raise ValueError("This is a compiler bug.")
+        return typ
+
     def resolve_strict(self, node: parser.Node) -> AbstractType:
         ret = self.resolve(node, fail_silent=False)
         if ret is None:
@@ -405,5 +414,10 @@ class TypeSystem:
                 expr.compile_error("Attempt to access an attribute of something that isn't a class")
             assert isinstance(lhs_typ, ClazzType)
             return lhs_typ.type_of_property(expr[1].data_strict)
+        elif expr.i("string"):
+            string_type = self.get_string_type()
+            if string_type is None:
+                expr.compile_error("Cannot use string literal without an implementation of stdlib.String")
+            return string_type
         else:
             raise ValueError("Expression not accounted for in typesys. This is a compiler bug.")

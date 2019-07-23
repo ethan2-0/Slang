@@ -7,6 +7,7 @@ import parser
 import util
 import claims as clms
 import interpreter
+import hashlib
 from typing import ClassVar, List, Optional, Union, TypeVar, Dict, cast, Tuple, Generic, NoReturn
 
 class RegisterHandle:
@@ -261,6 +262,36 @@ class MethodEmitter(SegmentEmitter):
             opcodes.append(ops["load"].ins(register, abs(nt), node=node))
             if nt < 0:
                 opcodes.append(ops["twocomp"].ins(register))
+        elif node.i("string"):
+            string_val = node.data_strict
+
+            numerical_values: List[interpreter.AbstractInterpreterValue] = []
+            for ch in string_val:
+                numerical_values.append(self.program.interpreter.create_int_value(ord(ch)))
+            string_array_type = self.types.get_array_type(self.types.int_type)
+            interpreter_value = interpreter.InterpreterValueArray(string_array_type, numerical_values)
+            # If we have the same string going into the same register multiple
+            # times then we'll end up with duplication here, but it's fine
+            # since StaticVariableSet implements a last-value-wins mapping
+            static_var_name = "--string-%s-%d-%s" % (self.signature.name, register.id, hashlib.md5(string_val.encode("utf8")).hexdigest())
+            self.program.static_variables.add_variable(StaticVariable(self.program.static_variables, static_var_name, string_array_type, interpreter_value))
+
+            string_array_register = self.scope.allocate(string_array_type)
+            opcodes.append(annotate(ops["staticvarget"].ins(static_var_name, string_array_register, node=node), "string instantiation"))
+
+            stdlib_string_type = self.types.get_string_type()
+            if stdlib_string_type is None:
+                node.compile_error("Cannot use string literal without an implementation of stdlib.String")
+            opcodes.append(ops["new"].ins(stdlib_string_type.signature, register))
+
+            opcodes.append(ops["param"].ins(string_array_register, 0))
+            string_int_register = self.scope.allocate(self.types.int_type)
+            opcodes.append(ops["load"].ins(string_int_register, 0))
+            opcodes.append(ops["param"].ins(string_int_register, 1))
+            opcodes.append(ops["load"].ins(string_int_register, len(string_val)))
+            opcodes.append(ops["param"].ins(string_int_register, 2))
+            string_ctor_signature = stdlib_string_type.signature.ctor_signatures[0]
+            opcodes.append(ops["classcall"].ins(register, string_ctor_signature, self.scope.allocate(self.types.bool_type)))
         elif node.i("as"):
             lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs_reg)
@@ -652,44 +683,10 @@ class MethodEmitter(SegmentEmitter):
             node.compile_error("Unexpected (this is a compiler bug)")
         return opcodes, claims
 
-    def convert_strings(self) -> None:
-        def replace(parent: parser.Node, index: int) -> None:
-            s = parent[index].data_strict
-            array_node = parser.Node("[")
-            nod = None
-            if len(s) > 0:
-                for ch in s:
-                    array_node.add(parser.Node("number", data=str(ord(ch))))
-                nod = parser.Node("new", parser.Node("ident", data="stdlib.String"), array_node, parser.Node("number", data="0"), parser.Node("number", data=str(len(s))))
-            else:
-                nod = parser.Node(
-                    "new",
-                    parser.Node("ident", data="stdlib.String"),
-                    parser.Node(
-                        "arrinst",
-                        parser.Node("ident", data="int"),
-                        parser.Node("number", data="0")
-                    ),
-                    parser.Node("number", data="0"),
-                    parser.Node("number", data="0")
-                )
-            parent.children[index] = nod
-
-        def convert_strings_inner(nod: parser.Node) -> None:
-            for i in range(len(nod)):
-                if nod[i].i("string"):
-                    replace(nod, i)
-                else:
-                    convert_strings_inner(nod[i])
-        # TODO: Technically, this doesn't work properly with functions with single-statement bodies.
-        if self.top.has_child("statements"):
-            convert_strings_inner(self.top["statements"])
-
     def emit(self) -> List[opcodes_module.OpcodeInstance]:
         self.return_type = self.signature.returntype
         # This caused a bug at some point
         assert self.top.i("fn") or self.top.i("ctor")
-        self.convert_strings()
         for argtype, argname in zip(self.signature.args, self.signature.argnames):
             self.scope.let(argname, self.scope.allocate(argtype), self.top[1] if self.top.i("fn") else self.top[0])
         opcodes, claims = self.emit_statement(self.top[3] if self.top.i("fn") else self.top[1])
@@ -1001,7 +998,7 @@ class Program:
         self.clazz_emitters: List[ClazzEmitter]
         self.method_signatures: List[MethodSignature] = []
         self.static_variables: StaticVariableSet = StaticVariableSet(self)
-        self.interpreter = interpreter.Interpreter(self)
+        self.interpreter: interpreter.Interpreter = interpreter.Interpreter(self)
 
     @property
     def search_paths(self) -> List[str]:

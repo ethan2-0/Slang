@@ -10,6 +10,7 @@ argparser.add_argument("--no-metadata", action="store_true", help="don't include
 argparser.add_argument("--ast", action="store_true", help="display AST (for debugging)")
 argparser.add_argument("--ast-after", action="store_true", help="display AST after bytecode generation (for debugging)")
 argparser.add_argument("--segments", action="store_true", help="display segments (for debugging)")
+argparser.add_argument("--static-values", action="store_true", help="display values of static variables")
 argparser.add_argument("--hexdump", action="store_true", help="display hexdump (for debugging)")
 argparser.add_argument("--headers", action="store_true", help="display headers (for debugging)")
 argparser.add_argument("--signatures", action="store_true", help="display signatures (for debugging)")
@@ -65,6 +66,11 @@ if not args.no_metadata:
 if args.segments:
     for segment in program.segments:
         segment.print_(compiler)
+
+if args.static_values:
+    print("Static variables:")
+    for variable in program.static_variables.variables.values():
+        print("%s = %s" % (variable, variable.initializer.human_representation()))
 
 if args.headers:
     import json
