@@ -9,9 +9,9 @@
 //       My goal here is to get something functional and understandable,
 //       with performance a distant second.
 
-static gc_OBJECT_REGISTRY* gc_first_registry = NULL;
-static gc_OBJECT_REGISTRY* gc_last_registry = NULL;
-static gc_OBJECT_REGISTRY* gc_current_empty = NULL;
+static struct gc_OBJECT_REGISTRY* gc_first_registry = NULL;
+static struct gc_OBJECT_REGISTRY* gc_last_registry = NULL;
+static struct gc_OBJECT_REGISTRY* gc_current_empty = NULL;
 static int64_t gc_registry_size = 64;
 
 void gc_grow_registry() {
@@ -19,7 +19,7 @@ void gc_grow_registry() {
     printf("Growing registry to %d\n", gc_registry_size);
     #endif
     uint64_t previous_object_id = gc_last_registry == NULL ? 0 : gc_last_registry->object_id + 1;
-    gc_OBJECT_REGISTRY* new_segment = mm_malloc(sizeof(gc_OBJECT_REGISTRY) * gc_registry_size);
+    struct gc_OBJECT_REGISTRY* new_segment = mm_malloc(sizeof(struct gc_OBJECT_REGISTRY) * gc_registry_size);
     for(int i = 0; i < gc_registry_size; i++) {
         if(i > 0) {
             new_segment[i].previous = &(new_segment[i - 1]);
@@ -53,12 +53,12 @@ void gc_find_new_empty() {
 static size_t gc_heap_size = 0;
 static size_t gc_next_collection_size = (1 << 24);
 extern bool gc_needs_collection;
-gc_OBJECT_REGISTRY* gc_register_object(itval object, size_t allocation_size, ts_CATEGORY category) {
+struct gc_OBJECT_REGISTRY* gc_register_object(union itval object, size_t allocation_size, enum ts_CATEGORY category) {
     if(gc_current_empty == NULL) {
         gc_grow_registry();
         gc_current_empty = gc_first_registry;
     }
-    gc_OBJECT_REGISTRY* ret = gc_current_empty;
+    struct gc_OBJECT_REGISTRY* ret = gc_current_empty;
     ret->object = object;
     ret->is_present = true;
     ret->allocation_size = allocation_size;
@@ -71,7 +71,7 @@ gc_OBJECT_REGISTRY* gc_register_object(itval object, size_t allocation_size, ts_
     }
     return ret;
 }
-void gc_free_internal(gc_OBJECT_REGISTRY* registry_entry) {
+void gc_free_internal(struct gc_OBJECT_REGISTRY* registry_entry) {
     gc_heap_size -= registry_entry->allocation_size;
     // We're saying `.array_data` here, because the type information is lost in
     // the implicit conversion to void*.
@@ -80,26 +80,21 @@ void gc_free_internal(gc_OBJECT_REGISTRY* registry_entry) {
     free(registry_entry->object.array_data);
     registry_entry->is_present = false;
 }
-void gc_free(gc_OBJECT_REGISTRY* registry_entry) {
+void gc_free(struct gc_OBJECT_REGISTRY* registry_entry) {
     gc_free_internal(registry_entry);
 }
-typedef struct gc_QUEUE_ENTRY {
-    gc_OBJECT_REGISTRY* entry;
+struct gc_QUEUE_ENTRY {
+    struct gc_OBJECT_REGISTRY* entry;
     struct gc_QUEUE_ENTRY* next;
-    // ELW
-    int number;
-} gc_QUEUE_ENTRY;
-typedef struct {
-    gc_QUEUE_ENTRY* start;
-    gc_QUEUE_ENTRY* end;
-} gc_QUEUE_ENTRY_PROPERTIES;
-void gc_add_to_queue(gc_OBJECT_REGISTRY* registry, gc_QUEUE_ENTRY_PROPERTIES* properties) {
-    static int number = 0;
-    number++;
-    gc_QUEUE_ENTRY* entry = mm_malloc(sizeof(gc_QUEUE_ENTRY));
+};
+struct gc_QUEUE_ENTRY_PROPERTIES {
+    struct gc_QUEUE_ENTRY* start;
+    struct gc_QUEUE_ENTRY* end;
+};
+void gc_add_to_queue(struct gc_OBJECT_REGISTRY* registry, struct gc_QUEUE_ENTRY_PROPERTIES* properties) {
+    struct gc_QUEUE_ENTRY* entry = mm_malloc(sizeof(struct gc_QUEUE_ENTRY));
     entry->entry = registry;
     entry->next = NULL;
-    entry->number = number;
     if(properties->start == NULL) {
         properties->start = entry;
         properties->end = entry;
@@ -108,41 +103,36 @@ void gc_add_to_queue(gc_OBJECT_REGISTRY* registry, gc_QUEUE_ENTRY_PROPERTIES* pr
         properties->end = entry;
     }
 }
-gc_OBJECT_REGISTRY* gc_pop_from_queue(gc_QUEUE_ENTRY_PROPERTIES* properties) {
-    static int prev_number = 0;
-    gc_QUEUE_ENTRY* queue_entry = properties->start;
-    if(queue_entry->number - prev_number != 1) {
-        printf("Number is different: %d, %d\n", prev_number, queue_entry->number);
-    }
-    prev_number = queue_entry->number;
-    gc_OBJECT_REGISTRY* ret = properties->start->entry;
+struct gc_OBJECT_REGISTRY* gc_pop_from_queue(struct gc_QUEUE_ENTRY_PROPERTIES* properties) {
+    struct gc_QUEUE_ENTRY* queue_entry = properties->start;
+    struct gc_OBJECT_REGISTRY* ret = properties->start->entry;
     properties->start = queue_entry->next;
     free(queue_entry);
     return ret;
 }
 static int gc_current_pass = 0;
-void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame, it_OPTIONS* options) {
+void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct it_STACKFRAME* current_frame, struct it_OPTIONS* options) {
     size_t starting_heap_size = gc_heap_size;
     if(options->gc_verbose) {
         printf("Garbage collecting, starting heap size is %ld\n", gc_heap_size);
     }
     gc_current_pass++;
-    gc_QUEUE_ENTRY_PROPERTIES properties;
+    struct gc_QUEUE_ENTRY_PROPERTIES properties;
     properties.start = NULL;
     properties.end = NULL;
     // This exists to catch bugs. It was initially debugging code but
     // it's cheap enough to leave in just in case.
     int add_parity = 0;
-    for(it_STACKFRAME* currentptr = stack; currentptr <= current_frame; currentptr++) {
-        it_METHOD* method = currentptr->method;
+    for(struct it_STACKFRAME* currentptr = stack; currentptr <= current_frame; currentptr++) {
+        struct it_METHOD* method = currentptr->method;
         for(int i = 0; i < method->registerc; i++) {
             if(currentptr->registers[i].array_data == NULL) {
                 continue;
             }
-            ts_CATEGORY category = method->register_types[i]->barebones.category;
+            enum ts_CATEGORY category = method->register_types[i]->barebones.category;
             if(category == ts_CATEGORY_ARRAY) {
                 add_parity++;
-                it_ARRAY_DATA* array_data = currentptr->registers[i].array_data;
+                struct it_ARRAY_DATA* array_data = currentptr->registers[i].array_data;
                 gc_add_to_queue(array_data->gc_registry_entry, &properties);
             } else if(category == ts_CATEGORY_CLAZZ) {
                 add_parity++;
@@ -151,14 +141,14 @@ void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* curren
         }
     }
     for(int i = 0; i < program->static_varsc; i++) {
-        ts_CATEGORY category = program->static_vars[i].type->barebones.category;
+        enum ts_CATEGORY category = program->static_vars[i].type->barebones.category;
         // Note that itval.array_data == NULL iff itval.clazz_data == NULL
         if(program->static_vars[i].value.array_data == NULL) {
             continue;
         }
         if(category == ts_CATEGORY_ARRAY) {
             add_parity++;
-            it_ARRAY_DATA* array_data = program->static_vars[i].value.array_data;
+            struct it_ARRAY_DATA* array_data = program->static_vars[i].value.array_data;
             gc_add_to_queue(array_data->gc_registry_entry, &properties);
         } else if(category == ts_CATEGORY_CLAZZ) {
             add_parity++;
@@ -169,14 +159,14 @@ void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* curren
         }
     }
     while(properties.start != NULL) {
-        gc_OBJECT_REGISTRY* entry = gc_pop_from_queue(&properties);
+        struct gc_OBJECT_REGISTRY* entry = gc_pop_from_queue(&properties);
         add_parity--;
         if(entry->visited >= gc_current_pass) {
             continue;
         }
         entry->visited = gc_current_pass;
         if(entry->category == ts_CATEGORY_ARRAY) {
-            it_ARRAY_DATA* arr_data = entry->object.array_data;
+            struct it_ARRAY_DATA* arr_data = entry->object.array_data;
             if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_PRIMITIVE) {
                 continue;
             } else if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_ARRAY) {
@@ -197,7 +187,7 @@ void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* curren
                 }
             }
         } else if(entry->category == ts_CATEGORY_CLAZZ) {
-            ts_TYPE_CLAZZ* clazz_properties = entry->object.clazz_data->phi_table;
+            struct ts_TYPE_CLAZZ* clazz_properties = entry->object.clazz_data->phi_table;
             for(int i = 0; i < clazz_properties->nfields; i++) {
                 if(entry->object.clazz_data->itval[i].array_data == NULL) {
                     continue;
@@ -219,7 +209,7 @@ void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* curren
         printf("Add parity failed: %d\n", add_parity);
         fatal("Add parity failed");
     }
-    for(gc_OBJECT_REGISTRY* registry = gc_first_registry; registry != NULL; registry = registry->next) {
+    for(struct gc_OBJECT_REGISTRY* registry = gc_first_registry; registry != NULL; registry = registry->next) {
         if(!registry->is_present) {
             continue;
         }

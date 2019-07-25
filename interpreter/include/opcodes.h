@@ -45,157 +45,157 @@
 #define OPCODE_STATICVARGET 0x23
 #define OPCODE_STATICVARSET 0x24
 
-typedef struct {
+struct it_OPCODE_DATA_LOAD {
     uint32_t target;
     uint64_t data;
-} it_OPCODE_DATA_LOAD;
-typedef struct {
+};
+struct it_OPCODE_DATA_ZERO {
     uint32_t target;
-} it_OPCODE_DATA_ZERO;
-typedef struct {
+};
+struct it_OPCODE_DATA_ADD {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_ADD;
-typedef struct {
+};
+struct it_OPCODE_DATA_TWOCOMP {
     uint32_t target;
-} it_OPCODE_DATA_TWOCOMP;
-typedef struct {
+};
+struct it_OPCODE_DATA_MULT {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_MULT;
-typedef struct {
+};
+struct it_OPCODE_DATA_MODULO {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_MODULO;
-typedef struct {
+};
+struct it_OPCODE_DATA_CALL {
     uint32_t callee;
     uint32_t returnval;
-} it_OPCODE_DATA_CALL;
-typedef struct {
+};
+struct it_OPCODE_DATA_RETURN {
     uint32_t target;
-} it_OPCODE_DATA_RETURN;
-typedef struct {
+};
+struct it_OPCODE_DATA_EQUALS {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_EQUALS;
-typedef struct {
+};
+struct it_OPCODE_DATA_INVERT {
     uint32_t target;
-} it_OPCODE_DATA_INVERT;
-typedef struct {
+};
+struct it_OPCODE_DATA_LTEQ {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_LTEQ;
-typedef struct {
+};
+struct it_OPCODE_DATA_GT {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_GT;
-typedef struct {
+};
+struct it_OPCODE_DATA_GOTO {
     uint32_t target;
-} it_OPCODE_DATA_GOTO;
-typedef struct {
+};
+struct it_OPCODE_DATA_JF {
     uint32_t predicate;
     uint32_t target;
-} it_OPCODE_DATA_JF;
-typedef struct {
+};
+struct it_OPCODE_DATA_PARAM {
     uint32_t source;
     uint8_t target;
-} it_OPCODE_DATA_PARAM;
-typedef struct {
+};
+struct it_OPCODE_DATA_GTEQ {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_GTEQ;
-typedef struct {
+};
+struct it_OPCODE_DATA_XOR {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_XOR;
-typedef struct {
+};
+struct it_OPCODE_DATA_AND {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_AND;
-typedef struct {
+};
+struct it_OPCODE_DATA_OR {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_OR;
-typedef struct {
+};
+struct it_OPCODE_DATA_MOV {
     uint32_t source;
     uint32_t target;
-} it_OPCODE_DATA_MOV;
-typedef struct {
+};
+struct it_OPCODE_DATA_LT {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_LT;
-typedef struct {
-    ts_TYPE_CLAZZ* clazz;
+};
+struct it_OPCODE_DATA_NEW {
+    struct ts_TYPE_CLAZZ* clazz;
     uint32_t dest;
-} it_OPCODE_DATA_NEW;
-typedef struct {
+};
+struct it_OPCODE_DATA_ACCESS {
     uint32_t clazzreg;
     uint32_t property_index;
     uint32_t destination;
-} it_OPCODE_DATA_ACCESS;
-typedef struct {
+};
+struct it_OPCODE_DATA_ASSIGN {
     uint32_t clazzreg;
     uint32_t property_index;
     uint32_t source;
-} it_OPCODE_DATA_ASSIGN;
-typedef struct {
+};
+struct it_OPCODE_DATA_CLASSCALL {
     uint32_t targetreg;
     uint32_t callee_index;
     uint32_t returnreg;
-} it_OPCODE_DATA_CLASSCALL;
-typedef struct {
+};
+struct it_OPCODE_DATA_ARRALLOC {
     uint32_t arrreg;
     uint32_t lengthreg;
-} it_OPCODE_DATA_ARRALLOC;
-typedef struct {
+};
+struct it_OPCODE_DATA_ARRACCESS {
     uint32_t arrreg;
     uint32_t indexreg;
     uint32_t elementreg;
-} it_OPCODE_DATA_ARRACCESS;
-typedef struct {
+};
+struct it_OPCODE_DATA_ARRASSIGN {
     uint32_t arrreg;
     uint32_t indexreg;
     uint32_t elementreg;
-} it_OPCODE_DATA_ARRASSIGN;
-typedef struct {
+};
+struct it_OPCODE_DATA_ARRLEN {
     uint32_t arrreg;
     uint32_t resultreg;
-} it_OPCODE_DATA_ARRLEN;
-typedef struct {
+};
+struct it_OPCODE_DATA_DIV {
     uint32_t source1;
     uint32_t source2;
     uint32_t target;
-} it_OPCODE_DATA_DIV;
-typedef struct {
+};
+struct it_OPCODE_DATA_CAST {
     uint32_t source;
     uint32_t target;
-    ts_TYPE* source_register_type;
-    ts_TYPE* target_type;
-} it_OPCODE_DATA_CAST;
-typedef struct {
+    union ts_TYPE* source_register_type;
+    union ts_TYPE* target_type;
+};
+struct it_OPCODE_DATA_INSTANCEOF {
     uint32_t source;
     uint32_t destination;
-    ts_TYPE* source_register_type;
-    ts_TYPE* predicate_type;
-} it_OPCODE_DATA_INSTANCEOF;
-typedef struct {
+    union ts_TYPE* source_register_type;
+    union ts_TYPE* predicate_type;
+};
+struct it_OPCODE_DATA_STATICVARGET {
     uint32_t source_var;
     uint32_t destination;
-} it_OPCODE_DATA_STATICVARGET;
-typedef struct {
+};
+struct it_OPCODE_DATA_STATICVARSET {
     uint32_t source;
     uint32_t destination_var;
-} it_OPCODE_DATA_STATICVARSET;
+};
 
-#endif
+#endif /* OPCODES_H */

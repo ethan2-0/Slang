@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include "common.h"
 
 void fatal_with_errcode(char* description, int errcode) {
     printf("Fatal error\n%s", description);
@@ -12,15 +13,8 @@ void fatal(char* description) {
     fatal_with_errcode(description, EXIT_FAILURE);
 }
 
-typedef struct {
-    FILE* fp;
-    char* buffer;
-    size_t bufflen;
-    int index;
-} fr_STATE;
-
-fr_STATE* fr_new(FILE* fp) {
-    fr_STATE* state = malloc(sizeof(fr_STATE));
+struct fr_STATE* fr_new(FILE* fp) {
+    struct fr_STATE* state = malloc(sizeof(struct fr_STATE));
     state->index = 0;
     state->fp = fp;
     fseek(fp, 0, SEEK_END);
@@ -31,8 +25,8 @@ fr_STATE* fr_new(FILE* fp) {
     fclose(fp);
     return state;
 }
-fr_STATE* fr_new_from_buffer(int bufflen, char* buffer) {
-    fr_STATE* state = malloc(sizeof(fr_STATE));
+struct fr_STATE* fr_new_from_buffer(int bufflen, char* buffer) {
+    struct fr_STATE* state = malloc(sizeof(struct fr_STATE));
     state->index = 0;
     state->fp = NULL;
     state->bufflen = bufflen;
@@ -40,33 +34,33 @@ fr_STATE* fr_new_from_buffer(int bufflen, char* buffer) {
     memcpy(state->buffer, buffer, bufflen);
     return state;
 }
-void fr_destroy(fr_STATE* state) {
+void fr_destroy(struct fr_STATE* state) {
     free(state->buffer);
     free(state);
 }
-void fr_advance(fr_STATE* state, int qty) {
+void fr_advance(struct fr_STATE* state, int qty) {
     state->index += qty;
 }
-void fr_rewind(fr_STATE* state) {
+void fr_rewind(struct fr_STATE* state) {
     state->index = 0;
 }
-bool fr_iseof(fr_STATE* state) {
+bool fr_iseof(struct fr_STATE* state) {
     return state->index >= state->bufflen;
 }
-char fr_getchar(fr_STATE* state) {
+char fr_getchar(struct fr_STATE* state) {
     if(fr_iseof(state)) {
-        fatal("Read past end of fr_STATE->buffer");
+        fatal("Read past end of struct fr_STATE->buffer");
         return '\0';
     }
     return state->buffer[state->index++] & 0xff;
 }
-uint8_t fr_getuint8(fr_STATE* state) {
+uint8_t fr_getuint8(struct fr_STATE* state) {
     return fr_getchar(state) & 0xff;
 }
-int8_t fr_getint8(fr_STATE* state) {
+int8_t fr_getint8(struct fr_STATE* state) {
     return fr_getchar(state) & 0xff;
 }
-uint16_t fr_getuint16(fr_STATE* state) {
+uint16_t fr_getuint16(struct fr_STATE* state) {
     uint16_t top = fr_getchar(state);
     uint16_t bottom = fr_getchar(state);
     bottom &= 0xff;
@@ -74,28 +68,28 @@ uint16_t fr_getuint16(fr_STATE* state) {
     top <<= 8;
     return bottom + top;
 }
-int16_t fr_getint16(fr_STATE* state) {
+int16_t fr_getint16(struct fr_STATE* state) {
     return (int16_t) fr_getuint16(state);
 }
-uint32_t fr_getuint32(fr_STATE* state) {
+uint32_t fr_getuint32(struct fr_STATE* state) {
     uint32_t top = fr_getuint16(state);
     uint32_t bottom = fr_getuint16(state);
     top <<= 16;
     return bottom + top;
 }
-int32_t fr_getint32(fr_STATE* state) {
+int32_t fr_getint32(struct fr_STATE* state) {
     return (int32_t) fr_getuint32(state);
 }
-uint64_t fr_getuint64(fr_STATE* state) {
+uint64_t fr_getuint64(struct fr_STATE* state) {
     uint64_t top = fr_getuint32(state);
     uint64_t bottom = fr_getuint32(state);
     top <<= 32;
     return bottom + top;
 }
-int64_t fr_getint64(fr_STATE* state) {
+int64_t fr_getint64(struct fr_STATE* state) {
     return (int64_t) fr_getuint64(state);
 }
-char* fr_getstr(fr_STATE* state) {
+char* fr_getstr(struct fr_STATE* state) {
     uint32_t length = fr_getuint32(state);
     char* buff = malloc(length + 1);
     for(uint32_t i = 0; i < length; i++) {

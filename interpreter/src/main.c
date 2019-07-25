@@ -11,8 +11,9 @@ int main(int argc, char* argv[]) {
     if(argc < 2) {
         fatal("Not enough arguments\nInclude a bytecode file name\n");
     }
-    it_OPTIONS options;
+    struct it_OPTIONS options;
     options.print_return_value = false;
+    options.gc_verbose = false;
     FILE* fp[argc - 1];
     int num_infiles = 0;
     for(int i = 1; i < argc; i++) {
@@ -33,12 +34,12 @@ int main(int argc, char* argv[]) {
             num_infiles++;
         }
     }
-    it_PROGRAM* prog = bc_parse_from_files(num_infiles, fp, &options);
+    struct it_PROGRAM* prog = bc_parse_from_files(num_infiles, fp, &options);
     #if DEBUG
     printf("\n\nMethods: %d\n", prog->methodc);
     printf("Entrypoint: %d\n", prog->entrypoint);
     for(int i = 0; i < prog->methodc; i++) {
-        it_METHOD* method = &prog->methods[i];
+        struct it_METHOD* method = &prog->methods[i];
         printf("\nFor method %d\n", method->id);
         printf("Nargs, opcodec %d, %d\n", method->nargs, method->opcodec);
         for(int j = 0; j < method->opcodec; j++) {

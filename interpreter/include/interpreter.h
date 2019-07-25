@@ -54,20 +54,15 @@ union ts_TYPE {
     struct ts_TYPE_ARRAY array;
 };
 
-typedef union ts_TYPE ts_TYPE;
-typedef struct ts_TYPE_BAREBONES ts_TYPE_BAREBONES;
-typedef struct ts_TYPE_CLAZZ ts_TYPE_CLAZZ;
-typedef struct ts_CLAZZ_FIELD ts_CLAZZ_FIELD;
-typedef struct ts_TYPE_ARRAY ts_TYPE_ARRAY;
-typedef enum ts_CATEGORY ts_CATEGORY;
+enum ts_CATEGORY ts_CATEGORY;
 
-ts_TYPE* ts_get_type(char* name);
-int ts_get_field_index(ts_TYPE_CLAZZ* clazz, char* name);
-int ts_get_method_index(ts_TYPE_CLAZZ* clazz, char* name);
-void ts_register_type(ts_TYPE* type, char* name);
+union ts_TYPE* ts_get_type(char* name);
+int ts_get_field_index(struct ts_TYPE_CLAZZ* clazz, char* name);
+int ts_get_method_index(struct ts_TYPE_CLAZZ* clazz, char* name);
+void ts_register_type(union ts_TYPE* type, char* name);
 uint32_t ts_allocate_type_id();
-bool ts_is_compatible(ts_TYPE* type1, ts_TYPE* type2);
-bool ts_instanceof(ts_TYPE* lhs, ts_TYPE* rhs);
+bool ts_is_compatible(union ts_TYPE* type1, union ts_TYPE* type2);
+bool ts_instanceof(union ts_TYPE* lhs, union ts_TYPE* rhs);
 
 struct it_CLAZZ_DATA;
 struct it_ARRAY_DATA;
@@ -78,47 +73,45 @@ union itval {
     struct it_ARRAY_DATA* array_data;
 };
 
-typedef struct gc_OBJECT_REGISTRY {
+struct gc_OBJECT_REGISTRY {
     struct gc_OBJECT_REGISTRY* next;
     struct gc_OBJECT_REGISTRY* previous;
     uint64_t object_id;
     bool is_present;
     size_t allocation_size;
     union itval object;
-    ts_CATEGORY category;
+    enum ts_CATEGORY category;
     uint32_t visited;
-} gc_OBJECT_REGISTRY;
+};
 
 struct it_ARRAY_DATA {
     uint64_t length;
-    gc_OBJECT_REGISTRY* gc_registry_entry;
-    ts_TYPE_ARRAY* type;
+    struct gc_OBJECT_REGISTRY* gc_registry_entry;
+    struct ts_TYPE_ARRAY* type;
     union itval elements[1];
 };
 
 struct it_CLAZZ_DATA {
-    ts_TYPE_CLAZZ* phi_table;
-    gc_OBJECT_REGISTRY* gc_registry_entry;
+    struct ts_TYPE_CLAZZ* phi_table;
+    struct gc_OBJECT_REGISTRY* gc_registry_entry;
     union itval itval[0];
 };
 
-typedef union itval itval;
-
-typedef struct {
+struct it_OPCODE {
     uint8_t type;
     void* payload;
     uint32_t linenum;
-} it_OPCODE;
-typedef struct {
-    itval* registers;
+};
+struct it_STACKFRAME {
+    union itval* registers;
     int registerc;
     int registers_allocated;
     uint32_t returnreg;
-    it_OPCODE* iptr;
+    struct it_OPCODE* iptr;
     struct it_METHOD* method;
     int index;
-} it_STACKFRAME;
-typedef itval (*it_METHOD_REPLACEMENT_PTR)(it_STACKFRAME*, itval*);
+};
+typedef union itval (*it_METHOD_REPLACEMENT_PTR)(struct it_STACKFRAME*, union itval*);
 struct it_METHOD {
     uint32_t id;
     // This could technically be a uint8_t, but ehh
@@ -126,15 +119,19 @@ struct it_METHOD {
     int opcodec;
     char* name;
     uint32_t registerc;
-    it_OPCODE* opcodes;
-    ts_TYPE* returntype;
+    struct it_OPCODE* opcodes;
+    union ts_TYPE* returntype;
     // This is a pointer to an array
-    ts_TYPE** register_types;
-    ts_TYPE_CLAZZ* containing_clazz;
+    union ts_TYPE** register_types;
+    struct ts_TYPE_CLAZZ* containing_clazz;
     it_METHOD_REPLACEMENT_PTR replacement_ptr;
 };
-struct sv_STATIC_VAR;
-typedef struct {
+struct sv_STATIC_VAR {
+    union ts_TYPE* type;
+    char* name;
+    union itval value;
+};
+struct it_PROGRAM {
     // This is the number of methods
     int methodc;
     // This is the methods, in an arbitrary order
@@ -146,44 +143,34 @@ typedef struct {
     int clazzesc;
     int clazz_index;
     // This is a pointer to an array of pointers of classes
-    ts_TYPE_CLAZZ** clazzes;
+    struct ts_TYPE_CLAZZ** clazzes;
 
     int static_varsc;
     // This is a pointer to the start of the array of static variables
     struct sv_STATIC_VAR* static_vars;
     int static_var_index;
-} it_PROGRAM;
+};
 
-typedef struct sv_STATIC_VAR {
-    ts_TYPE* type;
-    char* name;
-    // TODO: Including the value in here is terrible for cache locality
-    itval value;
-} sv_STATIC_VAR;
+void sv_add_static_var(struct it_PROGRAM* program, union ts_TYPE* type, char* name, union itval value);
+struct sv_STATIC_VAR* sv_get_var_by_name(struct it_PROGRAM* program, char* name);
+bool sv_has_var(struct it_PROGRAM* program, char* name);
+uint32_t sv_get_static_var_index_by_name(struct it_PROGRAM* program, char* name);
 
-void sv_add_static_var(it_PROGRAM* program, ts_TYPE* type, char* name, itval value);
-sv_STATIC_VAR* sv_get_var_by_name(it_PROGRAM* program, char* name);
-bool sv_has_var(it_PROGRAM* program, char* name);
-uint32_t sv_get_static_var_index_by_name(it_PROGRAM* program, char* name);
-
-typedef struct {
+struct it_OPTIONS {
     bool print_return_value;
     bool gc_verbose;
-} it_OPTIONS;
+};
 
-typedef struct it_METHOD it_METHOD;
-typedef struct it_ARRAY_DATA it_ARRAY_DATA;
+void it_run(struct it_PROGRAM* prog, struct it_OPTIONS* options);
+void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options);
+void it_replace_methods(struct it_PROGRAM* prog);
 
-void it_run(it_PROGRAM* prog, it_OPTIONS* options);
-void it_execute(it_PROGRAM* prog, it_OPTIONS* options);
-void it_replace_methods(it_PROGRAM* prog);
+void cl_arrange_phi_tables(struct it_PROGRAM* program);
 
-void cl_arrange_phi_tables(it_PROGRAM* program);
-
-gc_OBJECT_REGISTRY* gc_register_object(itval object, size_t allocation_size, ts_CATEGORY category);
-void gc_collect(it_PROGRAM* program, it_STACKFRAME* stack, it_STACKFRAME* current_frame, it_OPTIONS* options);
+struct gc_OBJECT_REGISTRY* gc_register_object(union itval object, size_t allocation_size, enum ts_CATEGORY category);
+void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct it_STACKFRAME* current_frame, struct it_OPTIONS* options);
 bool gc_needs_collection;
 
 #define NUM_REPLACED_METHODS 4
 
-#endif
+#endif /* INTERPRETER_H */

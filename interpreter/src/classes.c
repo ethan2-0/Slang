@@ -4,8 +4,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-//
-int cl_get_index(it_PROGRAM* program, ts_TYPE_CLAZZ* type) {
+
+int cl_get_index(struct it_PROGRAM* program, struct ts_TYPE_CLAZZ* type) {
     for(int i = 0; i < program->clazzesc; i++) {
         if(program->clazzes[i] == type) {
             return i;
@@ -13,7 +13,7 @@ int cl_get_index(it_PROGRAM* program, ts_TYPE_CLAZZ* type) {
     }
     return -1;
 }
-void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLAZZ* type) {
+void cl_arrange_phi_tables_inner(struct it_PROGRAM* program, bool* visited, struct ts_TYPE_CLAZZ* type) {
     #if DEBUG
     printf("Arranging phi tables for class %d\n", type->id);
     #endif
@@ -29,10 +29,10 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
             total_methods++;
         }
     }
-    type->methods = mm_malloc(sizeof(it_METHOD*) * total_methods);
+    type->methods = mm_malloc(sizeof(struct it_METHOD*) * total_methods);
     int current_method_index = 0;
     if(type->immediate_supertype != NULL) {
-        memcpy(type->methods, type->immediate_supertype->methods, sizeof(it_METHOD*) * type->immediate_supertype->methodc);
+        memcpy(type->methods, type->immediate_supertype->methods, sizeof(struct it_METHOD*) * type->immediate_supertype->methodc);
         current_method_index = type->immediate_supertype->methodc;
     }
     for(int i = 0; i < program->methodc; i++) {
@@ -54,21 +54,21 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
     }
     type->methodc = current_method_index;
     if(type->immediate_supertype != NULL) {
-        ts_CLAZZ_FIELD* old_fields = type->fields;
-        type->fields = mm_malloc(sizeof(ts_CLAZZ_FIELD) * (type->nfields + type->immediate_supertype->nfields));
-        memcpy(type->fields, type->immediate_supertype->fields, sizeof(ts_CLAZZ_FIELD) * type->immediate_supertype->nfields);
-        memcpy(type->fields + type->immediate_supertype->nfields, old_fields, sizeof(ts_CLAZZ_FIELD) * type->nfields);
+        struct ts_CLAZZ_FIELD* old_fields = type->fields;
+        type->fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * (type->nfields + type->immediate_supertype->nfields));
+        memcpy(type->fields, type->immediate_supertype->fields, sizeof(struct ts_CLAZZ_FIELD) * type->immediate_supertype->nfields);
+        memcpy(type->fields + type->immediate_supertype->nfields, old_fields, sizeof(struct ts_CLAZZ_FIELD) * type->nfields);
         free(old_fields);
         type->nfields += type->immediate_supertype->nfields;
         type->heirarchy_len = type->immediate_supertype->heirarchy_len + 1;
         // Yes, this is supposed to be size of a pointer
-        type->heirarchy = malloc(sizeof(ts_TYPE*) * type->heirarchy_len);
-        memcpy(type->heirarchy, type->immediate_supertype->heirarchy, sizeof(ts_TYPE*) * type->immediate_supertype->heirarchy_len);
-        type->heirarchy[type->heirarchy_len - 1] = (ts_TYPE*) type;
+        type->heirarchy = malloc(sizeof(union ts_TYPE*) * type->heirarchy_len);
+        memcpy(type->heirarchy, type->immediate_supertype->heirarchy, sizeof(union ts_TYPE*) * type->immediate_supertype->heirarchy_len);
+        type->heirarchy[type->heirarchy_len - 1] = (union ts_TYPE*) type;
     } else {
-        type->heirarchy = malloc(sizeof(ts_TYPE*) * 1);
+        type->heirarchy = malloc(sizeof(union ts_TYPE*) * 1);
         type->heirarchy_len = 1;
-        type->heirarchy[0] = (ts_TYPE*) type;
+        type->heirarchy[0] = (union ts_TYPE*) type;
     }
     int index = cl_get_index(program, type);
     visited[index] = true;
@@ -76,7 +76,7 @@ void cl_arrange_phi_tables_inner(it_PROGRAM* program, bool* visited, ts_TYPE_CLA
     printf("Finished arranging phi tables for class %d\n", type->id);
     #endif
 }
-void cl_arrange_phi_tables(it_PROGRAM* program) {
+void cl_arrange_phi_tables(struct it_PROGRAM* program) {
     #if DEBUG
     printf("Entering cl_arrange_phi_tables\n");
     #endif

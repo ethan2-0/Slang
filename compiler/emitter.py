@@ -660,14 +660,6 @@ class MethodEmitter(SegmentEmitter):
                 claims.add_claims_conservative(*true_path_claims.intersection(false_path_claims).claims)
             opcodes += result_opcodes
         elif node.of("++", "--"):
-            # var = self.scope.resolve(node[0].data_strict, node)
-            # if not var.type.is_numerical():
-            #     raise typesys.TypingError(node, "Subject of increment/decrement must be numerical")
-            # reg = self.scope.allocate(self.types.int_type)
-            # opcodes.append(ops["load"].ins(reg, 1, node=node))
-            # if node.i("--"):
-            #     opcodes.append(ops["twocomp"].ins(reg, node=node))
-            # opcodes.append(ops["add"].ins(var, reg, var, node=node))
             lhs_type = self.types.decide_type(node[0], self.scope)
             if not lhs_type.is_numerical():
                 raise typesys.TypingError(node, "Attempt to increment something that isn't numerical: %s" % lhs_type)

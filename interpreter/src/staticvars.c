@@ -4,13 +4,13 @@
 #include "interpreter.h"
 #include "common.h"
 
-void sv_add_static_var(it_PROGRAM* program, ts_TYPE* type, char* name, itval value) {
+void sv_add_static_var(struct it_PROGRAM* program, union ts_TYPE* type, char* name, union itval value) {
     program->static_vars[program->static_var_index].type = type;
     program->static_vars[program->static_var_index].name = name;
     program->static_vars[program->static_var_index].value = value;
     program->static_var_index++;
 }
-sv_STATIC_VAR* sv_get_var_by_name(it_PROGRAM* program, char* name) {
+struct sv_STATIC_VAR* sv_get_var_by_name(struct it_PROGRAM* program, char* name) {
     for(int i = 0; i < program->static_varsc; i++) {
         if(program->static_vars[i].name == NULL) {
             fatal("Attempt to get variable by name when not all variables are initialized");
@@ -23,7 +23,7 @@ sv_STATIC_VAR* sv_get_var_by_name(it_PROGRAM* program, char* name) {
     fatal("Attempt to resolve static variable that doesn't exist");
     return NULL; // Unreachable
 }
-bool sv_has_var(it_PROGRAM* program, char* name) {
+bool sv_has_var(struct it_PROGRAM* program, char* name) {
     for(int i = 0; i < program->static_varsc; i++) {
         if(program->static_vars[i].name == NULL) {
             fatal("Attempt to check for existence of static variable by name when not all variables are initialized");
@@ -34,7 +34,7 @@ bool sv_has_var(it_PROGRAM* program, char* name) {
     }
     return false;
 }
-uint32_t sv_get_static_var_index_by_name(it_PROGRAM* program, char* name) {
+uint32_t sv_get_static_var_index_by_name(struct it_PROGRAM* program, char* name) {
     for(uint32_t i = 0; i < program->static_varsc; i++) {
         if(program->static_vars[i].name == NULL) {
             fatal("Attempt to get variable index by name when not all variables are initialized");

@@ -11,7 +11,7 @@
 
 extern bool gc_needs_collection;
 
-void it_traceback(it_STACKFRAME* stackptr) {
+void it_traceback(struct it_STACKFRAME* stackptr) {
     printf("Traceback (most recent call first):\n");
     while(true) {
         if(stackptr->method->containing_clazz != NULL) {
@@ -26,7 +26,7 @@ void it_traceback(it_STACKFRAME* stackptr) {
         stackptr--;
     }
 }
-void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
+void load_method(struct it_STACKFRAME* stackptr, struct it_METHOD* method) {
     stackptr->method = method;
     stackptr->iptr = stackptr->method->opcodes;
     stackptr->registerc = stackptr->method->registerc;
@@ -35,17 +35,17 @@ void load_method(it_STACKFRAME* stackptr, it_METHOD* method) {
         printf("Allocating more register space: %d < %d\n", stackptr->registers_allocated, stackptr->registerc);
         #endif
         free(stackptr->registers);
-        stackptr->registers = mm_malloc(sizeof(itval) * stackptr->registerc);
+        stackptr->registers = mm_malloc(sizeof(union itval) * stackptr->registerc);
     }
     // Technically, we've already zeroed out the memory (in mm_malloc(...)).
     // But that's mostly to ease debugging, I don't want to rely on it.
-    memset(stackptr->registers, 0x00, stackptr->registerc * sizeof(itval));
+    memset(stackptr->registers, 0x00, stackptr->registerc * sizeof(union itval));
 }
-void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
+void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
     // Setup interpreter state
-    it_STACKFRAME* stack = mm_malloc(sizeof(it_STACKFRAME) * STACKSIZE);
-    it_STACKFRAME* stackptr = stack;
-    it_STACKFRAME* stackend = stack + STACKSIZE;
+    struct it_STACKFRAME* stack = mm_malloc(sizeof(struct it_STACKFRAME) * STACKSIZE);
+    struct it_STACKFRAME* stackptr = stack;
+    struct it_STACKFRAME* stackend = stack + STACKSIZE;
     for(int i = 0; i < STACKSIZE; i++) {
         stack[i].registers_allocated = 0;
         // Set the register file pointer to the null pointer so we can free() it.
@@ -53,18 +53,18 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
         stack[i].index = i;
     }
     load_method(stackptr, &prog->methods[prog->entrypoint]);
-    itval* registers = stackptr->registers;
+    union itval* registers = stackptr->registers;
     #if DEBUG
     printf("About to execute method %d\n", stackptr->method->id);
     #endif
     // This is the start of the instruction tape
-    it_OPCODE* instruction_start = stackptr->iptr;
+    struct it_OPCODE* instruction_start = stackptr->iptr;
     // This is the current index into the instruction tape
-    it_OPCODE* iptr = instruction_start;
+    struct it_OPCODE* iptr = instruction_start;
     // See the documentation for PARAM and CALL for details.
     // Note that this is preserved globally across method calls.
-    itval params[256];
-    memset(params, 0, sizeof(itval) * 256);
+    union itval params[256];
+    memset(params, 0, sizeof(union itval) * 256);
 
     // TODO: Do something smarter for dispatch here
     while(1) {
@@ -77,25 +77,25 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
         #endif
         switch(iptr->type) {
         case OPCODE_PARAM:
-            params[((it_OPCODE_DATA_PARAM*) iptr->payload)->target] = registers[((it_OPCODE_DATA_PARAM*) iptr->payload)->source];
+            params[((struct it_OPCODE_DATA_PARAM*) iptr->payload)->target] = registers[((struct it_OPCODE_DATA_PARAM*) iptr->payload)->source];
             iptr++;
             continue;
         case OPCODE_CALL:
             ; // Labels can't be immediately followed by declarations, because
               // C is a barbaric language
-            uint32_t callee_id = ((it_OPCODE_DATA_CALL*) iptr->payload)->callee;
-            it_METHOD* callee = &prog->methods[callee_id];
+            uint32_t callee_id = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->callee;
+            struct it_METHOD* callee = &prog->methods[callee_id];
             if(callee->replacement_ptr != NULL) {
                 #if DEBUG
                 printf("Calling replaced method %s\n", callee->name);
                 #endif
                 stackptr->iptr = iptr;
-                uint32_t returnreg = ((it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+                uint32_t returnreg = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
                 registers[returnreg] = callee->replacement_ptr(stackptr, params);
                 iptr++;
                 continue;
             }
-            it_STACKFRAME* oldstack = stackptr;
+            struct it_STACKFRAME* oldstack = stackptr;
             stackptr++;
             if(stackptr >= stackend) {
                 stackptr--;
@@ -107,7 +107,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             printf("Calling %d\n", callee_id);
             #endif
 
-            oldstack->returnreg = ((it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+            oldstack->returnreg = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
 
             #if DEBUG
             printf("Need %d args.\n", callee->nargs);
@@ -127,7 +127,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             continue;
         case OPCODE_CLASSCALL:
             ;
-            it_STACKFRAME* classcall_oldstack = stackptr;
+            struct it_STACKFRAME* classcall_oldstack = stackptr;
             stackptr++;
             if(stackptr >= stackend) {
                 stackptr--;
@@ -135,11 +135,11 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
                 fatal("Stack overflow");
             }
 
-            uint32_t classcall_callee_index = ((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->callee_index;
+            uint32_t classcall_callee_index = ((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload)->callee_index;
 
-            classcall_oldstack->returnreg = ((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->returnreg;
-            itval thiz = registers[((it_OPCODE_DATA_CLASSCALL*) iptr->payload)->targetreg];
-            it_METHOD* classcall_callee = thiz.clazz_data->phi_table->methods[classcall_callee_index];
+            classcall_oldstack->returnreg = ((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload)->returnreg;
+            union itval thiz = registers[((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload)->targetreg];
+            struct it_METHOD* classcall_callee = thiz.clazz_data->phi_table->methods[classcall_callee_index];
 
             #if DEBUG
             printf("Class-calling %s\n", classcall_callee->name);
@@ -163,7 +163,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
         case OPCODE_RETURN:
             ; // Labels can't be immediately followed by declarations, because
               // C is a barbaric language
-            itval result = registers[((it_OPCODE_DATA_RETURN*) iptr->payload)->target];
+            union itval result = registers[((struct it_OPCODE_DATA_RETURN*) iptr->payload)->target];
             if(stackptr <= stack) {
                 if(options->print_return_value) {
                     printf("Returned 0x%08lx\n", result.number);
@@ -181,103 +181,103 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             iptr++;
             continue;
         case OPCODE_ZERO:
-            registers[((it_OPCODE_DATA_ZERO*) iptr->payload)->target].number = 0x00000000;
+            registers[((struct it_OPCODE_DATA_ZERO*) iptr->payload)->target].number = 0x00000000;
             iptr++;
             continue;
         case OPCODE_ADD:
-            registers[((it_OPCODE_DATA_ADD*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_ADD*) iptr->payload)->source1].number + registers[((it_OPCODE_DATA_ADD*) iptr->payload)->source2].number;
+            registers[((struct it_OPCODE_DATA_ADD*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_ADD*) iptr->payload)->source1].number + registers[((struct it_OPCODE_DATA_ADD*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_TWOCOMP:
-            registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number = -registers[((it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number;
+            registers[((struct it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number = -registers[((struct it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number;
             iptr++;
             continue;
         case OPCODE_MULT:
-            registers[((it_OPCODE_DATA_MULT*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_MULT*) iptr->payload)->source1].number * registers[((it_OPCODE_DATA_MULT*) iptr->payload)->source2].number;
+            registers[((struct it_OPCODE_DATA_MULT*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_MULT*) iptr->payload)->source1].number * registers[((struct it_OPCODE_DATA_MULT*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_MODULO:
-            registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number % registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
+            registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number % registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_DIV:
-            registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number / registers[((it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
+            registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number / registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_EQUALS:
-            // TODO: Make this work on systems where sizeof(itval.number) != sizeof(itval.itval)
+            // TODO: Make this work on systems where sizeof(union itval.number) != sizeof(union itval.clazz_data), etc
             //       This probably involves a specialized EQUALS opcode, either in the compiler or
             //       just specializing in bytecode.c.
-            if(registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source1].number == registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->source2].number) {
-                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x1;
+            if(registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->source1].number == registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->source2].number) {
+                registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x0;
+                registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_INVERT:
-            if(registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target].number == 0x0) {
-                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x1;
+            if(registers[((struct it_OPCODE_DATA_INVERT*) iptr->payload)->target].number == 0x0) {
+                registers[((struct it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x0;
+                registers[((struct it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_LTEQ:
-            if(registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source1].number <= registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->source2].number) {
-                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x1;
+            if(registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->source1].number <= registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->source2].number) {
+                registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x0;
+                registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_GT:
-            if(registers[((it_OPCODE_DATA_GT*) iptr->payload)->source1].number > registers[((it_OPCODE_DATA_GT*) iptr->payload)->source2].number) {
-                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x1;
+            if(registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->source1].number > registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->source2].number) {
+                registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x0;
+                registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_GOTO:
             #if DEBUG
-            printf("Jumping to %d\n", ((it_OPCODE_DATA_GOTO*) iptr->payload)->target);
+            printf("Jumping to %d\n", ((struct it_OPCODE_DATA_GOTO*) iptr->payload)->target);
             #endif
-            iptr = instruction_start + ((it_OPCODE_DATA_GOTO*) iptr->payload)->target;
+            iptr = instruction_start + ((struct it_OPCODE_DATA_GOTO*) iptr->payload)->target;
             continue;
         case OPCODE_JF:
             // JF stands for Jump if False.
-            if(registers[((it_OPCODE_DATA_JF*) iptr->payload)->predicate].number == 0x00) {
+            if(registers[((struct it_OPCODE_DATA_JF*) iptr->payload)->predicate].number == 0x00) {
                 #if DEBUG
-                printf("Jumping to %d\n", ((it_OPCODE_DATA_JF*) iptr->payload)->target);
+                printf("Jumping to %d\n", ((struct it_OPCODE_DATA_JF*) iptr->payload)->target);
                 #endif
-                iptr = instruction_start + ((it_OPCODE_DATA_JF*) iptr->payload)->target;
+                iptr = instruction_start + ((struct it_OPCODE_DATA_JF*) iptr->payload)->target;
             } else {
                 iptr++;
             }
             continue;
         case OPCODE_GTEQ:
-            if(registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source1].number >= registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->source2].number) {
-                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x1;
+            if(registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->source1].number >= registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->source2].number) {
+                registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x0;
+                registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
         case OPCODE_XOR:
-            registers[((it_OPCODE_DATA_XOR*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source1].number ^ registers[((it_OPCODE_DATA_XOR*) iptr->payload)->source2].number;
+            registers[((struct it_OPCODE_DATA_XOR*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_XOR*) iptr->payload)->source1].number ^ registers[((struct it_OPCODE_DATA_XOR*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_AND:
-            registers[((it_OPCODE_DATA_AND*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_AND*) iptr->payload)->source1].number & registers[((it_OPCODE_DATA_AND*) iptr->payload)->source2].number;
+            registers[((struct it_OPCODE_DATA_AND*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_AND*) iptr->payload)->source1].number & registers[((struct it_OPCODE_DATA_AND*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_OR:
-            registers[((it_OPCODE_DATA_OR*) iptr->payload)->target].number = registers[((it_OPCODE_DATA_OR*) iptr->payload)->source1].number | registers[((it_OPCODE_DATA_OR*) iptr->payload)->source2].number;
+            registers[((struct it_OPCODE_DATA_OR*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_OR*) iptr->payload)->source1].number | registers[((struct it_OPCODE_DATA_OR*) iptr->payload)->source2].number;
             iptr++;
             continue;
         case OPCODE_MOV:
-            registers[((it_OPCODE_DATA_MOV*) iptr->payload)->target] = registers[((it_OPCODE_DATA_MOV*) iptr->payload)->source];
+            registers[((struct it_OPCODE_DATA_MOV*) iptr->payload)->target] = registers[((struct it_OPCODE_DATA_MOV*) iptr->payload)->source];
             iptr++;
             continue;
         case OPCODE_NOP:
@@ -285,14 +285,14 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             iptr++;
             continue;
         case OPCODE_LOAD:
-            registers[((it_OPCODE_DATA_LOAD*) iptr->payload)->target].number = ((it_OPCODE_DATA_LOAD*) iptr->payload)->data;
+            registers[((struct it_OPCODE_DATA_LOAD*) iptr->payload)->target].number = ((struct it_OPCODE_DATA_LOAD*) iptr->payload)->data;
             iptr++;
             continue;
         case OPCODE_LT:
-            if(registers[((it_OPCODE_DATA_LT*) iptr->payload)->source1].number < registers[((it_OPCODE_DATA_LT*) iptr->payload)->source2].number) {
-                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x1;
+            if(registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->source1].number < registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->source2].number) {
+                registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x1;
             } else {
-                registers[((it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x0;
+                registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x0;
             }
             iptr++;
             continue;
@@ -301,18 +301,18 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             if(gc_needs_collection) {
                 gc_collect(prog, stack, stackptr, options);
             }
-            it_OPCODE_DATA_NEW* opcode_new_data = (it_OPCODE_DATA_NEW*) iptr->payload;
-            size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(itval) * opcode_new_data->clazz->nfields;
+            struct it_OPCODE_DATA_NEW* opcode_new_data = (struct it_OPCODE_DATA_NEW*) iptr->payload;
+            size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(union itval) * opcode_new_data->clazz->nfields;
             registers[opcode_new_data->dest].clazz_data = mm_malloc(new_allocation_size);
-            gc_OBJECT_REGISTRY* new_register = gc_register_object(registers[opcode_new_data->dest], new_allocation_size, ts_CATEGORY_CLAZZ);
+            struct gc_OBJECT_REGISTRY* new_register = gc_register_object(registers[opcode_new_data->dest], new_allocation_size, ts_CATEGORY_CLAZZ);
             registers[opcode_new_data->dest].clazz_data->gc_registry_entry = new_register;
-            memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(itval) * opcode_new_data->clazz->nfields);
+            memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(union itval) * opcode_new_data->clazz->nfields);
             registers[opcode_new_data->dest].clazz_data->phi_table = opcode_new_data->clazz;
             iptr++;
             continue;
         case OPCODE_ACCESS:
             ;
-            it_OPCODE_DATA_ACCESS* opcode_access_data = (it_OPCODE_DATA_ACCESS*) iptr->payload;
+            struct it_OPCODE_DATA_ACCESS* opcode_access_data = (struct it_OPCODE_DATA_ACCESS*) iptr->payload;
             if(registers[opcode_access_data->clazzreg].clazz_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Null pointer on access");
@@ -323,7 +323,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             continue;
         case OPCODE_ASSIGN:
             ;
-            it_OPCODE_DATA_ASSIGN* opcode_assign_data = (it_OPCODE_DATA_ASSIGN*) iptr->payload;
+            struct it_OPCODE_DATA_ASSIGN* opcode_assign_data = (struct it_OPCODE_DATA_ASSIGN*) iptr->payload;
             if(registers[opcode_assign_data->clazzreg].clazz_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Null pointer on access");
@@ -336,20 +336,20 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             if(gc_needs_collection) {
                 gc_collect(prog, stack, stackptr, options);
             }
-            it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (it_OPCODE_DATA_ARRALLOC*) iptr->payload;
+            struct it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (struct it_OPCODE_DATA_ARRALLOC*) iptr->payload;
             uint64_t length = registers[opcode_arralloc_data->lengthreg].number;
-            size_t arralloc_allocation_size = sizeof(it_ARRAY_DATA) + sizeof(itval) * (length <= 0 ? 1 : length - 1);
-            registers[opcode_arralloc_data->arrreg].array_data = (it_ARRAY_DATA*) mm_malloc(arralloc_allocation_size);
+            size_t arralloc_allocation_size = sizeof(struct it_ARRAY_DATA) + sizeof(union itval) * (length <= 0 ? 1 : length - 1);
+            registers[opcode_arralloc_data->arrreg].array_data = (struct it_ARRAY_DATA*) mm_malloc(arralloc_allocation_size);
             registers[opcode_arralloc_data->arrreg].array_data->length = length;
-            memset(&registers[opcode_arralloc_data->arrreg].array_data->elements, 0, length * sizeof(itval));
-            registers[opcode_arralloc_data->arrreg].array_data->type = (ts_TYPE_ARRAY*) stackptr->method->register_types[opcode_arralloc_data->arrreg];
-            gc_OBJECT_REGISTRY* arralloc_registry = gc_register_object(registers[opcode_arralloc_data->arrreg], arralloc_allocation_size, ts_CATEGORY_ARRAY);
+            memset(&registers[opcode_arralloc_data->arrreg].array_data->elements, 0, length * sizeof(union itval));
+            registers[opcode_arralloc_data->arrreg].array_data->type = (struct ts_TYPE_ARRAY*) stackptr->method->register_types[opcode_arralloc_data->arrreg];
+            struct gc_OBJECT_REGISTRY* arralloc_registry = gc_register_object(registers[opcode_arralloc_data->arrreg], arralloc_allocation_size, ts_CATEGORY_ARRAY);
             registers[opcode_arralloc_data->arrreg].array_data->gc_registry_entry = arralloc_registry;
             iptr++;
             continue;
         case OPCODE_ARRACCESS:
             ;
-            it_OPCODE_DATA_ARRACCESS* opcode_arraccess_data = (it_OPCODE_DATA_ARRACCESS*) iptr->payload;
+            struct it_OPCODE_DATA_ARRACCESS* opcode_arraccess_data = (struct it_OPCODE_DATA_ARRACCESS*) iptr->payload;
             if(registers[opcode_arraccess_data->arrreg].array_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Attempt to access null array");
@@ -363,7 +363,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             continue;
         case OPCODE_ARRASSIGN:
             ;
-            it_OPCODE_DATA_ARRASSIGN* opcode_arrassign_data = (it_OPCODE_DATA_ARRASSIGN*) iptr->payload;
+            struct it_OPCODE_DATA_ARRASSIGN* opcode_arrassign_data = (struct it_OPCODE_DATA_ARRASSIGN*) iptr->payload;
             if(registers[opcode_arrassign_data->arrreg].array_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Attempt to assign to null array");
@@ -377,7 +377,7 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             continue;
         case OPCODE_ARRLEN:
             ;
-            it_OPCODE_DATA_ARRLEN* opcode_arrlen_data = (it_OPCODE_DATA_ARRLEN*) iptr->payload;
+            struct it_OPCODE_DATA_ARRLEN* opcode_arrlen_data = (struct it_OPCODE_DATA_ARRLEN*) iptr->payload;
             if(registers[opcode_arrlen_data->arrreg].array_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Attempt to find length of null");
@@ -387,10 +387,10 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             continue;
         case OPCODE_CAST:
             {
-                it_OPCODE_DATA_CAST* data = (it_OPCODE_DATA_CAST*) iptr->payload;
-                itval source = registers[data->source];
+                struct it_OPCODE_DATA_CAST* data = (struct it_OPCODE_DATA_CAST*) iptr->payload;
+                union itval source = registers[data->source];
                 // We know data->source_register_type->barebones.category == ts_CATEGORY_CLAZZ
-                if(!ts_is_compatible((ts_TYPE*) source.clazz_data->phi_table, data->target_type)) {
+                if(!ts_is_compatible((union ts_TYPE*) source.clazz_data->phi_table, data->target_type)) {
                     it_traceback(stackptr);
                     fatal("Incompatible cast");
                 }
@@ -400,22 +400,22 @@ void it_execute(it_PROGRAM* prog, it_OPTIONS* options) {
             }
         case OPCODE_INSTANCEOF:
             {
-                it_OPCODE_DATA_INSTANCEOF* data = (it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
-                itval source = registers[data->source];
-                registers[data->destination] = (itval) ((int64_t) ts_instanceof((ts_TYPE*) source.clazz_data->phi_table, data->predicate_type));
+                struct it_OPCODE_DATA_INSTANCEOF* data = (struct it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
+                union itval source = registers[data->source];
+                registers[data->destination] = (union itval) ((int64_t) ts_instanceof((union ts_TYPE*) source.clazz_data->phi_table, data->predicate_type));
                 iptr++;
                 continue;
             }
         case OPCODE_STATICVARGET:
             {
-                it_OPCODE_DATA_STATICVARGET* data = (it_OPCODE_DATA_STATICVARGET*) iptr->payload;
+                struct it_OPCODE_DATA_STATICVARGET* data = (struct it_OPCODE_DATA_STATICVARGET*) iptr->payload;
                 registers[data->destination] = prog->static_vars[data->source_var].value;
                 iptr++;
                 continue;
             }
         case OPCODE_STATICVARSET:
             {
-                it_OPCODE_DATA_STATICVARSET* data = (it_OPCODE_DATA_STATICVARSET*) iptr->payload;
+                struct it_OPCODE_DATA_STATICVARSET* data = (struct it_OPCODE_DATA_STATICVARSET*) iptr->payload;
                 prog->static_vars[data->destination_var].value = registers[data->source];
                 iptr++;
                 continue;
@@ -430,14 +430,14 @@ CLEANUP:
     // Explicitly not freeing stackptr and stackend since they're dangling pointers at this point
     return;
 }
-void it_run(it_PROGRAM* prog, it_OPTIONS* options) {
+void it_run(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
     #if DEBUG
     printf("Entering it_RUN\n");
     #endif
     it_execute(prog, options);
 }
-itval rm_print(it_STACKFRAME* stackptr, itval* params) {
-    it_ARRAY_DATA* arr = params[0].array_data;
+union itval rm_print(struct it_STACKFRAME* stackptr, union itval* params) {
+    struct it_ARRAY_DATA* arr = params[0].array_data;
     char* chars = mm_malloc(sizeof(char) * (arr->length + 1));
     for(int i = 0; i < arr->length; i++) {
         chars[i] = (char) (arr->elements[i].number & 0xff);
@@ -445,10 +445,10 @@ itval rm_print(it_STACKFRAME* stackptr, itval* params) {
     chars[arr->length] = 0;
     fputs(chars, stdout);
     free(chars);
-    return (itval) ((int64_t) 0);
+    return (union itval) ((int64_t) 0);
 }
-itval rm_read(it_STACKFRAME* stackptr, itval* params) {
-    it_ARRAY_DATA* buff = params[0].array_data;
+union itval rm_read(struct it_STACKFRAME* stackptr, union itval* params) {
+    struct it_ARRAY_DATA* buff = params[0].array_data;
     int64_t num_chars = params[1].number;
     if(num_chars > 1024) {
         num_chars = 1024;
@@ -459,21 +459,21 @@ itval rm_read(it_STACKFRAME* stackptr, itval* params) {
     for(int i = 0; i < result; i++) {
         buff->elements[i].number = mybuff[i];
     }
-    itval ret;
+    union itval ret;
     ret.number = result;
     return ret;
 }
-itval rm_exit(it_STACKFRAME* stackptr, itval* params) {
+union itval rm_exit(struct it_STACKFRAME* stackptr, union itval* params) {
     uint64_t exit_status = params[0].number;
     exit(exit_status);
     // This will never be reached
-    return (itval) ((int64_t) 0);
+    return (union itval) ((int64_t) 0);
 }
-itval rm_traceback(it_STACKFRAME* stackptr, itval* params) {
+union itval rm_traceback(struct it_STACKFRAME* stackptr, union itval* params) {
     it_traceback(stackptr);
-    return (itval) ((int64_t) 0);
+    return (union itval) ((int64_t) 0);
 }
-void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it_METHOD_REPLACEMENT_PTR methodptr, char* name) {
+void it_create_replaced_method(struct it_PROGRAM* prog, int method_index, int nargs, it_METHOD_REPLACEMENT_PTR methodptr, char* name) {
     if(method_index >= prog->methodc) {
         fatal("Attempting to create replaced method with index greater than methodc. This is a bug.");
     }
@@ -488,7 +488,7 @@ void it_create_replaced_method(it_PROGRAM* prog, int method_index, int nargs, it
     prog->methods[method_index].returntype = NULL;
     prog->methods[method_index].replacement_ptr = methodptr;
 }
-void it_replace_methods(it_PROGRAM* prog) {
+void it_replace_methods(struct it_PROGRAM* prog) {
     int method_index = prog->methodc - NUM_REPLACED_METHODS;
     it_create_replaced_method(prog, method_index++, 1, rm_print, strdup("stdlib.internal.print"));
     it_create_replaced_method(prog, method_index++, 0, rm_exit, strdup("stdlib.internal.exit"));
