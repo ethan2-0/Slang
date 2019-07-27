@@ -421,7 +421,7 @@ class TestReplacedMethods:
 
     def test_exit(self):
         util.clean_tmp()
-        path = util.assert_compile_succeeds("resources/replaced_methods/exit.slg", include_json=["../compiler/stdlib/src/stdlib.internal.json"])
+        path = util.assert_compile_succeeds("resources/replaced_methods/exit.slg")
         util.interpret(path, expect_fail=True)
 
 class TestInstanceofCasts:

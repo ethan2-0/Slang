@@ -1,4 +1,4 @@
-using stdlib.internal;
+using stdlib;
 
 fn main() {
     exit(1);

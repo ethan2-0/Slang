@@ -6,6 +6,7 @@
 #include "common.h"
 #include "interpreter.h"
 #include "opcodes.h"
+#include "nativelibs.h"
 
 #define STACKSIZE 1024
 
@@ -42,6 +43,7 @@ void load_method(struct it_STACKFRAME* stackptr, struct it_METHOD* method) {
     memset(stackptr->registers, 0x00, stackptr->registerc * sizeof(union itval));
 }
 void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
+    it_replace_methods(prog);
     // Setup interpreter state
     struct it_STACKFRAME* stack = mm_malloc(sizeof(struct it_STACKFRAME) * STACKSIZE);
     struct it_STACKFRAME* stackptr = stack;
@@ -91,7 +93,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 #endif
                 stackptr->iptr = iptr;
                 uint32_t returnreg = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
-                registers[returnreg] = callee->replacement_ptr(stackptr, params);
+                registers[returnreg] = callee->replacement_ptr(prog, stackptr, params);
                 iptr++;
                 continue;
             }
@@ -436,62 +438,83 @@ void it_run(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
     #endif
     it_execute(prog, options);
 }
-union itval rm_print(struct it_STACKFRAME* stackptr, union itval* params) {
-    struct it_ARRAY_DATA* arr = params[0].array_data;
-    char* chars = mm_malloc(sizeof(char) * (arr->length + 1));
-    for(int i = 0; i < arr->length; i++) {
-        chars[i] = (char) (arr->elements[i].number & 0xff);
+void it_replace_method_from_lib(struct it_PROGRAM* program, struct nl_NATIVE_LIB* lib, char* symbol_name, char* method_name) {
+    it_METHOD_REPLACEMENT_PTR method = nl_get_symbol(lib, symbol_name);
+    for(int i = 0; i < program->methodc; i++) {
+        if(strcmp(program->methods[i].name, method_name) == 0) {
+            program->methods[i].replacement_ptr = method;
+            return;
+        }
     }
-    chars[arr->length] = 0;
-    fputs(chars, stdout);
-    free(chars);
-    return (union itval) ((int64_t) 0);
+    printf("Method: %s\n", method_name);
+    fatal("Failed to find method to replace");
 }
-union itval rm_read(struct it_STACKFRAME* stackptr, union itval* params) {
-    struct it_ARRAY_DATA* buff = params[0].array_data;
-    int64_t num_chars = params[1].number;
-    if(num_chars > 1024) {
-        num_chars = 1024;
-    }
-    // I could use a VLA here, but it wouldn't actualyl help anything
-    char mybuff[1025];
-    ssize_t result = read(STDIN_FILENO, mybuff, (size_t) num_chars);
-    for(int i = 0; i < result; i++) {
-        buff->elements[i].number = mybuff[i];
-    }
-    union itval ret;
-    ret.number = result;
-    return ret;
-}
-union itval rm_exit(struct it_STACKFRAME* stackptr, union itval* params) {
-    uint64_t exit_status = params[0].number;
-    exit(exit_status);
-    // This will never be reached
-    return (union itval) ((int64_t) 0);
-}
-union itval rm_traceback(struct it_STACKFRAME* stackptr, union itval* params) {
+union itval rm_traceback(struct it_PROGRAM* program, struct it_STACKFRAME* stackptr, union itval* params) {
     it_traceback(stackptr);
     return (union itval) ((int64_t) 0);
 }
-void it_create_replaced_method(struct it_PROGRAM* prog, int method_index, int nargs, it_METHOD_REPLACEMENT_PTR methodptr, char* name) {
-    if(method_index >= prog->methodc) {
-        fatal("Attempting to create replaced method with index greater than methodc. This is a bug.");
+union itval rm_replace(struct it_PROGRAM* program, struct it_STACKFRAME* stackptr, union itval* params) {
+    uint64_t native_lib_id = params[0].number;
+    struct it_ARRAY_DATA* symbol_name_array = params[1].array_data;
+    char* symbol_name = mm_malloc(symbol_name_array->length + 1);
+    for(int i = 0; i < symbol_name_array->length; i++) {
+        // I mean, technically, symbol names are just byte arrays anyway
+        symbol_name[i] = (char) symbol_name_array->elements[i].number;
     }
-    prog->methods[method_index].register_types = NULL;
-    prog->methods[method_index].containing_clazz = NULL;
-    prog->methods[method_index].id = prog->method_id++;
-    prog->methods[method_index].name = name;
-    prog->methods[method_index].nargs = nargs;
-    prog->methods[method_index].opcodec = 0;
-    prog->methods[method_index].opcodes = NULL;
-    prog->methods[method_index].registerc = 0;
-    prog->methods[method_index].returntype = NULL;
-    prog->methods[method_index].replacement_ptr = methodptr;
+    struct it_ARRAY_DATA* method_name_array = params[2].array_data;
+    char* method_name = mm_malloc(method_name_array->length + 1);
+    for(int i = 0; i < method_name_array->length; i++) {
+        method_name[i] = (char) method_name_array->elements[i].number;
+    }
+    struct nl_NATIVE_LIB* lib = nl_get_by_index(native_lib_id);
+    it_replace_method_from_lib(program, lib, symbol_name, method_name);
+    free(symbol_name);
+    free(method_name);
+    union itval result;
+    result.number = 0;
+    return result;
 }
-void it_replace_methods(struct it_PROGRAM* prog) {
-    int method_index = prog->methodc - NUM_REPLACED_METHODS;
-    it_create_replaced_method(prog, method_index++, 1, rm_print, strdup("stdlib.internal.print"));
-    it_create_replaced_method(prog, method_index++, 0, rm_exit, strdup("stdlib.internal.exit"));
-    it_create_replaced_method(prog, method_index++, 1, rm_read, strdup("stdlib.internal.read"));
-    it_create_replaced_method(prog, method_index++, 0, rm_traceback, strdup("stdlib.internal.traceback"));
+union itval rm_create_rtlib(struct it_PROGRAM* program, struct it_STACKFRAME* stackptr, union itval* params) {
+    struct nl_NATIVE_LIB* rtlib = nl_create_rtlib();
+    union itval result;
+    result.number = rtlib->id;
+    return result;
+}
+union itval rm_create_lib(struct it_PROGRAM* program, struct it_STACKFRAME* stackptr, union itval* params) {
+    struct it_ARRAY_DATA* path_name_array = params[0].array_data;
+    char* path_name = mm_malloc(path_name_array->length + 1);
+    for(int i = 0; i < path_name_array->length; i++) {
+        // I mean, technically, symbol names are just byte arrays anyway
+        path_name[i] = (char) path_name_array->elements[i].number;
+    }
+    union itval result;
+    result.number = nl_create_native_lib_handle(path_name)->id;
+    return result;
+}
+union itval rm_close_native_lib(struct it_PROGRAM* program, struct it_STACKFRAME* stackptr, union itval* params) {
+    uint64_t native_lib_id = params[0].number;
+    struct nl_NATIVE_LIB* native_lib = nl_get_by_index(native_lib_id);
+    nl_close(native_lib);
+    union itval result;
+    result.number = 0;
+    return result;
+}
+void it_replace_methods(struct it_PROGRAM* program) {
+    for(int i = 0; i < program->methodc; i++) {
+        if(strcmp(program->methods[i].name, "stdlib.internal.traceback") == 0) {
+            program->methods[i].replacement_ptr = rm_traceback;
+        }
+        if(strcmp(program->methods[i].name, "stdlib.internal.replace") == 0) {
+            program->methods[i].replacement_ptr = rm_replace;
+        }
+        if(strcmp(program->methods[i].name, "stdlib.internal.create_rtlib") == 0) {
+            program->methods[i].replacement_ptr = rm_create_rtlib;
+        }
+        if(strcmp(program->methods[i].name, "stdlib.internal.create_lib") == 0) {
+            program->methods[i].replacement_ptr = rm_create_rtlib;
+        }
+        if(strcmp(program->methods[i].name, "stdlib.internal.close_native_lib") == 0) {
+            program->methods[i].replacement_ptr = rm_close_native_lib;
+        }
+    }
 }

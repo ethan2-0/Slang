@@ -1,5 +1,73 @@
 namespace stdlib;
 
+// Replaced method
+fn internal.print(value: [int]) {
+    die("Call to stdlib.internal.print before being replaced");
+    // If stdlib.internal.exit(...) hasn't been replaced, that previous call
+    // won't exit
+    let arr = [0];
+    let num = arr[1];
+}
+// Replaced method
+fn internal.exit(status: int) {
+    println("Error: call to stdlib.internal.exit before being replaced");
+    // I would call die(...), but we know for certain that exit(...) doesn't
+    // work, so what's the point?
+    let arr = [0];
+    let num = arr[1];
+}
+// Replaced method
+fn internal.read(buff: [int], num_chars: int): int {
+    die("Call to stdlib.internal.read before being replaced");
+    // If stdlib.internal.exit(...) hasn't been replaced, that previous call
+    // won't exit
+    let arr = [0];
+    let num = arr[1];
+    return -1;
+}
+// Replaced method
+fn internal.traceback() {
+    // Do nothing
+    // This is replaced directly in interpreter.c so we don't have to deal with
+    // the case that this wouldn't be replaced
+}
+// Replaced method
+fn internal.replace(index: int, symbol_name: [int], method_name: [int]) {
+    // Do nothing
+    // Same applies as stdlib.internal.traceback(...)
+}
+// Replaced method
+fn internal.create_rtlib(): int {
+    // Do nothing
+    // Same applies as stdlib.internal.traceback(...)
+    return -1;
+}
+fn internal.create_lib(path: [int]): int {
+    // Do nothing
+    // This is replaced directly in interpreter.c so we don't have to deal with
+    // the case that this wouldn't be replaced
+    return -1;
+}
+// Replaced method
+fn internal.close_native_lib(index: int) {
+    // Do nothing
+    // Same applies as stdlib.internal.traceback(...)
+}
+
+static rtlib_loaded: bool = false;
+
+fn load_rtlib() {
+    if(rtlib_loaded) {
+        return;
+    }
+    let rtlib = stdlib.internal.create_rtlib();
+    stdlib.internal.replace(rtlib, ("rtlib_exit")._getCleanBuffer(), ("stdlib.internal.exit")._getCleanBuffer());
+    stdlib.internal.replace(rtlib, ("rtlib_print")._getCleanBuffer(), ("stdlib.internal.print")._getCleanBuffer());
+    stdlib.internal.replace(rtlib, ("rtlib_read")._getCleanBuffer(), ("stdlib.internal.read")._getCleanBuffer());
+    stdlib.internal.close_native_lib(rtlib);
+    rtlib_loaded = true;
+}
+
 fn die(message: String) {
     print("Fatal error: ");
     print(message);
@@ -7,7 +75,12 @@ fn die(message: String) {
     let blah = stdlib.internal.traceback();
     exit(1);
 }
-
+fn exit(code: int) {
+    if(not rtlib_loaded) {
+        load_rtlib();
+    }
+    let _ = stdlib.internal.exit(code);
+}
 class String {
     chars: [int];
     startIndex: int;
@@ -204,6 +277,9 @@ class String {
     }
 }
 fn print(str: String) {
+    if(not rtlib_loaded) {
+        load_rtlib();
+    }
     // This is to work around a compiler bug that I haven't gotten around to fixing yet
     let _ = stdlib.internal.print(str._getCleanBuffer());
 }
@@ -211,9 +287,6 @@ fn println(str: String) {
     // I know, this is horribly inefficient
     print(str);
     print("\n");
-}
-fn exit(code: int) {
-    let _ = stdlib.internal.exit(code);
 }
 fn getOne(): int {
     return 1;
@@ -369,6 +442,9 @@ class StdinInputStream extends InputStream {
         this._hasMore = true;
     }
     override fn read(buff: [int], maxlen: int): int {
+        if(not rtlib_loaded) {
+            load_rtlib();
+        }
         let result = stdlib.internal.read(buff, maxlen);
         if(result <= 0) {
             this._hasMore = false;

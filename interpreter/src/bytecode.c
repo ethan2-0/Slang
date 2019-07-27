@@ -395,6 +395,7 @@ uint32_t bc_resolve_name(struct it_PROGRAM* program, char* name) {
     #if DEBUG
     printf("Name: %s\n", name);
     #endif
+    printf("Name: '%s'\n", name);
     fatal("Asked to resolve unknown name");
     // Unreachable
     return -1;
@@ -622,7 +623,7 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
     struct it_PROGRAM* result = mm_malloc(sizeof(struct it_PROGRAM));
     result->clazz_index = 0;
     result->method_id = 0;
-    result->methodc = NUM_REPLACED_METHODS;
+    result->methodc = 0;
     result->entrypoint = -1;
     result->static_varsc = 0;
     for(int i = 0; i < num_files; i++) {
@@ -665,7 +666,6 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
         // Ignore the magic number
         fr_getuint32(state[i]);
     }
-    it_replace_methods(result);
     cl_arrange_phi_tables(result);
 
     if(result->entrypoint == -1) {

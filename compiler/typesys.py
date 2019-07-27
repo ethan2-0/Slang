@@ -120,33 +120,43 @@ class ClazzType(AbstractType):
             return self.typesys.get_clazz_type_by_signature(self.signature.parent_signature)
         return None
 
-    def type_of_property(self, name: str, node: parser.Node=None) -> AbstractType:
+    def type_of_property(self, name: str, node: parser.Node) -> AbstractType:
+        ret = self.type_of_property_optional(name, node)
+        if ret is None:
+            node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
+        return ret
+
+    def type_of_property_optional(self, name: str, node: parser.Node=None) -> Optional[AbstractType]:
         for field in self.signature.fields:
             if field.name == name:
                 return field.type
         supertype = self.get_supertype()
         if supertype is not None:
-            ret = supertype.type_of_property(name)
+            ret = supertype.type_of_property_optional(name)
             if ret is not None:
                 return ret
         if node is not None:
             node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
-        # TODO: I included this next line under the assumption that `node` is never None. Is that true?
-        return None # type: ignore
+        return None
 
-    def method_signature(self, name: str, node: parser.Node=None) -> "emitter.MethodSignature":
+    def method_signature(self, name: str, node: parser.Node) -> "emitter.MethodSignature":
+        ret = self.method_signature_optional(name, node)
+        if ret is None:
+            node.compile_error("Invalid class method name '%s' for type '%s'" % (name, self.name))
+        return ret
+
+    def method_signature_optional(self, name: str, node: parser.Node=None) -> "Optional[emitter.MethodSignature]":
         for method in self.signature.method_signatures:
             if method.name == name:
                 return method
         supertype = self.get_supertype()
         if supertype is not None:
-            ret = supertype.method_signature(name)
+            ret = supertype.method_signature_optional(name)
             if ret is not None:
                 return ret
         if node is not None:
             node.compile_error("Invalid class method name '%s' for type '%s'" % (name, self.name))
-        # TODO: I included this next line under the assumption that `node` is never None. Is that true?
-        return None # type: ignore
+        return None
 
     def is_clazz(self) -> bool:
         return True
@@ -261,12 +271,12 @@ class TypeSystem:
                 # Unreachable
                 return None # type: ignore
             assert isinstance(typ, ClazzType)
-            if typ.type_of_property(node[1].data_strict) is not None:
+            if typ.type_of_property_optional(node[1].data_strict) is not None:
                 node.compile_error("Attempt to call a property")
                 # Unreachable
                 return None # type: ignore
-            elif typ.method_signature(node[1].data_strict) is not None:
-                return typ.method_signature(node[1].data_strict)
+            elif typ.method_signature_optional(node[1].data_strict) is not None:
+                return typ.method_signature(node[1].data_strict, node)
             else:
                 node.compile_error("Attempt to perform property access that doesn't make sense (perhaps the property doesn't exist or is spelled wrong?)")
                 # Unreachabe
@@ -413,7 +423,7 @@ class TypeSystem:
             if not lhs_typ.is_clazz():
                 expr.compile_error("Attempt to access an attribute of something that isn't a class")
             assert isinstance(lhs_typ, ClazzType)
-            return lhs_typ.type_of_property(expr[1].data_strict)
+            return lhs_typ.type_of_property(expr[1].data_strict, expr)
         elif expr.i("string"):
             string_type = self.get_string_type()
             if string_type is None:

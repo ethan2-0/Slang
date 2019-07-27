@@ -238,14 +238,14 @@ class MethodEmitter(SegmentEmitter):
                 # Unreachable
                 return None # type: ignore
             assert isinstance(typ, typesys.ClazzType)
-            if typ.type_of_property(node[1].data_strict) is not None:
+            if typ.type_of_property_optional(node[1].data_strict) is not None:
                 node.compile_error("Attempt to call a property")
                 # Unreachable
                 return None # type: ignore
-            elif typ.method_signature(node[1].data_strict) is not None:
+            elif typ.method_signature_optional(node[1].data_strict) is not None:
                 reg = self.scope.allocate(typ)
                 opcodes += self.emit_expr(node[0], reg)
-                return typ.method_signature(node[1].data_strict), reg
+                return typ.method_signature(node[1].data_strict, node), reg
             else:
                 node.compile_error("Attempt to perform property access that doesn't make sense")
                 # Unreachable
@@ -497,7 +497,7 @@ class MethodEmitter(SegmentEmitter):
             opcodes += self.emit_expr(expr_lhs, expr_lhs_reg)
             if not expr[1].i("ident"):
                 raise ValueError("This is a compiler bug.")
-            if not expr_lhs_type.type_of_property(expr[1].data_strict).is_assignable_from(value.type):
+            if not expr_lhs_type.type_of_property(expr[1].data_strict, expr).is_assignable_from(value.type):
                 raise typesys.TypingError(expr, "Incompatible types in class property assignment: %s, %s" % (expr_lhs_type, value.type))
             opcodes.append(ops["assign"].ins(expr_lhs_reg, expr[1].data_strict, value))
         elif expr.i("access"):
