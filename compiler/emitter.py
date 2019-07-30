@@ -767,15 +767,17 @@ class ClazzField:
 
 class ClazzSignature:
     def __init__(self, name: str, fields: List[ClazzField], method_signatures: List[MethodSignature],
-                ctor_signatures: List[MethodSignature], parent_signature: "Optional[ClazzSignature]", is_included: bool=False) -> None:
+                ctor_signatures: List[MethodSignature], parent_type: Optional[typesys.ClazzType], is_included: bool=False) -> None:
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
         self.ctor_signatures = ctor_signatures
         self.is_included = is_included
-        if parent_signature is not None and type(parent_signature) is not ClazzSignature:
-            raise ValueError("Invalid type for parent_signature %s (expected ClazzSignature or NoneType)" % type(parent_signature))
-        self.parent_signature = parent_signature
+        self.parent_type = parent_type
+
+    @property
+    def parent_signature(self) -> "Optional[ClazzSignature]":
+        return self.parent_type.signature if self.parent_type is not None else None
 
     def validate_overriding_rules(self) -> None:
         if self.is_included:
@@ -909,13 +911,21 @@ class ClazzEmitter(SegmentEmitter):
         return self.signature
 
     def add_superclass_to_signature(self) -> None:
-        if len(self.top["extends"]) > 0:
+        if len(self.top["extends"]) <= 0:
+            # Implicitly extending stdlib.Object
+            object_type = self.program.types.get_object_type()
+            if object_type is None:
+                self.top["extends"].compile_error("Cannot implicitly extend stdlib.Object without an implementation of stdlib.Object")
+            self.signature.parent_type = object_type
+        elif self.top["extends"][0].i("ident") and self.top["extends"][0].data_strict == "void":
+            self.signature.parent_type = None
+        else:
             # Since we have a reference to this class's signature, we can
             # just update it in-place.
             parent_type = self.program.types.resolve(self.top["extends"][0])
             if parent_type is None or not isinstance(parent_type, typesys.ClazzType):
                 self.top["extends"].compile_error("Tried to extend a nonexisting class")
-            self.signature.parent_signature = parent_type.signature
+            self.signature.parent_type = parent_type
         # Otherwise, the superclass remains as `None`.
 
     def emit(self) -> "ClazzSegment":
@@ -1128,7 +1138,7 @@ class Program:
             parent_type = self.types.resolve_strict(parser.parse_type(clazz.parent)) if clazz.parent is not None else None
             assert isinstance(parent_type, typesys.ClazzType) or parent_type is None
             # util.nonnull is correct here because of the previous two lines
-            clazz_signature = ClazzSignature(clazz.name, fields, methods, ctors, util.nonnull(parent_type).signature if clazz.parent is not None else None, is_included=True)
+            clazz_signature = ClazzSignature(clazz.name, fields, methods, ctors, util.nonnull(parent_type) if clazz.parent is not None else None, is_included=True)
             self.clazz_signatures.append(clazz_signature)
             self.types.update_signature(clazz_signature)
 

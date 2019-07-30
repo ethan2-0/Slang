@@ -1,0 +1,17 @@
+using stdlib;
+
+class Cls {
+    ctor() {}
+}
+class Cls2 extends void {
+    ctor() {}
+}
+
+entrypoint fn main() {
+    if(not new Cls() instanceof Object) {
+        die("Failed 1");
+    }
+    if(new Cls2() instanceof Object) {
+        die("Failed 2");
+    }
+}

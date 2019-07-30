@@ -1,0 +1,7 @@
+using stdlib;
+
+class Cls extends stdlib.String {
+    ctor() {}
+}
+
+entrypoint fn main() {}

@@ -134,6 +134,11 @@ class TestClazzesBasic:
         path = util.assert_compile_succeeds("resources/classes_basic/class_call.slg")
         assert "0x00000001" in util.interpret(path, "--print-return-value")
 
+    def test_extend_included(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/classes_basic/extend_included.slg")
+        util.interpret(path)
+
 class TestClassesMethods:
     def test_classes_method(self):
         util.clean_tmp()
@@ -412,7 +417,6 @@ class TestStdlib:
         path = util.assert_compile_succeeds("resources/stdlib/string_advanced.slg")
         util.interpret(path)
 
-
 class TestReplacedMethods:
     def test_print(self):
         util.clean_tmp()
@@ -476,3 +480,9 @@ class TestStaticVariables:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/static_variables/initializer_garbage_collection.slg", no_warnings=False)
         assert "Garbage collecting" in util.interpret(path, "--gc-verbose")
+
+class TestObject:
+    def test_object_extension(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/object/object_extension.slg", no_warnings=False)
+        util.interpret(path)

@@ -149,7 +149,11 @@ class String {
         }
         return this.substr(startIndex, this.length);
     }
-    fn equals(other: String): bool {
+    override fn equals(other_: Object): bool {
+        if(not other_ instanceof String) {
+            return false;
+        }
+        let other = other_ as String;
         if(other.length != this.length) {
             return false;
         }
@@ -274,6 +278,15 @@ class String {
             }
         }
         return true;
+    }
+}
+class Object extends void {
+    ctor() {}
+    fn toString(): String {
+        return "[Object]";
+    }
+    fn equals(other: Object): bool {
+        return other == this;
     }
 }
 fn print(str: String) {

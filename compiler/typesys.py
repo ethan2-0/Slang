@@ -51,9 +51,7 @@ class AbstractType:
         name = flatten_qualified(node)
 
         for search_path in program.search_paths:
-            # print("search_path=%s, name=%s, self.name=%s" % (search_path, name, self.name))
             if "%s%s" % (search_path, name) == self.name:
-                # print("resolved\n")
                 return True
         return False
 
@@ -198,18 +196,24 @@ class TypeSystem:
                 return None
             return self.get_array_type(element_type)
         if not fail_silent:
-            raise TypingError(node, "Could not resolve type: '%s'" % node)
+            raise TypingError(node, "Could not resolve type: '%s' ('%s')" % (node, util.get_flattened(node)))
         else:
             return None
 
-    def get_string_type(self) -> Optional[ClazzType]:
-        typ = self.resolve(parser.parse_type("stdlib.String"), fail_silent=True)
+    def get_clazz_type_by_name(self, name: str) -> Optional[ClazzType]:
+        typ = self.resolve(parser.parse_type(name), fail_silent=True)
         if typ is None:
             return typ
         if not isinstance(typ, ClazzType):
-            # Since an identifier can only resolve to a class
+            # Clearly someone passed in a bad value for `name`
             raise ValueError("This is a compiler bug.")
         return typ
+
+    def get_string_type(self) -> Optional[ClazzType]:
+        return self.get_clazz_type_by_name("stdlib.String")
+
+    def get_object_type(self) -> Optional[ClazzType]:
+        return self.get_clazz_type_by_name("stdlib.Object")
 
     def resolve_strict(self, node: parser.Node) -> AbstractType:
         ret = self.resolve(node, fail_silent=False)

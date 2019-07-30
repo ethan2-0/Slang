@@ -37,6 +37,15 @@ if args.parse_only:
 
 compiler = emitter.Emitter(tree)
 program = compiler.emit_program()
+
+# This used to come after the other includes. Why did I change it? With the
+# current implementation, If an include depends on something else, that
+# something else needs to be included first. That might seem like a problem,
+# but it really isn't: I already don't allow cyclic dependencies
+if not args.no_stdlib:
+    compiler_dir = os.path.dirname(__file__)
+    program.add_include(header.from_slb(os.path.join(compiler_dir, "stdlib/bin/stdlib.slb")))
+
 if args.include:
     for include in args.include:
         program.add_include(header.from_slb(include))
@@ -44,10 +53,6 @@ if args.include:
 if args.include_json:
     for include in args.include_json:
         program.add_include(header.from_json(include))
-
-if not args.no_stdlib:
-    compiler_dir = os.path.dirname(__file__)
-    program.add_include(header.from_slb(os.path.join(compiler_dir, "stdlib/bin/stdlib.slb")))
 
 program.prescan()
 if args.directives:

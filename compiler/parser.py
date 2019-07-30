@@ -187,9 +187,8 @@ class Node:
         return self.data
 
     def __repr__(self) -> str:
-        return "%s(%s)%s" % (self.type,
-            self.data if self.data is not None else "",
-            " %s" % self.xattrs if len(self.xattrs) > 0 else "")
+        return "%s(%s)" % (self.type,
+            self.data if self.data is not None else "")
 
     def __str__(self) -> str:
         return repr(self)

@@ -448,7 +448,7 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     printf("Done parsing method\n");
     #endif
 }
-void bc_scan_types(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
+void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
         if(segment_type == SEGMENT_TYPE_METHOD) {
@@ -494,8 +494,8 @@ void bc_scan_types(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* presca
             fatal("Unrecognized segment type");
         }
     }
-    fr_rewind(state);
-    fr_getuint32(state); // magic number
+}
+void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
         if(segment_type == SEGMENT_TYPE_METHOD) {
@@ -645,7 +645,13 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
     result->methods = mm_malloc(sizeof(struct it_METHOD) * result->methodc);
     result->clazzes = mm_malloc(sizeof(struct ts_TYPE_CLAZZ*) * result->clazzesc);
     for(int i = 0; i < num_files; i++) {
-        bc_scan_types(result, prescan[i], state[i]);
+        bc_scan_types_firstpass(result, prescan[i], state[i]);
+        fr_rewind(state[i]);
+        // Ignore the magic number
+        fr_getuint32(state[i]);
+    }
+    for(int i = 0; i < num_files; i++) {
+        bc_scan_types_secondpass(result, prescan[i], state[i]);
         fr_rewind(state[i]);
         // Ignore the magic number
         fr_getuint32(state[i]);
