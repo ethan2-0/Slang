@@ -1,0 +1,25 @@
+using stdlib;
+
+class Cls {
+    a: int;
+    ctor(a: int) {
+        super();
+        this.a = a;
+    }
+    fn doStuff(n: int): int {
+        return n + this.a;
+    }
+}
+class Cls2 extends Cls {
+    ctor(a: int) {
+        super(a);
+    }
+    override fn doStuff(n: int): int {
+        return super.doStuff(3) + 4 + n;
+    }
+}
+entrypoint fn main() {
+    if((new Cls2(10)).doStuff(3) != 20) {
+        die("Failed.");
+    }
+}

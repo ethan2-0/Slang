@@ -262,6 +262,22 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         data->destination_var = sv_get_static_var_index_by_name(program, dest_var_name);
         free(dest_var_name);
         opcode->payload = data;
+    } else if(opcode_num == OPCODE_CLASSCALLSPECIAL) {
+        struct it_OPCODE_DATA_CLASSCALLSPECIAL* data = mm_malloc(sizeof(struct it_OPCODE_DATA_CLASSCALLSPECIAL));
+        char* classname = fr_getstr(state);
+        char* methodname = fr_getstr(state);
+        data->destination_register = fr_getuint32(state);
+        data->callee_register = fr_getuint32(state);
+        struct ts_TYPE_CLAZZ* clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(classname);
+        // This is safe since every member of union ts_TYPE has offsetof(category) the same
+        if(clazz->category != ts_CATEGORY_CLAZZ) {
+            fatal("First argument to CLASSCALLSPECIAL isn't a class");
+        }
+        uint32_t method_index = ts_get_method_index(clazz, methodname);
+        data->method = clazz->methods[method_index];
+        free(classname);
+        free(methodname);
+        opcode->payload = data;
     } else {
         printf("Opcode: %2x\n", opcode_num);
         fatal("Unrecognized opcode");

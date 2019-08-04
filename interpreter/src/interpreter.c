@@ -83,10 +83,24 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             iptr++;
             continue;
         case OPCODE_CALL:
+        case OPCODE_CLASSCALLSPECIAL:
             ; // Labels can't be immediately followed by declarations, because
               // C is a barbaric language
-            uint32_t callee_id = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->callee;
-            struct it_METHOD* callee = &prog->methods[callee_id];
+            // TODO: Especially after the introduction of CLASSCALLSPECIAL,
+            // this desperately needs optimization.
+            struct it_METHOD* callee;
+            if(iptr->type == OPCODE_CALL) {
+                uint32_t callee_id = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->callee;
+                callee = &prog->methods[callee_id];
+            } else {
+                callee = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->method;
+            }
+            if(iptr->type == OPCODE_CLASSCALLSPECIAL) {
+                if(registers[((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->callee_register].clazz_data == NULL) {
+                    it_traceback(stackptr);
+                    fatal("Attempt to do a non-virtual class call on null");
+                }
+            }
             if(callee->replacement_ptr != NULL) {
                 #if DEBUG
                 printf("Calling replaced method %s\n", callee->name);
@@ -106,10 +120,18 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             }
 
             #if DEBUG
-            printf("Calling %d\n", callee_id);
+            if(callee->containing_clazz != NULL) {
+                printf("Calling %s from %s\n", callee->name, callee->containing_clazz->name);
+            } else {
+                printf("Calling %s\n", callee->name);
+            }
             #endif
 
-            oldstack->returnreg = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+            if(iptr->type == OPCODE_CLASSCALLSPECIAL) {
+                oldstack->returnreg = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->destination_register;
+            } else {
+                oldstack->returnreg = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+            }
 
             #if DEBUG
             printf("Need %d args.\n", callee->nargs);
@@ -123,8 +145,12 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             instruction_start = stackptr->iptr;
             oldstack->iptr = iptr;
             iptr = instruction_start;
-            for(uint32_t i = 0; i < callee->nargs; i++) {
-                registers[i] = params[i];
+            if(oldstack->iptr->type == OPCODE_CLASSCALLSPECIAL) {
+                uint32_t reg = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) oldstack->iptr->payload)->callee_register;
+                registers[0] = oldstack->registers[reg];
+            }
+            for(uint32_t i = 0; i < callee->nargs - (oldstack->iptr->type == OPCODE_CLASSCALLSPECIAL ? 1 : 0); i++) {
+                registers[i + (oldstack->iptr->type == OPCODE_CALL ? 0 : 1)] = params[i];
             }
             continue;
         case OPCODE_CLASSCALL:
@@ -137,10 +163,17 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 fatal("Stack overflow");
             }
 
-            uint32_t classcall_callee_index = ((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload)->callee_index;
+            struct it_OPCODE_DATA_CLASSCALL* classcalldata = ((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload);
 
-            classcall_oldstack->returnreg = ((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload)->returnreg;
-            union itval thiz = registers[((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload)->targetreg];
+            uint32_t classcall_callee_index = classcalldata->callee_index;
+
+            classcall_oldstack->returnreg = classcalldata->returnreg;
+            union itval thiz = registers[classcalldata->targetreg];
+            if(thiz.clazz_data == NULL) {
+                stackptr--;
+                it_traceback(stackptr);
+                fatal("Attempt to call method of null");
+            }
             struct it_METHOD* classcall_callee = thiz.clazz_data->phi_table->methods[classcall_callee_index];
 
             #if DEBUG
@@ -181,6 +214,9 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             iptr = stackptr->iptr;
             registers[stackptr->returnreg] = result;
             iptr++;
+            #if DEBUG
+            printf("Returned to %s\n", stackptr->method->name);
+            #endif
             continue;
         case OPCODE_ZERO:
             registers[((struct it_OPCODE_DATA_ZERO*) iptr->payload)->target].number = 0x00000000;

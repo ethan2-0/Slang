@@ -44,6 +44,7 @@
 #define OPCODE_INSTANCEOF 0x22
 #define OPCODE_STATICVARGET 0x23
 #define OPCODE_STATICVARSET 0x24
+#define OPCODE_CLASSCALLSPECIAL 0x25
 
 struct it_OPCODE_DATA_LOAD {
     uint32_t target;
@@ -196,6 +197,11 @@ struct it_OPCODE_DATA_STATICVARGET {
 struct it_OPCODE_DATA_STATICVARSET {
     uint32_t source;
     uint32_t destination_var;
+};
+struct it_OPCODE_DATA_CLASSCALLSPECIAL {
+    struct it_METHOD* method;
+    uint32_t destination_register;
+    uint32_t callee_register;
 };
 
 #endif /* OPCODES_H */

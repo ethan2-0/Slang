@@ -486,3 +486,9 @@ class TestObject:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/object/object_extension.slg", no_warnings=False)
         util.interpret(path)
+
+class TestSupercalls:
+    def test_supercalls(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/supercalls/supercalls.slg")
+        util.interpret(path)

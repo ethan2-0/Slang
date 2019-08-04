@@ -230,6 +230,9 @@ class MethodEmitter(SegmentEmitter):
         if node.i("ident"):
             node.compile_error("Attempt to call an identifier that doesn't resolve to a method")
         elif node.i("."):
+            if node[0].i("super"):
+                # We shouldn't ever get to emit_to_method_signature, instead we should handle it directly in emit_expr
+                raise ValueError("This is a compiler bug.")
             typ = self.types.decide_type(node[0], self.scope)
             if not node[1].i("ident"):
                 raise ValueError("This is a compiler bug")
@@ -282,7 +285,7 @@ class MethodEmitter(SegmentEmitter):
             stdlib_string_type = self.types.get_string_type()
             if stdlib_string_type is None:
                 node.compile_error("Cannot use string literal without an implementation of stdlib.String")
-            opcodes.append(ops["new"].ins(stdlib_string_type.signature, register))
+            opcodes.append(ops["new"].ins(stdlib_string_type.signature, register, node=node))
 
             opcodes.append(ops["param"].ins(string_array_register, 0))
             string_int_register = self.scope.allocate(self.types.int_type)
@@ -302,7 +305,7 @@ class MethodEmitter(SegmentEmitter):
                 node.compile_error("Cannot cast to a type that isn't a class.")
             if not lhs_reg.type.is_clazz():
                 node.compile_error("Cannot cast something that isn't a class.");
-            opcodes.append(ops["cast"].ins(lhs_reg, register))
+            opcodes.append(ops["cast"].ins(lhs_reg, register, node=node))
         elif node.i("instanceof"):
             lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs_reg)
@@ -313,7 +316,7 @@ class MethodEmitter(SegmentEmitter):
                 node.warn("Tautology: %s always instanceof %s" % (lhs_reg.type, rhs_type))
             if (not lhs_reg.type.is_assignable_to(rhs_type)) and (not rhs_type.is_assignable_to(lhs_reg.type)):
                 node.warn("Contradiction: there cannot exist any %s instanceof %s" % (lhs_reg.type, rhs_type))
-            opcodes.append(ops["instanceof"].ins(lhs_reg, register, rhs_type))
+            opcodes.append(ops["instanceof"].ins(lhs_reg, register, rhs_type, node=node))
         elif node.of("+", "*", "^", "&", "|", "%", "/", "==", ">=", "<=", ">", "<", "!=", "and", "or"):
             lhs = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs)
@@ -377,8 +380,37 @@ class MethodEmitter(SegmentEmitter):
                 opcodes += self.emit_expr(node[1], rhs)
                 opcodes.append(ops["twocomp"].ins(rhs, node=node))
                 opcodes.append(ops["add"].ins(lhs, rhs, register, node=node))
-        elif node.i("call"):
+        elif node.i("call") and node[0].i(".") and node[0][0].i("super"):
+            # Super call
             emitted_opcodes: List[opcodes_module.OpcodeInstance] = []
+            containing_class = self.signature.containing_class
+            if containing_class is None:
+                node[0].compile_error("Cannot reference super outside of a class")
+            superclass = containing_class.parent_signature
+            if superclass is None:
+                node[0].compile_error("Cannot reference super in a class without a superclass")
+            method_name = node[0][1].data_strict
+            method_signature = superclass.get_method_signature_by_name(method_name)
+            if method_signature is None:
+                node[0][1].compile_error("Attempt to call method of superclass that doesn't exist")
+            if not len(node) - 1 == len(method_signature.args) - 1:
+                node.compile_error("Expected %s arguments, got %s" % (len(node), len(method_signature.args)))
+            param_reg: List[RegisterHandle] = []
+            for param, index in zip(node.children[1:], range(len(node) - 1)):
+                expected_type = method_signature.args[index + 1]
+                reg = self.scope.allocate(self.types.decide_type(param, self.scope))
+                if not reg.type.is_assignable_to(expected_type):
+                    raise typesys.TypingError(param, "Invalid parameter type: %s is not assignable to %s" % (reg.type, expected_type))
+                emitted_opcodes += self.emit_expr(param, reg)
+                param_reg.append(reg)
+            for i in range(len(param_reg)):
+                emitted_opcodes.append(ops["param"].ins(param_reg[i], i, node=node))
+            # TODO: scope.resolve("this") is ugly
+            emitted_opcodes.append(ops["classcallspecial"].ins(superclass, method_signature, register, self.scope.resolve("this", node), node=node))
+            opcodes += annotate(emitted_opcodes, "super method call")
+        elif node.i("call"):
+            # Normal (not super) call
+            emitted_opcodes = []
             signature, optional_lhs_reg = self.emit_to_method_signature(node[0], emitted_opcodes)
             opcodes += emitted_opcodes
             is_clazz_call = optional_lhs_reg is not None
@@ -395,7 +427,6 @@ class MethodEmitter(SegmentEmitter):
                 reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
                 param_registers.append((reg, index + (-1 if is_clazz_call else 0)))
-                # opcodes.append(ops["param"].ins(reg, index + (-1 if is_clazz_call else 0)))
             for reg, index in param_registers:
                 opcodes.append(ops["param"].ins(reg, index, node=node))
             if is_clazz_call:
@@ -482,12 +513,12 @@ class MethodEmitter(SegmentEmitter):
             static_variable = self.program.static_variables.resolve_variable(util.nonnull(util.get_flattened(expr)))
             if not static_variable.type.is_assignable_from(value.type):
                 raise typesys.TypingError(expr, "Attempt to make incompatible assignment to static variable: %s, %s" % (static_variable.type, value.type))
-            opcodes.append(ops["staticvarset"].ins(value, static_variable.name))
+            opcodes.append(ops["staticvarset"].ins(value, static_variable.name, node=expr))
         elif expr.i("ident"):
             lhs_reg = self.scope.resolve(expr.data_strict, expr)
             if not value.type.is_assignable_to(lhs_reg.type):
                 raise typesys.TypingError(expr, "Attempt to make incompatible assignment: %s, %s" % (lhs_reg.type, value.type))
-            opcodes.append(ops["mov"].ins(value, lhs_reg))
+            opcodes.append(ops["mov"].ins(value, lhs_reg, node=expr))
         elif expr.i("."):
             expr_lhs = expr[0]
             expr_lhs_type = self.types.decide_type(expr_lhs, self.scope)
@@ -499,7 +530,7 @@ class MethodEmitter(SegmentEmitter):
                 raise ValueError("This is a compiler bug.")
             if not expr_lhs_type.type_of_property(expr[1].data_strict, expr).is_assignable_from(value.type):
                 raise typesys.TypingError(expr, "Incompatible types in class property assignment: %s, %s" % (expr_lhs_type, value.type))
-            opcodes.append(ops["assign"].ins(expr_lhs_reg, expr[1].data_strict, value))
+            opcodes.append(ops["assign"].ins(expr_lhs_reg, expr[1].data_strict, value, node=expr))
         elif expr.i("access"):
             expr_lhs = expr[0]
             expr_lhs_type = self.types.decide_type(expr_lhs, self.scope)
@@ -515,7 +546,7 @@ class MethodEmitter(SegmentEmitter):
                 raise typesys.TypingError(expr_index, "Attempt to index an array by something that isn't an integer: %s" % index_type)
             index_reg = self.scope.allocate(index_type)
             opcodes += self.emit_expr(expr_index, index_reg)
-            opcodes.append(ops["arrassign"].ins(expr_lhs_reg, index_reg, value))
+            opcodes.append(ops["arrassign"].ins(expr_lhs_reg, index_reg, value, node=expr))
         return opcodes
 
     def emit_statement(self, node: parser.Node) -> Tuple[List[opcodes_module.OpcodeInstance], clms.ClaimSpace]:
@@ -669,8 +700,35 @@ class MethodEmitter(SegmentEmitter):
             opcodes.append(ops["load"].ins(reg, 1, node=node))
             if node.i("--"):
                 opcodes.append(ops["twocomp"].ins(reg, node=node))
-            opcodes.append(ops["add"].ins(reg, lhs_reg, reg))
+            opcodes.append(ops["add"].ins(reg, lhs_reg, reg, node=node))
             opcodes += self.assign_to_expr(node[0], reg)
+        elif node.i("super"):
+            emitted_opcodes: List[opcodes_module.OpcodeInstance] = []
+            # Note that we don't check if we're in a constructor. Though I can't
+            # imagine why someone would want to call the superclass's
+            # constructor outside of a constructor, it's not hurting anything.
+            containing_class = self.signature.containing_class
+            if containing_class is None:
+                node.compile_error("Cannot invoke super constructor other than in a class method")
+            clazz_signature = containing_class.parent_signature
+            if clazz_signature is None:
+                node.compile_error("Cannot invoke super constructor in class without a superclass")
+            # For now, every class has exactly one constructor
+            ctor_signature = clazz_signature.ctor_signatures[0]
+            param_registers: List[RegisterHandle] = []
+            if not len(node) == len(ctor_signature.args) - 1:
+                node.compile_error("Expected %s arguments, got %s" % (len(ctor_signature.args), len(node)))
+            for param, index in zip(node, range(len(node))):
+                reg = self.scope.allocate(self.types.decide_type(param, self.scope))
+                if not reg.type.is_assignable_to(ctor_signature.args[index + 1]):
+                    raise typesys.TypingError(node, "Invalid parameter type: %s is not assignable to %s" % (reg.type, ctor_signature.args[index + 1]))
+                emitted_opcodes += self.emit_expr(param, reg)
+                param_registers.append(reg)
+            for i in range(len(param_registers)):
+                emitted_opcodes.append(ops["param"].ins(param_registers[i], i, node=node))
+            # TODO: scope.resolve("this") is ugly
+            emitted_opcodes.append(ops["classcallspecial"].ins(clazz_signature, ctor_signature, self.scope.allocate(self.types.bool_type), self.scope.resolve("this", node), node=node))
+            opcodes += annotate(emitted_opcodes, "super cosntructor call")
         else:
             node.compile_error("Unexpected (this is a compiler bug)")
         return opcodes, claims

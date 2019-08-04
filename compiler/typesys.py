@@ -433,5 +433,14 @@ class TypeSystem:
             if string_type is None:
                 expr.compile_error("Cannot use string literal without an implementation of stdlib.String")
             return string_type
+        elif expr.i("super"):
+            # TODO: This is horribly ugly
+            typ = scope.resolve("this", expr).type
+            if not isinstance(typ, ClazzType):
+                expr.compile_error("Variable `this` isn't a class type")
+            parent_type = typ.get_supertype()
+            if parent_type is None:
+                expr.compile_error("Attempt to reference superclass in a class without a superclass")
+            return parent_type
         else:
             raise ValueError("Expression not accounted for in typesys. This is a compiler bug.")

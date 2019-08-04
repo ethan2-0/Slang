@@ -31,7 +31,10 @@ class Token:
 
 TokerState = NewType("TokerState", Tuple[int, int, int])
 class Toker:
-    keywords = ["using", "namespace", "static", "class", "override", "entrypoint", "fn", "ctor", "extends", "let", "return", "while", "for", "if", "else", "new", "true", "false", "and", "or", "not", "null", "as", "instanceof"]
+    keywords = ["using", "namespace", "static", "class", "override",
+            "entrypoint", "fn", "ctor", "extends", "let", "return", "while",
+            "for", "if", "else", "new", "true", "false", "and", "or", "not",
+            "null", "as", "instanceof", "super"]
     escapes = {"n": "\n", "\\": "\\", "'": "'", "\"": "\"", "r": "\r", "0": "\0", "b": "\b", "v": "\v", "t": "\t", "f": "\f"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
@@ -328,13 +331,16 @@ class Parser:
             return Node(self.next())
         elif self.isn("new"):
             return Node(self.next(), Node(self.expect("ident")), *self.parse_fcall_params())
-        elif self.isn("ident") or self.isn("("):
+        elif self.isn("ident") or self.isn("(") or self.isn("super"):
+            # Note that we'll end up parsing some `super` expressions that don't
+            # make sense, like `super[0]` or `super.property`. We reject these
+            # later.
             if self.isn("("):
                 self.expect("(")
                 ret = self.parse_expr()
                 self.expect(")")
             else:
-                ret = Node(self.expect("ident"))
+                ret = Node(self.next())
             while self.isn(".") or self.isn("(") or self.isn("["):
                 if self.isn("."):
                     ret = Node(self.expect("."), ret, Node(self.expect("ident")))
@@ -507,6 +513,11 @@ class Parser:
                     self.expect(";")
                 return nod
             return Node("expr", lhs_expr)
+        elif tok.isn("super"):
+            ret = Node(self.expect("super"), *self.parse_fcall_params())
+            while self.isn(";"):
+                self.expect(";")
+            return ret
         else:
             self.throw(tok)
 

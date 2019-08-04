@@ -189,6 +189,13 @@
         "writes": [1]
     },
     {
+        "code": "0x25",
+        "mneumonic": "CLASSCALLSPECIAL",
+        "params": ["class", "method", "register", "register"],
+        "reads": [3],
+        "writes": [2]
+    },
+    {
         "code": "0x05",
         "mneumonic": "MODULO",
         "params": ["register", "register", "register"],
