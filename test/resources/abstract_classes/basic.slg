@@ -1,0 +1,30 @@
+using stdlib;
+
+abstract class Superclass {
+    ctor() {}
+    abstract fn method1(): int;
+    fn method2(): int {
+        return this.method1() + 2;
+    }
+    fn method3(): int {
+        return this.method2() + 4;
+    }
+}
+abstract class Subclass extends Superclass {
+    ctor() {}
+    override fn method2(): int {
+        return this.method1() + 8;
+    }
+}
+class SubclassSubclass extends Subclass {
+    ctor() {}
+    override fn method1(): int {
+        return 16;
+    }
+}
+entrypoint fn main() {
+    let a: Superclass = new SubclassSubclass();
+    if(a.method3() != 28) {
+        die("Failed");
+    }
+}

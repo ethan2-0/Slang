@@ -34,7 +34,7 @@ class Toker:
     keywords = ["using", "namespace", "static", "class", "override",
             "entrypoint", "fn", "ctor", "extends", "let", "return", "while",
             "for", "if", "else", "new", "true", "false", "and", "or", "not",
-            "null", "as", "instanceof", "super"]
+            "null", "as", "instanceof", "super", "abstract"]
     escapes = {"n": "\n", "\\": "\\", "'": "'", "\"": "\"", "r": "\r", "0": "\0", "b": "\b", "v": "\v", "t": "\t", "f": "\f"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
@@ -140,6 +140,20 @@ class Toker:
         if ret is None:
             self.throw("Unexpected EOF")
         assert ret is not None
+        return ret
+
+    def peek_until(self, result_types: List[str], inbetween_types: List[str]) -> Token:
+        state = self.get_state()
+        ret = None
+        while True:
+            ret = self.next()
+            if ret.of(*result_types):
+                break
+            if not ret.of(*inbetween_types):
+                self.throw("Unexpected token %s, expected any of %s" % (ret, ", ".join(inbetween_types)))
+        self.set_state(state)
+        if ret is None:
+            raise ValueError("Unreachable")
         return ret
 
     def isn(self, type: str, data: str=None, num: int=1) -> bool:
@@ -250,7 +264,9 @@ class Node:
         print("Line %s @ %s: Warning: %s" % (self.line, repr(self), message))
 
 class Parser:
-    method_modifiers = ["override", "entrypoint"]
+    method_modifiers = ["override", "entrypoint", "abstract"]
+    class_modifiers = ["abstract"]
+    all_modifiers = method_modifiers + class_modifiers
     def __init__(self, toker: Toker) -> None:
         self.toker = toker
         global last_parser
@@ -530,12 +546,23 @@ class Parser:
             modifiers.add(modifier)
         self.expect("fn")
         name = self.parse_qualified_name()
-        return Node("fn", name, self.parse_fn_params(), self.parse_type_annotation() if self.isn(":") else Node("ident", data="void"), self.parse_statement(), modifiers)
+        params = self.parse_fn_params()
+        type_annotation = self.parse_type_annotation() if self.isn(":") else Node("ident", data="void")
+        if modifiers.has_child("abstract"):
+            statements = Node("statements")
+            while self.isn(";"):
+                self.expect(";")
+        else:
+            statements = self.parse_statement()
+        return Node("fn", name, params, type_annotation, statements, modifiers)
 
     def parse_ctor(self) -> Node:
         return Node(self.expect("ctor"), self.parse_fn_params(), self.parse_statement())
 
     def parse_class(self) -> Node:
+        modifiers = Node("modifiers")
+        while self.peek().of(*Parser.class_modifiers):
+            modifiers.add(Node(self.next()))
         nod = Node(self.expect("class"), Node(self.expect("ident")))
         if self.isn("extends"):
             nod.add(Node(self.expect("extends"), self.parse_type()))
@@ -556,6 +583,7 @@ class Parser:
             else:
                 self.throw(self.peek())
         self.expect("}")
+        nod.add(modifiers)
         return nod
 
     def parse_using(self) -> Node:
@@ -593,10 +621,15 @@ class Parser:
         last_parser = self
         nod = Node("top")
         while not self.isn("EOF"):
-            if self.isn("fn") or self.peek().of(*Parser.method_modifiers):
-                nod.add(self.parse_fn())
-            elif self.isn("class"):
-                nod.add(self.parse_class())
+            if self.isn("fn") or self.isn("class") or self.peek().of(*Parser.all_modifiers):
+                tok = self.toker.peek_until(["class", "fn"], Parser.all_modifiers)
+                if tok.isn("fn"):
+                    nod.add(self.parse_fn())
+                elif tok.isn("class"):
+                    nod.add(self.parse_class())
+                else:
+                    # Unreachable
+                    raise ValueError("This is a compiler bug.")
             elif self.isn("using"):
                 nod.add(self.parse_using())
             elif self.isn("namespace"):

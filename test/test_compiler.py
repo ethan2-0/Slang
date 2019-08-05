@@ -492,3 +492,21 @@ class TestSupercalls:
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/supercalls/supercalls.slg")
         util.interpret(path)
+
+class TestAbstractClasses:
+    def test_basic(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/abstract_classes/basic.slg")
+        util.interpret(path)
+
+    def test_instantiate_abstract_class(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/abstract_classes/instantiate_abstract_class.slg", message="Cannot instantiate an abstract class")
+
+    def test_dont_override_abstract_method(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/abstract_classes/dont_override_abstract_method.slg", message="is not overridden")
+
+    def test_supercall_to_abstract_method(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/abstract_classes/supercall_to_abstract_method.slg", message="Attempt to perform super call to abstract method")

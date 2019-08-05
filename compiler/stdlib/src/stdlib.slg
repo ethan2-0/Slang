@@ -431,22 +431,12 @@ fn strjoin(strs: [String], delimiter: String): String {
     }
     return new String(result, 0, len);
 }
-class InputStream {
+abstract class InputStream {
     // This is heavily inspired by java.io.InputStream.
-    ctor() {
-        die("Cannot construct InputStream directly.");
-    }
-    fn read(buff: [int], maxlen: int): int {
-        die("InputStream is abstract.");
-        return -1;
-    }
-    fn hasMore(): bool {
-        die("InputStream is abstract.");
-        return false;
-    }
-    fn available(): int {
-        return 0;
-    }
+    ctor() {}
+    abstract fn read(buff: [int], maxlen: int): int;
+    abstract fn hasMore(): bool;
+    abstract fn available(): int;
 }
 class StdinInputStream extends InputStream {
     _hasMore: bool;
@@ -474,9 +464,9 @@ class StdinInputStream extends InputStream {
         return 0;
     }
 }
-class SeekableInputStream extends InputStream {
+abstract class SeekableInputStream extends InputStream {
     ctor() {
-        die("Cannot construct SeekableInputStream directly.");
+        super();
     }
     fn seek(index: int) {
         die("SeekableInputStream is abstract.");

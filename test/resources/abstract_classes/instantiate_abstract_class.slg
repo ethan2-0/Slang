@@ -1,0 +1,6 @@
+abstract class Class {
+    ctor() {}
+}
+entrypoint fn main() {
+    let a = new Class();
+}

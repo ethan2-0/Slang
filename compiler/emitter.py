@@ -136,8 +136,8 @@ class MethodSignature:
     sequential_id: ClassVar[int] = 0
     def __init__(
                 self, name: str, args: "List[typesys.AbstractType]", argnames: "List[str]",
-                returntype: "typesys.AbstractType", is_ctor: bool=False, containing_class: "ClazzSignature"=None,
-                is_override: bool=False, is_entrypoint: bool=False) -> None:
+                returntype: "typesys.AbstractType", is_ctor: bool = False, containing_class: "ClazzSignature" = None,
+                is_override: bool = False, is_entrypoint: bool = False, is_abstract: bool = False) -> None:
         self.name = name
         self.args = args
         self.argnames = argnames
@@ -147,6 +147,7 @@ class MethodSignature:
         self.containing_class = containing_class
         self.is_override = is_override
         self.is_entrypoint = is_entrypoint
+        self.is_abstract = is_abstract
         MethodSignature.sequential_id += 1
 
     @property
@@ -178,14 +179,19 @@ class MethodSignature:
             argnames = ([] if this_type is None else ["this"]) + [arg[0].data_strict for arg in method[1]]
             is_override = method["modifiers"].has_child("override")
             is_entrypoint = method["modifiers"].has_child("entrypoint")
+            is_abstract = method["modifiers"].has_child("abstract")
             if is_entrypoint and containing_class is not None:
                 method.compile_error("Can't have an entrypoint inside a class")
             if is_entrypoint and len(argnames) > 0:
                 method.compile_error("Can't have an entrypoint with arguments")
+            if is_abstract and is_override:
+                method.compile_error("Modifiers abstract and override are incompatible")
+            if is_abstract and containing_class is None:
+                method.compile_error("Cannot have an abstract method outside of a class")
             name = util.nonnull(util.get_flattened(method[0]))
             if containing_class is None and program.namespace is not None:
                 name = "%s.%s" % (program.namespace, name)
-            return MethodSignature(name, signature, argnames, program.types.resolve_strict(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint)
+            return MethodSignature(name, signature, argnames, program.types.resolve_strict(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint, is_abstract=is_abstract)
         elif method.i("ctor"):
             signature = cast(List[typesys.AbstractType], [this_type]) + [program.types.resolve_strict(arg[1]) for arg in method[0]]
             argnames = ["this"] + [arg[0].data_strict for arg in method[0]]
@@ -393,6 +399,8 @@ class MethodEmitter(SegmentEmitter):
             method_signature = superclass.get_method_signature_by_name(method_name)
             if method_signature is None:
                 node[0][1].compile_error("Attempt to call method of superclass that doesn't exist")
+            if method_signature.is_abstract:
+                node[0][1].compile_error("Attempt to perform super call to abstract method")
             if not len(node) - 1 == len(method_signature.args) - 1:
                 node.compile_error("Expected %s arguments, got %s" % (len(node), len(method_signature.args)))
             param_reg: List[RegisterHandle] = []
@@ -437,6 +445,8 @@ class MethodEmitter(SegmentEmitter):
             typ = self.types.resolve_strict(node[0])
             if not isinstance(typ, typesys.ClazzType):
                 node[0].compile_error("Attempt to instantiate a type that isn't a class")
+            if typ.signature.is_abstract:
+                node[0].compile_error("Cannot instantiate an abstract class")
             clazz_signature = typ.signature
             result_register = self.scope.allocate(self.types.decide_type(node, self.scope))
             opcodes.append(ops["new"].ins(clazz_signature, result_register, node=node))
@@ -740,7 +750,7 @@ class MethodEmitter(SegmentEmitter):
         for argtype, argname in zip(self.signature.args, self.signature.argnames):
             self.scope.let(argname, self.scope.allocate(argtype), self.top[1] if self.top.i("fn") else self.top[0])
         opcodes, claims = self.emit_statement(self.top[3] if self.top.i("fn") else self.top[1])
-        if not claims.contains_equivalent(clms.ClaimReturns()):
+        if not self.signature.is_abstract and not claims.contains_equivalent(clms.ClaimReturns()):
             if self.signature.returntype.is_void():
                 zeroreg = self.scope.allocate(self.types.int_type)
                 opcodes.append(ops["zero"].ins(zeroreg))
@@ -810,7 +820,7 @@ class MetadataSegment(Segment[SegmentEmitter]):
     def print_(self, emitter: SegmentEmitter) -> None:
         Segment.print_(self, emitter)
         print("    entrypoint=%s" % self.entrypoint)
-        print("    headers omitted for brevity")
+        print("    headers omitted for brevity (pass --headers to override)")
 
     def has_entrypoint(self) -> bool:
         return self.entrypoint is not None
@@ -825,11 +835,12 @@ class ClazzField:
 
 class ClazzSignature:
     def __init__(self, name: str, fields: List[ClazzField], method_signatures: List[MethodSignature],
-                ctor_signatures: List[MethodSignature], parent_type: Optional[typesys.ClazzType], is_included: bool=False) -> None:
+                ctor_signatures: List[MethodSignature], parent_type: Optional[typesys.ClazzType], is_abstract: bool, is_included: bool=False) -> None:
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
         self.ctor_signatures = ctor_signatures
+        self.is_abstract = is_abstract
         self.is_included = is_included
         self.parent_type = parent_type
 
@@ -847,6 +858,8 @@ class ClazzSignature:
         for signature in self.method_signatures:
             if self.get_field_by_name(signature.name) is not None:
                 raise ValueError("Class property and method with the same name: '%s' (from class '%s'" % (signature.name, self.name))
+            if signature.is_abstract and not self.is_abstract:
+                raise ValueError("Class '%s' is not abstract but has abstract method '%s'" % (self.name, signature.name))
             if not signature.is_override:
                 if self.parent_signature is None:
                     continue
@@ -869,17 +882,24 @@ class ClazzSignature:
                     if not parent_sig.args[i + 1].is_assignable_to(signature.args[i + 1]):
                         throw(signature)
 
+        if self.parent_signature is not None and not self.is_abstract:
+            for parent_sig in self.parent_signature.method_signatures:
+                if not parent_sig.is_abstract:
+                    continue
+                if self.get_method_signature_by_name(parent_sig.name, recursive=False) is None:
+                    raise ValueError("Abstract method '%s' is not overridden by subclass '%s'" % (parent_sig.name, self.name))
+
         if self.parent_signature is not None:
             for field in self.fields:
                 if self.parent_signature.get_field_by_name(field.name) is not None:
                     raise ValueError("Duplicate field in both child and parent class named '%s'" % field.name)
 
-    def get_method_signature_by_name(self, name: str) -> Optional[MethodSignature]:
+    def get_method_signature_by_name(self, name: str, recursive: bool = True) -> Optional[MethodSignature]:
         for signature in self.method_signatures:
             if signature.name == name:
                 return signature
 
-        if self.parent_signature is not None:
+        if self.parent_signature is not None and recursive:
             return self.parent_signature.get_method_signature_by_name(name)
 
         return None
@@ -926,7 +946,7 @@ class ClazzEmitter(SegmentEmitter):
 
     def emit_signature_no_fields(self) -> ClazzSignature:
         self.is_signature_no_fields = True
-        self.signature = ClazzSignature(self.name, [], [], [], None)
+        self.signature = ClazzSignature(self.name, [], [], [], None, self.top["modifiers"].has_child("abstract"))
         return self.signature
 
     def emit_signature(self) -> ClazzSignature:
@@ -960,7 +980,7 @@ class ClazzEmitter(SegmentEmitter):
                 self.method_signatures.append(signature)
                 self.ctor_signatures.append(signature)
                 field.xattrs["signature"] = signature
-        self.signature = ClazzSignature(self.name, self.fields, self.method_signatures, self.ctor_signatures, None)
+        self.signature = ClazzSignature(self.name, self.fields, self.method_signatures, self.ctor_signatures, None, self.top["modifiers"].has_child("abstract"))
         # We need to replace the containing_class with the new signature,
         # just so we don't have different signatures floating around.
         for signature in self.method_signatures:
@@ -1174,14 +1194,15 @@ class Program:
 
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
-            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, is_included=True))
+            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, is_included=True))
         for method in headers.methods:
             # elw
             self.method_signatures.append(MethodSignature(
                 method.name,
                 [self.types.resolve_strict(parser.parse_type(arg.type)) for arg in method.args],
                 [arg.name for arg in method.args],
-                self.types.resolve_strict(parser.parse_type(method.returntype))
+                self.types.resolve_strict(parser.parse_type(method.returntype)),
+                is_abstract=method.is_abstract
             ))
         for clazz in headers.clazzes:
             methods = []
@@ -1196,7 +1217,7 @@ class Program:
             parent_type = self.types.resolve_strict(parser.parse_type(clazz.parent)) if clazz.parent is not None else None
             assert isinstance(parent_type, typesys.ClazzType) or parent_type is None
             # util.nonnull is correct here because of the previous two lines
-            clazz_signature = ClazzSignature(clazz.name, fields, methods, ctors, util.nonnull(parent_type) if clazz.parent is not None else None, is_included=True)
+            clazz_signature = ClazzSignature(clazz.name, fields, methods, ctors, util.nonnull(parent_type) if clazz.parent is not None else None, clazz.is_abstract, is_included=True)
             self.clazz_signatures.append(clazz_signature)
             self.types.update_signature(clazz_signature)
 

@@ -1,0 +1,7 @@
+abstract class Superclass {
+    ctor() {}
+    abstract fn method();
+}
+class Subclass extends Superclass {
+    ctor() {}
+}

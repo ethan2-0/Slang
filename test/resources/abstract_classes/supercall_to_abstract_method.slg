@@ -1,0 +1,10 @@
+abstract class Superclass {
+    ctor() {}
+    abstract fn method();
+}
+class Subclass extends Superclass {
+    ctor() {}
+    override fn method() {
+        let a = super.method();
+    }
+}

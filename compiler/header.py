@@ -33,7 +33,7 @@ class HeaderMethodArgumentRepresentation:
 
 class HeaderMethodRepresentation:
     def __init__(self, name: str, args: List[HeaderMethodArgumentRepresentation], returntype: str,
-                containing_clazz: Optional[str], is_ctor: bool, entrypoint: bool, is_override: bool):
+                containing_clazz: Optional[str], is_ctor: bool, entrypoint: bool, is_override: bool, is_abstract: bool):
         self.name = name
         self.args = args
         self.returntype = returntype
@@ -41,6 +41,7 @@ class HeaderMethodRepresentation:
         self.is_ctor = is_ctor
         self.entrypoint = entrypoint
         self.is_override = False
+        self.is_abstract = is_abstract
 
     @property
     def numargs(self) -> int:
@@ -56,7 +57,8 @@ class HeaderMethodRepresentation:
             "containingclass": self.containing_clazz,
             "entrypoint": self.entrypoint,
             "ctor": self.is_ctor,
-            "override": self.is_override
+            "override": self.is_override,
+            "abstract": self.is_abstract
         }
 
     @staticmethod
@@ -67,16 +69,16 @@ class HeaderMethodRepresentation:
             method.signature.returntype.name,
             method.signature.containing_class.name if method.signature.containing_class is not None else None,
             is_ctor=method.signature.is_ctor,
-            # is_ctor=False,
             entrypoint=entrypoint_id == method.signature.id,
-            is_override=method.signature.is_override)
+            is_override=method.signature.is_override,
+            is_abstract=method.signature.is_abstract)
 
     @staticmethod
     def unserialize(input: JsonObject) -> "HeaderMethodRepresentation":
         if input["type"] != "method":
             raise ValueError("Asked to unserialize type '%s' as method" % input["type"])
 
-        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"], input["containingclass"], is_ctor=input["ctor"], entrypoint=False, is_override=input["override"])
+        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"], input["containingclass"], is_ctor=input["ctor"], entrypoint=False, is_override=input["override"], is_abstract=input["abstract"])
 
 class HeaderClazzFieldRepresentation:
     def __init__(self, name: str, type: str):
@@ -119,12 +121,13 @@ class HeaderClazzMethodRepresentation:
 
 class HeaderClazzRepresentation:
     def __init__(self, name: str, fields: List[HeaderClazzFieldRepresentation], methods: List[HeaderClazzMethodRepresentation],
-                ctors: List[HeaderClazzMethodRepresentation], parent: Optional[str]):
+                ctors: List[HeaderClazzMethodRepresentation], parent: Optional[str], is_abstract: bool):
         self.name = name
         self.fields = fields
         self.methods = methods
         self.ctors = ctors
         self.parent = parent
+        self.is_abstract = is_abstract
 
     def serialize(self) -> JsonObject:
         return {
@@ -133,7 +136,8 @@ class HeaderClazzRepresentation:
             "fields": [field.serialize() for field in self.fields],
             "methods": [method.serialize() for method in self.methods],
             "ctors": [method.serialize() for method in self.ctors],
-            "parent": self.parent
+            "parent": self.parent,
+            "abstract": self.is_abstract
         }
 
     @staticmethod
@@ -143,7 +147,8 @@ class HeaderClazzRepresentation:
             [HeaderClazzFieldRepresentation.from_field(field) for field in signature.fields],
             [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.method_signatures],
             [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures],
-            signature.parent_signature.name if signature.parent_signature is not None else None
+            signature.parent_signature.name if signature.parent_signature is not None else None,
+            signature.is_abstract
         )
 
     @staticmethod
@@ -155,7 +160,8 @@ class HeaderClazzRepresentation:
             [HeaderClazzFieldRepresentation.unserialize(field) for field in input["fields"]],
             [HeaderClazzMethodRepresentation.unserialize(method) for method in input["methods"]],
             [HeaderClazzMethodRepresentation.unserialize(method) for method in input["ctors"]],
-            input["parent"]
+            input["parent"],
+            input["abstract"]
         )
 
 
