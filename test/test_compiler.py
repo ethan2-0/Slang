@@ -493,6 +493,14 @@ class TestSupercalls:
         path = util.assert_compile_succeeds("resources/supercalls/supercalls.slg")
         util.interpret(path)
 
+    def test_supercall_statement(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/supercalls/supercall_statement.slg")
+
+    def test_assign_to_supercall_statement(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/supercalls/assign_to_supercall_statement.slg", message="Cannot assign to a method call")
+
 class TestAbstractClasses:
     def test_basic(self):
         util.clean_tmp()

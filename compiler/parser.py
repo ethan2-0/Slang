@@ -510,7 +510,11 @@ class Parser:
             while self.isn(";"):
                 self.expect(";")
             return nod
-        elif tok.isn("ident"):
+        # Why add the requirement for the next token to be `.` for super?
+        # I'd already implemented super constructor calls as a standalone
+        # statement before I added support for parsing non-constructor
+        # supercalls here, and I didn't want to change it.
+        elif tok.isn("ident") or (tok.isn("super") and self.peek(2).isn(".")):
             lhs_expr = self.parse_expr()
             if self.isn("="):
                 self.expect("=")

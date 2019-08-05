@@ -1,0 +1,13 @@
+class Class {
+    ctor() {}
+    fn method(): int {
+        return 2;
+    }
+}
+class Subclass extends Class {
+    ctor() {}
+    override fn method(): int {
+        super.method() = 4;
+        return 8;
+    }
+}

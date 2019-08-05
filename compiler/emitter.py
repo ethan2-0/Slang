@@ -557,6 +557,10 @@ class MethodEmitter(SegmentEmitter):
             index_reg = self.scope.allocate(index_type)
             opcodes += self.emit_expr(expr_index, index_reg)
             opcodes.append(ops["arrassign"].ins(expr_lhs_reg, index_reg, value, node=expr))
+        elif expr.i("call"):
+            expr.compile_error("Cannot assign to a method call")
+        else:
+            raise ValueError("This is a compiler bug.")
         return opcodes
 
     def emit_statement(self, node: parser.Node) -> Tuple[List[opcodes_module.OpcodeInstance], clms.ClaimSpace]:

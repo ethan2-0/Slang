@@ -1,0 +1,12 @@
+class Class {
+    ctor() {}
+    fn method() {
+        // Do nothing
+    }
+}
+class Subclass extends Class {
+    ctor() {}
+    override fn method() {
+        super.method();
+    }
+}
