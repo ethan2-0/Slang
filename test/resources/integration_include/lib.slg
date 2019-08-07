@@ -1,3 +1,5 @@
+static number: int = 5;
+
 class AtomicInteger {
     value: int;
     ctor(value: int) {

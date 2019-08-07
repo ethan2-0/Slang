@@ -1,4 +1,4 @@
 entrypoint fn main(): int {
-    let num = new AtomicInteger(0);
+    let num = new AtomicInteger(number - 5);
     return add(num.incrementValue(), 2);
 }

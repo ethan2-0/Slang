@@ -95,11 +95,12 @@ class Scopes:
         self.locals[len(self.locals) - 1][key] = register
 
 class StaticVariable:
-    def __init__(self, variable_set: "StaticVariableSet", name: str, type: typesys.AbstractType, initializer: interpreter.AbstractInterpreterValue) -> None:
+    def __init__(self, variable_set: "StaticVariableSet", name: str, type: typesys.AbstractType, initializer: interpreter.AbstractInterpreterValue, included: bool = False) -> None:
         self.variable_set = variable_set
         self.name = name
         self.type = type
         self.initializer = initializer
+        self.included = included
 
     def __str__(self) -> str:
         return "static %s: %s" % (self.name, self.type.name)
@@ -467,8 +468,6 @@ class MethodEmitter(SegmentEmitter):
             opcodes += emitted_opcodes
 
             param_registers = []
-
-            print(signature, signature.is_class_method, signature.is_interface_method, signature.is_reference_call, signature.containing_class)
 
             if len(node.children) - 1 != len(signature.args) + (-1 if signature.is_reference_call else 0):
                 node.compile_error("Expected %s arguments, got %s for method %s" % (len(signature.args), len(node.children) - 1, signature))
@@ -1409,6 +1408,8 @@ class Program:
             self.types.update_signature(clazz_signature)
             for method_signature in methods + ctors:
                 method_signature.containing_class = clazz_signature
+        for staticvar in headers.static_variables:
+            self.static_variables.add_variable(StaticVariable(self.static_variables, staticvar.name, self.types.resolve_strict(parser.parse_type(staticvar.type)), self.interpreter.null, included=True))
 
 class Emitter:
     def __init__(self, top: parser.Node) -> None:

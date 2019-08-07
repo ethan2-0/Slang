@@ -151,10 +151,14 @@ class SegmentEmitterStaticVariables(SegmentEmitter[emitter.StaticVariableSegment
 
     def emit(self, segment: emitter.StaticVariableSegment) -> bytes:
         ret = SegmentEmitter.emit(self, segment)
-        body = bytes()
-        body += struct.pack("!I", len(segment.static_variables.variables))
+        serialized_variables = bytes()
+        variables_counted = 0
         for variable in segment.static_variables.variables.values():
-            body += encode_str(variable.name) + encode_str(variable.type.name) + self.emit_interpreter_value(variable.initializer)
+            if variable.included:
+                continue
+            variables_counted += 1
+            serialized_variables += encode_str(variable.name) + encode_str(variable.type.name) + self.emit_interpreter_value(variable.initializer)
+        body = struct.pack("!I", variables_counted) + serialized_variables
         return ret + struct.pack("!I", len(body)) + body
 
 class SegmentEmitterInterface(SegmentEmitter[emitter.InterfaceSegment]):

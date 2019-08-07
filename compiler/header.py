@@ -164,13 +164,33 @@ class HeaderClazzRepresentation:
             input["abstract"]
         )
 
+class HeaderStaticVariableRepresentation:
+    def __init__(self, name: str, typ: str):
+        self.name = name
+        self.type = typ
+
+    def serialize(self) -> JsonObject:
+        return {
+            "name": self.name,
+            "variabletype": self.type,
+            "type": "staticvar"
+        }
+
+    @staticmethod
+    def from_static_variable(variable: "emitter.StaticVariable") -> "HeaderStaticVariableRepresentation":
+        return HeaderStaticVariableRepresentation(variable.name, variable.type.name)
+
+    @staticmethod
+    def unserialize(input: JsonObject) -> "HeaderStaticVariableRepresentation":
+        return HeaderStaticVariableRepresentation(input["name"], input["variabletype"])
 
 class HeaderRepresentation:
     # Filled in below
     HIDDEN: "HeaderRepresentation" = None # type: ignore
-    def __init__(self, methods: List[HeaderMethodRepresentation], clazzes: List[HeaderClazzRepresentation], hidden: bool=False):
+    def __init__(self, methods: List[HeaderMethodRepresentation], clazzes: List[HeaderClazzRepresentation], static_variables: List[HeaderStaticVariableRepresentation], hidden: bool=False):
         self.methods = methods
         self.clazzes = clazzes
+        self.static_variables = static_variables
         self.hidden = hidden
 
     def serialize(self) -> JsonObject:
@@ -182,6 +202,7 @@ class HeaderRepresentation:
         return {
             "methods": [method.serialize() for method in self.methods],
             "classes": [clazz.serialize() for clazz in self.clazzes],
+            "staticvars": [var.serialize() for var in self.static_variables],
             "type": "metadata"
         }
 
@@ -189,7 +210,8 @@ class HeaderRepresentation:
     def from_program(program: "emitter.Program") -> "HeaderRepresentation":
         return HeaderRepresentation(
             [HeaderMethodRepresentation.from_method(method, program) for method in program.methods],
-            [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures if not clazz.is_included]
+            [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures if not clazz.is_included],
+            [HeaderStaticVariableRepresentation.from_static_variable(var) for var in program.static_variables.variables.values() if not var.included]
         )
 
     @staticmethod
@@ -202,10 +224,11 @@ class HeaderRepresentation:
 
         return HeaderRepresentation(
             [HeaderMethodRepresentation.unserialize(method) for method in input["methods"]],
-            [HeaderClazzRepresentation.unserialize(clazz) for clazz in input["classes"]]
+            [HeaderClazzRepresentation.unserialize(clazz) for clazz in input["classes"]],
+            [HeaderStaticVariableRepresentation.unserialize(var) for var in input["staticvars"]]
         )
 
-HeaderRepresentation.HIDDEN = HeaderRepresentation([], [], hidden=True)
+HeaderRepresentation.HIDDEN = HeaderRepresentation([], [], [], hidden=True)
 
 def from_json(fname: str) -> "HeaderRepresentation":
     file_data = None
