@@ -135,9 +135,17 @@ class StaticVariableSet:
 class MethodSignature:
     sequential_id: ClassVar[int] = 0
     def __init__(
-                self, name: str, args: "List[typesys.AbstractType]", argnames: "List[str]",
-                returntype: "typesys.AbstractType", is_ctor: bool = False, containing_class: "ClazzSignature" = None,
-                is_override: bool = False, is_entrypoint: bool = False, is_abstract: bool = False) -> None:
+                self,
+                name: str,
+                args: "List[typesys.AbstractType]",
+                argnames: "List[str]",
+                returntype: "typesys.AbstractType",
+                is_ctor: bool = False,
+                containing_class: "ClazzSignature" = None,
+                containing_interface: "Interface" = None,
+                is_override: bool = False,
+                is_entrypoint: bool = False,
+                is_abstract: bool = False) -> None:
         self.name = name
         self.args = args
         self.argnames = argnames
@@ -145,6 +153,7 @@ class MethodSignature:
         self.is_ctor = is_ctor
         self.id = MethodSignature.sequential_id
         self.containing_class = containing_class
+        self.containing_interface = containing_interface
         self.is_override = is_override
         self.is_entrypoint = is_entrypoint
         self.is_abstract = is_abstract
@@ -153,6 +162,18 @@ class MethodSignature:
     @property
     def nargs(self) -> int:
         return len(self.args)
+
+    @property
+    def is_class_method(self) -> bool:
+        return self.containing_class is not None
+
+    @property
+    def is_interface_method(self) -> bool:
+        return self.containing_interface is not None
+
+    @property
+    def is_reference_call(self) -> bool:
+        return self.is_class_method or self.is_interface_method
 
     def looks_like_method_handle(self) -> None:
         pass
@@ -163,14 +184,22 @@ class MethodSignature:
     def __str__(self) -> str:
         modifiers = ("override " if self.is_override else "") + ("entrypoint " if self.is_entrypoint else "")
         args_str = ", ".join(["%s: %s" % (name, typ.name) for typ, name in zip(self.args, self.argnames)])
-        prefix = "%s." % self.containing_class.name if self.containing_class is not None else ""
+        prefix = ""
+        if self.containing_class is not None:
+            prefix = "%s." % self.containing_class.name
+        if self.containing_interface is not None:
+            prefix = "%s." % self.containing_interface.name
         if self.is_ctor:
             return "%sctor(%s)" % (prefix, args_str)
         return "%sfn %s%s(%s): %s" % (modifiers, prefix, self.name, args_str, self.returntype.name)
 
     @staticmethod
-    def from_node(method: parser.Node, program: "Program",
-            this_type: "Optional[typesys.ClazzType]"=None, containing_class: "Optional[ClazzSignature]"=None) -> "MethodSignature":
+    def from_node(
+            method: parser.Node,
+            program: "Program",
+            this_type: "Optional[typesys.AbstractType]" = None,
+            containing_class: "Optional[ClazzSignature]" = None,
+            containing_interface: "Optional[Interface]" = None) -> "MethodSignature":
         if containing_class is None and method["modifiers"].has_child("override"):
             method.compile_error("Can't both be an override method and not have a containing class")
 
@@ -188,10 +217,23 @@ class MethodSignature:
                 method.compile_error("Modifiers abstract and override are incompatible")
             if is_abstract and containing_class is None:
                 method.compile_error("Cannot have an abstract method outside of a class")
+            if (is_override or is_entrypoint or is_abstract) and containing_interface is not None:
+                method.compile_error("Interface methods cannot have modifiers")
             name = util.nonnull(util.get_flattened(method[0]))
-            if containing_class is None and program.namespace is not None:
+            if containing_class is None and containing_interface is None and program.namespace is not None:
                 name = "%s.%s" % (program.namespace, name)
-            return MethodSignature(name, signature, argnames, program.types.resolve_strict(method[2]), is_ctor=False, containing_class=containing_class, is_override=is_override, is_entrypoint=is_entrypoint, is_abstract=is_abstract)
+            return MethodSignature(
+                name,
+                signature,
+                argnames,
+                program.types.resolve_strict(method[2]),
+                is_ctor=False,
+                containing_class=containing_class,
+                containing_interface=containing_interface,
+                is_override=is_override,
+                is_entrypoint=is_entrypoint,
+                is_abstract=is_abstract
+            )
         elif method.i("ctor"):
             signature = cast(List[typesys.AbstractType], [this_type]) + [program.types.resolve_strict(arg[1]) for arg in method[0]]
             argnames = ["this"] + [arg[0].data_strict for arg in method[0]]
@@ -242,23 +284,25 @@ class MethodEmitter(SegmentEmitter):
             typ = self.types.decide_type(node[0], self.scope)
             if not node[1].i("ident"):
                 raise ValueError("This is a compiler bug")
-            if not typ.is_clazz():
-                node.compile_error("Cannot perform access on something that isn't an instance of a class")
-                # Unreachable
-                return None # type: ignore
-            assert isinstance(typ, typesys.ClazzType)
-            if typ.type_of_property_optional(node[1].data_strict) is not None:
-                node.compile_error("Attempt to call a property")
-                # Unreachable
-                return None # type: ignore
-            elif typ.method_signature_optional(node[1].data_strict) is not None:
+            if isinstance(typ, typesys.ClazzType):
+                if typ.type_of_property_optional(node[1].data_strict) is not None:
+                    node.compile_error("Attempt to call a property")
+                    # Unreachable
+                    return None # type: ignore
+                elif typ.method_signature_optional(node[1].data_strict) is not None:
+                    reg = self.scope.allocate(typ)
+                    opcodes += self.emit_expr(node[0], reg)
+                    return typ.method_signature(node[1].data_strict, node), reg
+                else:
+                    node.compile_error("Attempt to perform property access that doesn't make sense")
+                    # Unreachable
+                    return None # type: ignore
+            elif isinstance(typ, typesys.InterfaceType):
                 reg = self.scope.allocate(typ)
                 opcodes += self.emit_expr(node[0], reg)
                 return typ.method_signature(node[1].data_strict, node), reg
             else:
-                node.compile_error("Attempt to perform property access that doesn't make sense")
-                # Unreachable
-                return None # type: ignore
+                node.compile_error("Cannot perform access on something that isn't an instance of a class or an interface")
         else:
             node.compile_error("Attempt to call something that can't be called")
             # Unreachable
@@ -305,12 +349,12 @@ class MethodEmitter(SegmentEmitter):
             lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
             opcodes += self.emit_expr(node[0], lhs_reg)
             rhs_type = self.types.resolve_strict(node[1])
-            if not lhs_reg.type.is_assignable_to(rhs_type) and not rhs_type.is_assignable_to(lhs_reg.type):
-                raise typesys.TypingError(node, "Invalid cast: LHS is incompatible with RHS")
-            if not rhs_type.is_clazz():
-                node.compile_error("Cannot cast to a type that isn't a class.")
-            if not lhs_reg.type.is_clazz():
-                node.compile_error("Cannot cast something that isn't a class.");
+            if lhs_reg.type.is_clazz() and rhs_type.is_clazz() and not lhs_reg.type.is_assignable_to(rhs_type) and not rhs_type.is_assignable_to(lhs_reg.type):
+                node.warn("Impossible cast: LHS %s is incompatible with RHS %s" % (lhs_reg.type, rhs_type))
+            if not rhs_type.is_clazz() and not rhs_type.is_interface():
+                node.compile_error("Cannot cast to a type that isn't a class or interface.")
+            if not lhs_reg.type.is_clazz() and not lhs_reg.type.is_interface():
+                node.compile_error("Cannot cast something that isn't a class or interface.")
             opcodes.append(ops["cast"].ins(lhs_reg, register, node=node))
         elif node.i("instanceof"):
             lhs_reg = self.scope.allocate(self.types.decide_type(node[0], self.scope))
@@ -421,24 +465,27 @@ class MethodEmitter(SegmentEmitter):
             emitted_opcodes = []
             signature, optional_lhs_reg = self.emit_to_method_signature(node[0], emitted_opcodes)
             opcodes += emitted_opcodes
-            is_clazz_call = optional_lhs_reg is not None
 
             param_registers = []
 
-            if len(node.children) - 1 != len(signature.args) + (-1 if is_clazz_call else 0):
-                node.compile_error("Expected %s arguments, got %s" % (len(signature.args), len(node.children) - 1))
-            for param, index in zip(node.children[1:], range(1 if is_clazz_call else 0, len(node.children) + (1 if is_clazz_call else 0))):
+            print(signature, signature.is_class_method, signature.is_interface_method, signature.is_reference_call, signature.containing_class)
+
+            if len(node.children) - 1 != len(signature.args) + (-1 if signature.is_reference_call else 0):
+                node.compile_error("Expected %s arguments, got %s for method %s" % (len(signature.args), len(node.children) - 1, signature))
+            for param, index in zip(node.children[1:], range(1 if signature.is_reference_call else 0, len(node.children) + (1 if signature.is_reference_call else 0))):
                 inferred_type = self.types.decide_type(param, self.scope)
                 declared_type = signature.args[index]
                 if not inferred_type.is_assignable_to(declared_type):
                     raise typesys.TypingError(node, "Invalid parameter type: '%s' is not assignable to '%s'" % (inferred_type, declared_type))
                 reg = self.scope.allocate(inferred_type)
                 opcodes += self.emit_expr(param, reg)
-                param_registers.append((reg, index + (-1 if is_clazz_call else 0)))
+                param_registers.append((reg, index + (-1 if signature.is_reference_call else 0)))
             for reg, index in param_registers:
                 opcodes.append(ops["param"].ins(reg, index, node=node))
-            if is_clazz_call:
+            if signature.is_class_method:
                 opcodes.append(ops["classcall"].ins(util.nonnull(optional_lhs_reg), signature, register, node=node))
+            elif signature.is_interface_method:
+                opcodes.append(ops["interfacecall"].ins(util.nonnull(optional_lhs_reg), signature, register, node=node))
             else:
                 opcodes.append(ops["call"].ins(signature, register, node=node))
         elif node.i("new"):
@@ -754,7 +801,7 @@ class MethodEmitter(SegmentEmitter):
         for argtype, argname in zip(self.signature.args, self.signature.argnames):
             self.scope.let(argname, self.scope.allocate(argtype), self.top[1] if self.top.i("fn") else self.top[0])
         opcodes, claims = self.emit_statement(self.top[3] if self.top.i("fn") else self.top[1])
-        if not self.signature.is_abstract and not claims.contains_equivalent(clms.ClaimReturns()):
+        if not self.signature.is_abstract and self.signature.containing_interface is None and not claims.contains_equivalent(clms.ClaimReturns()):
             if self.signature.returntype.is_void():
                 zeroreg = self.scope.allocate(self.types.int_type)
                 opcodes.append(ops["zero"].ins(zeroreg))
@@ -763,9 +810,7 @@ class MethodEmitter(SegmentEmitter):
                 self.top[3].compile_error("Non-void method might not return")
         return opcodes
 
-SegmentEmitterTypeVariable = TypeVar("SegmentEmitterTypeVariable", bound=SegmentEmitter)
-
-class Segment(Generic[SegmentEmitterTypeVariable]):
+class Segment:
     def __init__(self, humantype: str, realtype: int) -> None:
         self.humantype = humantype
         self.realtype = realtype
@@ -773,13 +818,13 @@ class Segment(Generic[SegmentEmitterTypeVariable]):
     def __str__(self) -> str:
         return "Segment(type='%s', code=%s)" % (self.humantype, self.realtype)
 
-    def print_(self, emitter: SegmentEmitterTypeVariable) -> None:
+    def print_(self) -> None:
         print(str(self))
 
     def evaluate(self, program: "Program") -> None:
         pass
 
-class MethodSegment(Segment[MethodEmitter]):
+class MethodSegment(Segment):
     def __init__(self, method: parser.Node, signature: MethodSignature) -> None:
         Segment.__init__(self, "method", 0x00)
         self.method = method
@@ -802,8 +847,8 @@ class MethodSegment(Segment[MethodEmitter]):
     def __str__(self) -> str:
         return "MethodSegment(type='%s', typecode=%s, signature=%s)" % (self.humantype, self.realtype, self.signature)
 
-    def print_(self, emitter: MethodEmitter) -> None:
-        Segment.print_(self, emitter)
+    def print_(self) -> None:
+        Segment.print_(self)
         print("Registers:", ", ".join([repr(register) for register in self.emitter.scope.registers]))
         for opcode, index in zip(self.opcodes, range(len(self.opcodes))):
             print("%6d: %s" % (index, str(opcode)))
@@ -811,8 +856,7 @@ class MethodSegment(Segment[MethodEmitter]):
     def evaluate(self, program: "Program") -> None:
         self.opcodes = self.emit_opcodes(program)
 
-# We need to provide an argument to Segment but there's no MetadataEmitter
-class MetadataSegment(Segment[SegmentEmitter]):
+class MetadataSegment(Segment):
     def __init__(self, entrypoint: Optional[MethodSignature]=None, headers: header.HeaderRepresentation=header.HeaderRepresentation.HIDDEN) -> None:
         Segment.__init__(self, "metadata", 0x01)
         self.entrypoint = entrypoint
@@ -821,10 +865,10 @@ class MetadataSegment(Segment[SegmentEmitter]):
     def __str__(self) -> str:
         return "MetadataSegment(type='%s', typecode=%s, entrypoint=%s)" % (self.humantype, self.realtype, self.entrypoint)
 
-    def print_(self, emitter: SegmentEmitter) -> None:
-        Segment.print_(self, emitter)
+    def print_(self) -> None:
+        Segment.print_(self)
         print("    entrypoint=%s" % self.entrypoint)
-        print("    headers omitted for brevity (pass --headers to override)")
+        print("    headers omitted for brevity (pass --headers to show anyway)")
 
     def has_entrypoint(self) -> bool:
         return self.entrypoint is not None
@@ -832,14 +876,83 @@ class MetadataSegment(Segment[SegmentEmitter]):
     def evaluate(self, program: "Program") -> None:
         Segment.evaluate(self, program)
 
+class Interface:
+    def __init__(self, name: str, node: Optional[parser.Node]) -> None:
+        self.name = name
+        self.node = node
+        self.method_signatures: List[MethodSignature] = []
+        self.type: Optional[typesys.InterfaceType]
+
+    def get_signature_by_name(self, name: str) -> Optional[MethodSignature]:
+        for signature in self.method_signatures:
+            if signature.name == name:
+                return signature
+        return None
+
+    def add_to_typesys(self, types: typesys.TypeSystem) -> None:
+        self.type = types.accept_interface(self)
+
+    def add_signature(self, signature: MethodSignature) -> None:
+        self.method_signatures.append(signature)
+
+    def add_signatures_from_node(self, program: "Program") -> None:
+        if self.node is None:
+            raise ValueError("This is a compiler bug.")
+        for node in self.node["interfacebody"]:
+            if not node.i("fn"):
+                raise ValueError("This is a compiler bug.")
+            self.add_signature(MethodSignature.from_node(node, program, containing_interface=self, this_type=util.nonnull(self.type)))
+
+    def __str__(self) -> str:
+        return "interface %s" % self.name
+
+    @staticmethod
+    def create_from_node(node: parser.Node, program: "Program") -> "Interface":
+        name = node["ident"].data_strict
+        if program.namespace is not None:
+            name = "%s.%s" % (program.namespace, name)
+        return Interface(name, node)
+
+class InterfaceSegment(Segment):
+    def __init__(self, interface: Interface) -> None:
+        Segment.__init__(self, "interface", 0x04)
+        self.interface = interface
+
+    def __str__(self) -> str:
+        return "InterfaceSegment(type='%s', typecode=%s, interface=%s)" % (self.humantype, self.realtype, self.interface)
+
+    def print_(self) -> None:
+        Segment.print_(self)
+        for signature in self.interface.method_signatures:
+            print("    %s" % signature)
+
+    def evaluate(self, program: "Program") -> None:
+        Segment.evaluate(self, program)
+        if self.interface.node is None:
+            return
+        for node in self.interface.node["interfacebody"]:
+            if not node.i("fn"):
+                raise ValueError("This is a compiler bug")
+            method = program.emit_method(node, util.nonnull(self.interface.get_signature_by_name(node["ident"].data_strict)))
+            program.segments.append(method)
+            program.methods.append(method)
+
 class ClazzField:
     def __init__(self, name: str, type: typesys.AbstractType) -> None:
         self.name = name
         self.type = type
 
 class ClazzSignature:
-    def __init__(self, name: str, fields: List[ClazzField], method_signatures: List[MethodSignature],
-                ctor_signatures: List[MethodSignature], parent_type: Optional[typesys.ClazzType], is_abstract: bool, is_included: bool=False) -> None:
+    def __init__(
+                self,
+                name: str,
+                fields: List[ClazzField],
+                method_signatures: List[MethodSignature],
+                ctor_signatures: List[MethodSignature],
+                parent_type: Optional[typesys.ClazzType],
+                is_abstract: bool,
+                implemented_interfaces: List[typesys.InterfaceType],
+                is_included: bool=False) -> None:
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
@@ -847,6 +960,7 @@ class ClazzSignature:
         self.is_abstract = is_abstract
         self.is_included = is_included
         self.parent_type = parent_type
+        self.implemented_interfaces = implemented_interfaces
 
     @property
     def parent_signature(self) -> "Optional[ClazzSignature]":
@@ -898,6 +1012,22 @@ class ClazzSignature:
                 if self.parent_signature.get_field_by_name(field.name) is not None:
                     raise ValueError("Duplicate field in both child and parent class named '%s'" % field.name)
 
+        for interface in self.implemented_interfaces:
+            for signature in interface.interface.method_signatures:
+                implementation_sig = self.get_method_signature_by_name(signature.name)
+                if implementation_sig is None:
+                    raise ValueError("Method '%s' of interface '%s' is not implemented by class '%s'" % (signature.name, interface.name, self.name))
+                if not implementation_sig.returntype.is_assignable_to(signature.returntype):
+                    raise ValueError("Method '%s' of class '%s' has return type %s that isn't assignable to return type %s of the corresponding method from interface %s"
+                        % (signature.name, self.name, implementation_sig.returntype, signature.returntype, interface.name))
+                if len(implementation_sig.args) != len(signature.args):
+                    raise ValueError("Method '%s' of class '%s' has %s arguments, but expected %s to match the corresponding method from interface %s"
+                        % (signature.name, self.name, len(implementation_sig.args), len(signature.args), interface.name))
+                for i in range(1, len(signature.args)):
+                    if not signature.args[i].is_assignable_to(implementation_sig.args[i]):
+                        raise ValueError("Method '%s' of class '%s': argument #%s (including this) has type %s which is not assignable from %s from corresponding method of interface %s"
+                        % (signature.name, self.name, i, implementation_sig.args[i], signature.args[i], interface.name))
+
     def get_method_signature_by_name(self, name: str, recursive: bool = True) -> Optional[MethodSignature]:
         for signature in self.method_signatures:
             if signature.name == name:
@@ -919,7 +1049,24 @@ class ClazzSignature:
         return None
 
     def __str__(self) -> str:
-        return repr(self)
+        ret = ""
+        if self.is_included:
+            ret += ("included ")
+        if self.is_abstract:
+            ret += ("abstract ")
+        ret += "class "
+        ret += self.name
+        if self.parent_signature is None:
+            ret += " extends null"
+        else:
+            ret += " extends %s" % self.parent_signature.name
+        if len(self.implemented_interfaces) > 0:
+            ret += " implements "
+            interface_names: List[str] = []
+            for interface in self.implemented_interfaces:
+                interface_names.append(interface.name)
+            ret += ", ".join(interface_names)
+        return ret
 
     def __repr__(self) -> str:
         return "ClazzSignature(name='%s')" % self.name
@@ -950,7 +1097,7 @@ class ClazzEmitter(SegmentEmitter):
 
     def emit_signature_no_fields(self) -> ClazzSignature:
         self.is_signature_no_fields = True
-        self.signature = ClazzSignature(self.name, [], [], [], None, self.top["modifiers"].has_child("abstract"))
+        self.signature = ClazzSignature(self.name, [], [], [], None, self.top["modifiers"].has_child("abstract"), [])
         return self.signature
 
     def emit_signature(self) -> ClazzSignature:
@@ -984,7 +1131,15 @@ class ClazzEmitter(SegmentEmitter):
                 self.method_signatures.append(signature)
                 self.ctor_signatures.append(signature)
                 field.xattrs["signature"] = signature
-        self.signature = ClazzSignature(self.name, self.fields, self.method_signatures, self.ctor_signatures, None, self.top["modifiers"].has_child("abstract"))
+        self.signature = ClazzSignature(
+            self.name,
+            self.fields,
+            self.method_signatures,
+            self.ctor_signatures,
+            None,
+            self.top["modifiers"].has_child("abstract"),
+            []
+        )
         # We need to replace the containing_class with the new signature,
         # just so we don't have different signatures floating around.
         for signature in self.method_signatures:
@@ -1010,11 +1165,18 @@ class ClazzEmitter(SegmentEmitter):
             self.signature.parent_type = parent_type
         # Otherwise, the superclass remains as `None`.
 
+    def add_interfaces_to_signature(self) -> None:
+        for interface in self.top["implements"]:
+            typ = self.program.types.resolve_strict(interface)
+            if not isinstance(typ, typesys.InterfaceType):
+                interface.compile_error("Can't implement a type that isn't an interface")
+            self.signature.implemented_interfaces.append(typ)
+
     def emit(self) -> "ClazzSegment":
         self.emit_signature()
         return ClazzSegment(self)
 
-class StaticVariableSegment(Segment[SegmentEmitter]):
+class StaticVariableSegment(Segment):
     def __init__(self, static_variables: StaticVariableSet) -> None:
         Segment.__init__(self, "staticvars", 0x03)
         self.static_variables = static_variables
@@ -1022,15 +1184,15 @@ class StaticVariableSegment(Segment[SegmentEmitter]):
     def __str__(self) -> str:
         return "StaticVariableSegment()"
 
-    def print_(self, emitter: SegmentEmitter) -> None:
-        Segment.print_(self, emitter)
+    def print_(self) -> None:
+        Segment.print_(self)
         for variable in self.static_variables.variables.values():
             print("    %s" % variable)
 
     def evaluate(self, program: "Program") -> None:
         Segment.evaluate(self, program)
 
-class ClazzSegment(Segment[ClazzEmitter]):
+class ClazzSegment(Segment):
     def __init__(self, emitter: ClazzEmitter) -> None:
         Segment.__init__(self, "class", 0x02)
         self.emitter = emitter
@@ -1044,16 +1206,15 @@ class ClazzSegment(Segment[ClazzEmitter]):
         return self.signature.parent_signature
 
     def __str__(self) -> str:
-        return "ClazzSegment(type='%s', typecode=%s, name='%s', nfields=%s, nmethods=%s, superclass=%s)" \
+        return "ClazzSegment(type='%s', typecode=%s,nfields=%s, nmethods=%s, signature=%s)" \
             % (self.humantype,
             self.realtype,
-            self.name,
             len(self.fields),
             len(self.method_signatures),
-            "'%s'" % self.parent_signature.name if self.parent_signature is not None else "None")
+            self.signature)
 
-    def print_(self, emitter: ClazzEmitter) -> None:
-        Segment.print_(self, emitter)
+    def print_(self) -> None:
+        Segment.print_(self)
         for method in self.method_signatures:
             print("    %s" % method)
         for field in self.fields:
@@ -1083,6 +1244,7 @@ class Program:
         self.method_signatures: List[MethodSignature] = []
         self.static_variables: StaticVariableSet = StaticVariableSet(self)
         self.interpreter: interpreter.Interpreter = interpreter.Interpreter(self)
+        self.interfaces: List[Interface] = []
 
     @property
     def search_paths(self) -> List[str]:
@@ -1138,6 +1300,10 @@ class Program:
         self.validate_overriding_rules()
         for clazz in self.clazzes:
             clazz.evaluate(self)
+        for interface in self.interfaces:
+            interface_segment = InterfaceSegment(interface)
+            self.segments.append(interface_segment)
+            interface_segment.evaluate(self)
         for method in self.methods:
             method.evaluate(self)
         self.segments.append(StaticVariableSegment(self.static_variables))
@@ -1175,9 +1341,10 @@ class Program:
                 self.using_directives.append(flatten_ident_nodes(toplevel))
         clazz_emitters: List[ClazzEmitter] = []
         for toplevel in self.top:
-            if not toplevel.i("class"):
-                continue
-            clazz_emitters.append(ClazzEmitter(toplevel, self))
+            if toplevel.i("class"):
+                clazz_emitters.append(ClazzEmitter(toplevel, self))
+            elif toplevel.i("interface"):
+                self.interfaces.append(Interface.create_from_node(toplevel, self))
         # This is the indices in self.clazz_signatures of the class signature
         # associated with its respective emitter
         indices = dict()
@@ -1190,15 +1357,20 @@ class Program:
             signature = emitter.emit_signature()
             self.types.update_signature(signature)
             self.clazz_signatures[indices[id(emitter)]] = signature
+        for interface in self.interfaces:
+            interface.add_to_typesys(self.types)
         for emitter in clazz_emitters:
             emitter.add_superclass_to_signature()
+            emitter.add_interfaces_to_signature()
+        for interface in self.interfaces:
+            interface.add_signatures_from_node(self)
         self.clazz_emitters = clazz_emitters
         self.method_signatures += MethodSignature.scan(self.emitter.top, self)
         self.prescan_static_variables()
 
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
-            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, is_included=True))
+            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, [], is_included=True))
         for method in headers.methods:
             # elw
             self.method_signatures.append(MethodSignature(
@@ -1206,7 +1378,9 @@ class Program:
                 [self.types.resolve_strict(parser.parse_type(arg.type)) for arg in method.args],
                 [arg.name for arg in method.args],
                 self.types.resolve_strict(parser.parse_type(method.returntype)),
-                is_abstract=method.is_abstract
+                is_abstract=method.is_abstract,
+                is_override=method.is_override,
+                is_ctor=method.is_ctor
             ))
         for clazz in headers.clazzes:
             methods = []
@@ -1221,9 +1395,20 @@ class Program:
             parent_type = self.types.resolve_strict(parser.parse_type(clazz.parent)) if clazz.parent is not None else None
             assert isinstance(parent_type, typesys.ClazzType) or parent_type is None
             # util.nonnull is correct here because of the previous two lines
-            clazz_signature = ClazzSignature(clazz.name, fields, methods, ctors, util.nonnull(parent_type) if clazz.parent is not None else None, clazz.is_abstract, is_included=True)
+            clazz_signature = ClazzSignature(
+                clazz.name,
+                fields,
+                methods,
+                ctors,
+                util.nonnull(parent_type) if clazz.parent is not None else None,
+                clazz.is_abstract,
+                [],
+                is_included=True
+            )
             self.clazz_signatures.append(clazz_signature)
             self.types.update_signature(clazz_signature)
+            for method_signature in methods + ctors:
+                method_signature.containing_class = clazz_signature
 
 class Emitter:
     def __init__(self, top: parser.Node) -> None:

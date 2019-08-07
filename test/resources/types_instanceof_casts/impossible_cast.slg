@@ -1,0 +1,9 @@
+class Class1 {
+    ctor() {}
+}
+class Class2 {
+    ctor() {}
+}
+entrypoint fn main() {
+    let a = new Class1() as Class2;
+}

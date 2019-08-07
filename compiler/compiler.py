@@ -70,7 +70,7 @@ if not args.no_metadata:
 
 if args.segments:
     for segment in program.segments:
-        segment.print_(compiler)
+        segment.print_()
 
 if args.static_values:
     print("Static variables:")

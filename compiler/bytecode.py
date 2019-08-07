@@ -157,7 +157,22 @@ class SegmentEmitterStaticVariables(SegmentEmitter[emitter.StaticVariableSegment
             body += encode_str(variable.name) + encode_str(variable.type.name) + self.emit_interpreter_value(variable.initializer)
         return ret + struct.pack("!I", len(body)) + body
 
-emitters: List[SegmentEmitter] = [SegmentEmitterMetadata(), SegmentEmitterMethod(), SegmentEmitterClazz(), SegmentEmitterStaticVariables()]
+class SegmentEmitterInterface(SegmentEmitter[emitter.InterfaceSegment]):
+    def __init__(self) -> None:
+        SegmentEmitter.__init__(self, "interface")
+
+    def emit(self, segment: emitter.InterfaceSegment) -> bytes:
+        ret = SegmentEmitter.emit(self, segment)
+        body = encode_str(segment.interface.name)
+        return ret + body
+
+emitters: List[SegmentEmitter] = [
+    SegmentEmitterMetadata(),
+    SegmentEmitterMethod(),
+    SegmentEmitterClazz(),
+    SegmentEmitterStaticVariables(),
+    SegmentEmitterInterface()
+]
 
 def emit(segments: List[emitter.Segment]) -> bytes:
     ret = binascii.unhexlify(b"cf702b56")

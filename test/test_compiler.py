@@ -446,6 +446,16 @@ class TestInstanceofCasts:
             no_warnings=False
         )
 
+    def test_impossible_cast(self):
+        util.clean_tmp()
+        util.assert_compile_succeeds(
+            "resources/types_instanceof_casts/impossible_cast.slg",
+            message=[
+                "Impossible cast: LHS :Class1 is incompatible with RHS :Class2"
+            ],
+            no_warnings=False
+        )
+
 class TestInterpreterDuplicateMethodOrClass:
     def test_duplicate_class(self):
         util.clean_tmp()

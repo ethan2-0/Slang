@@ -47,6 +47,13 @@
         "reads": [0, "params"]
     },
     {
+        "code": "0x26",
+        "mneumonic": "INTERFACECALL",
+        "params": ["register", "method", "register"],
+        "writes": [2, "params"],
+        "reads": [0, "params"]
+    },
+    {
         "code": "0x06",
         "mneumonic": "CALL",
         "params": ["method", "register"],

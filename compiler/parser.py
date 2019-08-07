@@ -31,10 +31,11 @@ class Token:
 
 TokerState = NewType("TokerState", Tuple[int, int, int])
 class Toker:
-    keywords = ["using", "namespace", "static", "class", "override",
-            "entrypoint", "fn", "ctor", "extends", "let", "return", "while",
-            "for", "if", "else", "new", "true", "false", "and", "or", "not",
-            "null", "as", "instanceof", "super", "abstract"]
+    keywords = ["using", "namespace", "static", "class", "interface",
+            "override", "entrypoint", "fn", "ctor", "extends", "implements",
+            "let", "return", "while", "for", "if", "else", "new", "true",
+            "false", "and", "or", "not", "null", "as", "instanceof", "super",
+            "abstract"]
     escapes = {"n": "\n", "\\": "\\", "'": "'", "\"": "\"", "r": "\r", "0": "\0", "b": "\b", "v": "\v", "t": "\t", "f": "\f"}
     ident_start_chars = string.ascii_letters + "_"
     ident_chars = ident_start_chars + string.digits
@@ -541,7 +542,7 @@ class Parser:
         else:
             self.throw(tok)
 
-    def parse_fn(self) -> Node:
+    def parse_fn(self, allow_body: bool = True) -> Node:
         modifiers = Node("modifiers")
         while self.peek().of(*Parser.method_modifiers):
             modifier = Node(self.next())
@@ -552,7 +553,7 @@ class Parser:
         name = self.parse_qualified_name()
         params = self.parse_fn_params()
         type_annotation = self.parse_type_annotation() if self.isn(":") else Node("ident", data="void")
-        if modifiers.has_child("abstract"):
+        if modifiers.has_child("abstract") or not allow_body:
             statements = Node("statements")
             while self.isn(";"):
                 self.expect(";")
@@ -572,6 +573,15 @@ class Parser:
             nod.add(Node(self.expect("extends"), self.parse_type()))
         else:
             nod.add(Node("extends"))
+        if self.isn("implements"):
+            implements = Node(self.expect("implements"))
+            implements.add(self.parse_type())
+            while self.isn(","):
+                self.expect(",")
+                implements.add(self.parse_type())
+            nod.add(implements)
+        else:
+            nod.add(Node("implements"))
         body = Node("classbody")
         nod.add(body)
         self.expect("{")
@@ -589,6 +599,16 @@ class Parser:
         self.expect("}")
         nod.add(modifiers)
         return nod
+
+    def parse_interface(self) -> Node:
+        node = Node(self.expect("interface"), Node(self.expect("ident")))
+        body = Node("interfacebody")
+        node.add(body)
+        self.expect("{")
+        while not self.isn("}"):
+            body.add(self.parse_fn(allow_body=False))
+        self.expect("}")
+        return node
 
     def parse_using(self) -> Node:
         self.expect("using")
@@ -634,6 +654,8 @@ class Parser:
                 else:
                     # Unreachable
                     raise ValueError("This is a compiler bug.")
+            elif self.isn("interface"):
+                nod.add(self.parse_interface())
             elif self.isn("using"):
                 nod.add(self.parse_using())
             elif self.isn("namespace"):

@@ -15,7 +15,7 @@ class AbstractType:
 
     def is_assignable_to(self, other: "AbstractType") -> bool:
         # RuntimeException isAssignableTo Exception
-        pass
+        raise NotImplementedError
 
     def is_assignable_from(self, other: "AbstractType") -> bool:
         # Exception isAssignableFrom RuntimeException
@@ -32,6 +32,9 @@ class AbstractType:
 
     def is_clazz(self) -> bool:
         # Contract: This returns true iff isinstance(self, ClazzType)
+        return False
+
+    def is_interface(self) -> bool:
         return False
 
     def is_array(self) -> bool:
@@ -159,6 +162,40 @@ class ClazzType(AbstractType):
     def is_clazz(self) -> bool:
         return True
 
+    def implements(self, other: "InterfaceType") -> bool:
+        for interface in self.signature.implemented_interfaces:
+            if other == interface:
+                return True
+        supertype = self.get_supertype()
+        if supertype is not None and supertype.implements(other):
+            return True
+        return False
+
+class InterfaceType(AbstractType):
+    def __init__(self, interface: "emitter.Interface") -> None:
+        AbstractType.__init__(self, interface.name)
+        self.interface = interface
+
+    def is_interface(self) -> bool:
+        return True
+
+    def get_supertype(self) -> Optional[AbstractType]:
+        return None
+
+    def method_signature(self, name: str, node: parser.Node) -> "emitter.MethodSignature":
+        ret = self.method_signature_optional(name)
+        if ret is None:
+            node.compile_error("Invalid interface method name '%s' for type '%s'" % (name, self.name))
+        return ret
+
+    def method_signature_optional(self, name: str) -> "Optional[emitter.MethodSignature]":
+        return self.interface.get_signature_by_name(name)
+
+    def is_assignable_to(self, other: AbstractType) -> bool:
+        if not isinstance(other, InterfaceType):
+            return False
+        return other == self
+
 class ArrayType(AbstractType):
     def __init__(self, parent_type: AbstractType) -> None:
         AbstractType.__init__(self, "[%s]" % parent_type.name)
@@ -200,13 +237,25 @@ class TypeSystem:
         else:
             return None
 
+    def accept_interface(self, interface: "emitter.Interface") -> InterfaceType:
+        typ = InterfaceType(interface)
+        self.types.append(typ)
+        return typ
+
+    def get_interface_type_by_name(self, name: str) -> Optional[InterfaceType]:
+        typ = self.resolve(parser.parse_type(name), fail_silent=True)
+        if typ is None:
+            return typ
+        if not isinstance(typ, InterfaceType):
+            return None
+        return typ
+
     def get_clazz_type_by_name(self, name: str) -> Optional[ClazzType]:
         typ = self.resolve(parser.parse_type(name), fail_silent=True)
         if typ is None:
             return typ
         if not isinstance(typ, ClazzType):
-            # Clearly someone passed in a bad value for `name`
-            raise ValueError("This is a compiler bug.")
+            return None
         return typ
 
     def get_string_type(self) -> Optional[ClazzType]:
@@ -270,20 +319,22 @@ class TypeSystem:
             typ = self.decide_type(node[0], scope)
             if not node[1].i("ident"):
                 raise ValueError("This is a compiler bug")
-            if not typ.is_clazz():
-                node.compile_error("Cannot perform access on something that isn't an instance of a class")
-                # Unreachable
-                return None # type: ignore
-            assert isinstance(typ, ClazzType)
-            if typ.type_of_property_optional(node[1].data_strict) is not None:
-                node.compile_error("Attempt to call a property")
-                # Unreachable
-                return None # type: ignore
-            elif typ.method_signature_optional(node[1].data_strict) is not None:
+            if isinstance(typ, ClazzType):
+                if typ.type_of_property_optional(node[1].data_strict) is not None:
+                    node.compile_error("Attempt to call a property")
+                    # Unreachable
+                    return None # type: ignore
+                elif typ.method_signature_optional(node[1].data_strict) is not None:
+                    return typ.method_signature(node[1].data_strict, node)
+                else:
+                    node.compile_error("Attempt to perform property access that doesn't make sense (perhaps the property doesn't exist or is spelled wrong?)")
+                    # Unreachabe
+                    return None # type: ignore
+            elif isinstance(typ, InterfaceType):
                 return typ.method_signature(node[1].data_strict, node)
             else:
-                node.compile_error("Attempt to perform property access that doesn't make sense (perhaps the property doesn't exist or is spelled wrong?)")
-                # Unreachabe
+                node.compile_error("Cannot perform access on something that isn't an instance of a class or an interface")
+                # Unreachable
                 return None # type: ignore
         else:
             node.compile_error("Attempt to call something that can't be called")
