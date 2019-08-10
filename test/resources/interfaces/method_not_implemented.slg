@@ -1,0 +1,8 @@
+interface Interface {
+    fn method1();
+    fn method2();
+}
+class Class implements Interface {
+    ctor() {}
+    override fn method1() {}
+}

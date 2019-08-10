@@ -1026,7 +1026,7 @@ class ClazzSignature:
                     raise ValueError("Method '%s' of interface '%s' is not implemented by class '%s'" % (signature.name, interface.name, self.name))
                 if not implementation_sig.is_override:
                     raise ValueError("Method '%s' of class '%s' is an implementation from interface '%s' and must be marked as override" % (signature.name, self.name, interface.name))
-                if not implementation_sig.returntype.is_assignable_to(signature.returntype):
+                if not implementation_sig.returntype.is_assignable_to(signature.returntype) or (implementation_sig.returntype.is_void() and not signature.returntype.is_void()):
                     raise ValueError("Method '%s' of class '%s' has return type %s that isn't assignable to return type %s of the corresponding method from interface %s"
                         % (signature.name, self.name, implementation_sig.returntype, signature.returntype, interface.name))
                 if len(implementation_sig.args) != len(signature.args):

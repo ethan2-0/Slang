@@ -1,0 +1,43 @@
+using stdlib;
+namespace test;
+
+interface Interface {
+    fn getNumber(a: bool): int;
+}
+class Class1 implements Interface {
+    ctor() {}
+    override fn getNumber(a: bool): int {
+        if(a) {
+            return 2;
+        } else {
+            return 4;
+        }
+    }
+}
+class Class2 implements Interface {
+    ctor() {}
+    override fn getNumber(a: bool): int {
+        if(a) {
+            return 8;
+        } else {
+            return 16;
+        }
+    }
+}
+fn getNumber(instance: Interface, value: bool): int {
+    return instance.getNumber(value);
+}
+entrypoint fn main() {
+    if(getNumber(new Class1() as Interface, true) != 2) {
+        die("Failed 1");
+    }
+    if(getNumber(new Class2() as Interface, false) != 16) {
+        die("Failed 2");
+    }
+    if((new Class1()).getNumber(false) != 4) {
+        die("Failed 3");
+    }
+    if((new Class2()).getNumber(true) != 8) {
+        die("Failed 4");
+    }
+}

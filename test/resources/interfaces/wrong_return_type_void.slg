@@ -1,0 +1,8 @@
+using stdlib;
+
+interface Interface {
+    fn method(): int;
+}
+class Class implements Interface {
+    override fn method() {}
+}

@@ -1,0 +1,35 @@
+using stdlib;
+
+interface Interface1 {
+    fn method1(): String;
+    fn method2(): int;
+}
+interface Interface2 {
+    fn method3(): bool;
+}
+class Class implements Interface1, Interface2 {
+    ctor() {}
+    override fn method1(): String {
+        return "Hello";
+    }
+    override fn method2(): int {
+        return 2;
+    }
+    override fn method3(): bool {
+        return true;
+    }
+}
+entrypoint fn main() {
+    let instance = new Class();
+    let interface1 = instance as Interface1;
+    let interface2 = instance as Interface2;
+    if(not interface1.method1().equals("Hello")) {
+        die("Failed 1");
+    }
+    if(interface1.method2() != 2) {
+        die("Failed 2");
+    }
+    if(not interface2.method3()) {
+        die("Failed 3");
+    }
+}

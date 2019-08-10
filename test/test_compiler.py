@@ -528,3 +528,26 @@ class TestAbstractClasses:
     def test_supercall_to_abstract_method(self):
         util.clean_tmp()
         path = util.assert_compile_fails("resources/abstract_classes/supercall_to_abstract_method.slg", message="Attempt to perform super call to abstract method")
+
+class TestInterfaces:
+    def test_basic(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/interfaces/basic.slg")
+        util.interpret(path)
+
+    def test_multiple_interfaces(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/interfaces/multiple_interfaces.slg")
+        util.interpret(path)
+
+    def test_method_not_implemented(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/interfaces/method_not_implemented.slg", message="Method 'method2' of interface 'Interface' is not implemented by class 'Class'")
+
+    def test_wrong_return_type(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/interfaces/wrong_return_type.slg", message="Method 'method' of class 'Class' has return type :stdlib.String that isn't assignable to return type :int of the corresponding method from interface Interface")
+
+    def test_wrong_return_type_void(self):
+        util.clean_tmp()
+        path = util.assert_compile_fails("resources/interfaces/wrong_return_type_void.slg", message="Method 'method' of class 'Class' has return type :void that isn't assignable to return type :int of the corresponding method from interface Interface")
