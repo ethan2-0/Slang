@@ -49,9 +49,6 @@ void ts_init_global_registry() {
     void_type->category = ts_CATEGORY_PRIMITIVE;
 }
 uint32_t ts_allocate_type_id() {
-    // The whole concept of type IDs isn't actually necessary
-    // I could replace this with `return 0` and all the tests would pass
-    // But who knows, it could be useful, so I'll keep it
     return type_id++;
 }
 void ts_register_type(union ts_TYPE* type, char* name) {
@@ -67,31 +64,6 @@ void ts_register_type(union ts_TYPE* type, char* name) {
     end->next->name = name;
     end->next->type = type;
     end->next->next = NULL;
-}
-int ts_get_field_index(struct ts_TYPE_CLAZZ* clazz, char* name) {
-    for(int i = 0; i < clazz->nfields; i++) {
-        if(strcmp(clazz->fields[i].name, name) == 0) {
-            return i;
-        }
-    }
-    #if DEBUG
-    printf("Field name: '%s'\n", name);
-    #endif
-    fatal("Unable to find field");
-    return -1; // Unreachable
-}
-int ts_get_method_index(struct ts_TYPE_CLAZZ* clazz, char* name) {
-    #if DEBUG
-    printf("Asked to get index of %llx's field %s\n", clazz, name);
-    printf("%d %llx\n", clazz->methodc, clazz->methods);
-    #endif
-    for(int i = 0; i < clazz->methodc; i++) {
-        if(strcmp(clazz->methods[i]->name, name) == 0) {
-            return i;
-        }
-    }
-    fatal("Unable to find class method");
-    return -1; // Unreachable
 }
 union ts_TYPE* ts_get_type_inner(char* name) {
     #if DEBUG
@@ -110,6 +82,9 @@ union ts_TYPE* ts_get_type_inner(char* name) {
     return NULL;
 }
 struct ts_TYPE_ARRAY* ts_create_array_type(union ts_TYPE* parent_type) {
+    if(global_registry == NULL) {
+        ts_init_global_registry();
+    }
     struct ts_TYPE_ARRAY* result = mm_malloc(sizeof(struct ts_TYPE_ARRAY));
     result->category = ts_CATEGORY_ARRAY;
     result->id = ts_allocate_type_id();
@@ -124,7 +99,10 @@ struct ts_TYPE_ARRAY* ts_create_array_type(union ts_TYPE* parent_type) {
     ts_register_type((union ts_TYPE*) result, result->name);
     return result;
 }
-union ts_TYPE* ts_get_type(char* name) {
+union ts_TYPE* ts_get_type_optional(char* name) {
+    if(global_registry == NULL) {
+        ts_init_global_registry();
+    }
     union ts_TYPE* typ = ts_get_type_inner(name);
     if(typ == NULL) {
         if(name[0] == '[') {
@@ -141,12 +119,33 @@ union ts_TYPE* ts_get_type(char* name) {
             #endif
             return ret;
         }
-        printf("Tried to find type: '%s'\n", name);
-        fatal("Cannot find type");
     }
     return typ;
 }
+union ts_TYPE* ts_get_type(char* name) {
+    if(global_registry == NULL) {
+        ts_init_global_registry();
+    }
+    union ts_TYPE* result = ts_get_type_optional(name);
+    if(result == NULL) {
+        printf("Tried to find type: '%s'\n", name);
+        fatal("Cannot find type");
+    }
+    return result;
+}
 bool ts_is_compatible(union ts_TYPE* type1, union ts_TYPE* type2) {
+    if(global_registry == NULL) {
+        ts_init_global_registry();
+    }
+    if(type1->barebones.category == ts_CATEGORY_INTERFACE) {
+        return type1 == type2;
+    }
+    if(type2->barebones.category == ts_CATEGORY_INTERFACE) {
+        if(type1->barebones.category != ts_CATEGORY_CLAZZ) {
+            return false;
+        }
+        return cl_class_implements_interface(&type1->clazz, &type2->interface);
+    }
     int min_heirarchy_len = type1->barebones.heirarchy_len;
     if(type2->barebones.heirarchy_len < min_heirarchy_len) {
         min_heirarchy_len = type2->barebones.heirarchy_len;
@@ -154,6 +153,9 @@ bool ts_is_compatible(union ts_TYPE* type1, union ts_TYPE* type2) {
     return type1->barebones.heirarchy[min_heirarchy_len] == type2->barebones.heirarchy[min_heirarchy_len];
 }
 bool ts_instanceof(union ts_TYPE* lhs, union ts_TYPE* rhs) {
+    if(global_registry == NULL) {
+        ts_init_global_registry();
+    }
     // Test if lhs instanceof rhs
     #if DEBUG
     printf("Asked if %s instanceof %s\n", lhs->barebones.name, rhs->barebones.name);

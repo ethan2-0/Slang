@@ -972,15 +972,20 @@ class ClazzSignature:
         def throw(signature: MethodSignature) -> NoReturn:
             raise ValueError("Method '%s' violates overriding rules on class '%s'" % (signature.name, self.name))
 
+        # The `override` modifier can mean either that a method is an interface
+        # implementation method or an override from a superclass. In the latter
+        # case, we'll first see that it's marked as override and add it to this
+        # set. Later, if it didn't end up being an interface implementation, we
+        # throw that signature because it was marked as override improperly.
+        must_be_interface_implementation = set()
+
         for signature in self.method_signatures:
             if self.get_field_by_name(signature.name) is not None:
                 raise ValueError("Class property and method with the same name: '%s' (from class '%s'" % (signature.name, self.name))
             if signature.is_abstract and not self.is_abstract:
                 raise ValueError("Class '%s' is not abstract but has abstract method '%s'" % (self.name, signature.name))
             if not signature.is_override:
-                if self.parent_signature is None:
-                    continue
-                if self.parent_signature.get_method_signature_by_name(signature.name) is not None:
+                if self.parent_signature is not None and self.parent_signature.get_method_signature_by_name(signature.name) is not None:
                     throw(signature)
             else:
                 if self.parent_signature is None:
@@ -988,16 +993,17 @@ class ClazzSignature:
                 # `parent_sig` is a method signature (as opposed to a class signature)
                 parent_sig = util.nonnull(self.parent_signature).get_method_signature_by_name(signature.name)
                 if parent_sig is None:
-                    throw(signature)
-                assert parent_sig is not None
-                if not parent_sig.returntype.is_assignable_to(signature.returntype):
-                    throw(signature)
-                if len(signature.args) != len(parent_sig.args):
-                    throw(signature)
-                for i in range(len(signature.args) - 1):
-                    # Why - 1 and + 1? Because `this` is an argument
-                    if not parent_sig.args[i + 1].is_assignable_to(signature.args[i + 1]):
+                    must_be_interface_implementation.add(signature)
+                else:
+                    assert parent_sig is not None
+                    if not parent_sig.returntype.is_assignable_to(signature.returntype):
                         throw(signature)
+                    if len(signature.args) != len(parent_sig.args):
+                        throw(signature)
+                    for i in range(len(signature.args) - 1):
+                        # Why - 1 and + 1? Because `this` is an argument
+                        if not parent_sig.args[i + 1].is_assignable_to(signature.args[i + 1]):
+                            throw(signature)
 
         if self.parent_signature is not None and not self.is_abstract:
             for parent_sig in self.parent_signature.method_signatures:
@@ -1014,8 +1020,12 @@ class ClazzSignature:
         for interface in self.implemented_interfaces:
             for signature in interface.interface.method_signatures:
                 implementation_sig = self.get_method_signature_by_name(signature.name)
+                if implementation_sig in must_be_interface_implementation:
+                    must_be_interface_implementation.remove(implementation_sig)
                 if implementation_sig is None:
                     raise ValueError("Method '%s' of interface '%s' is not implemented by class '%s'" % (signature.name, interface.name, self.name))
+                if not implementation_sig.is_override:
+                    raise ValueError("Method '%s' of class '%s' is an implementation from interface '%s' and must be marked as override" % (signature.name, self.name, interface.name))
                 if not implementation_sig.returntype.is_assignable_to(signature.returntype):
                     raise ValueError("Method '%s' of class '%s' has return type %s that isn't assignable to return type %s of the corresponding method from interface %s"
                         % (signature.name, self.name, implementation_sig.returntype, signature.returntype, interface.name))
@@ -1026,6 +1036,10 @@ class ClazzSignature:
                     if not signature.args[i].is_assignable_to(implementation_sig.args[i]):
                         raise ValueError("Method '%s' of class '%s': argument #%s (including this) has type %s which is not assignable from %s from corresponding method of interface %s"
                         % (signature.name, self.name, i, implementation_sig.args[i], signature.args[i], interface.name))
+        # This is a for loop for conceptual clarity, even though it'll never
+        # hit a second iteration
+        for signature in must_be_interface_implementation:
+            throw(signature)
 
     def get_method_signature_by_name(self, name: str, recursive: bool = True) -> Optional[MethodSignature]:
         for signature in self.method_signatures:
@@ -1186,6 +1200,8 @@ class StaticVariableSegment(Segment):
     def print_(self) -> None:
         Segment.print_(self)
         for variable in self.static_variables.variables.values():
+            if variable.included:
+                continue
             print("    %s" % variable)
 
     def evaluate(self, program: "Program") -> None:

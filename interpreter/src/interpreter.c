@@ -174,7 +174,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 it_traceback(stackptr);
                 fatal("Attempt to call method of null");
             }
-            struct it_METHOD* classcall_callee = thiz.clazz_data->phi_table->methods[classcall_callee_index];
+            struct it_METHOD* classcall_callee = thiz.clazz_data->method_table->methods[classcall_callee_index];
 
             #if DEBUG
             printf("Class-calling %s\n", classcall_callee->name);
@@ -193,6 +193,43 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             registers[0] = thiz;
             for(uint32_t i = 0; i < classcall_callee->nargs - 1; i++) {
                 registers[i + 1] = params[i];
+            }
+            continue;
+        case OPCODE_INTERFACECALL:
+            {
+                struct it_STACKFRAME* oldstack = stackptr;
+                stackptr++;
+                if(stackptr >= stackend) {
+                    stackptr--;
+                    it_traceback(stackptr);
+                    fatal("Stack overflow");
+                }
+                struct it_OPCODE_DATA_INTERFACECALL* data = ((struct it_OPCODE_DATA_INTERFACECALL*) iptr->payload);
+                oldstack->returnreg = data->destination_register;
+                union itval thiz = registers[data->callee_register];
+                if(thiz.clazz_data == NULL) {
+                    stackptr--;
+                    it_traceback(stackptr);
+                    fatal("Attempt to call method of null interface reference");
+                }
+                struct it_INTERFACE_IMPLEMENTATION* implementations = thiz.clazz_data->method_table->interface_implementations;
+                struct it_INTERFACE_IMPLEMENTATION* implementation;
+                for(int i = 0; i < thiz.clazz_data->method_table->ninterface_implementations; i++) {
+                    if(implementations[i].interface_id == data->interface_id) {
+                        implementation = &implementations[i];
+                        break;
+                    }
+                }
+                struct it_METHOD* callee = implementation->method_table->methods[data->method_index];
+                load_method(stackptr, callee);
+                registers = stackptr->registers;
+                instruction_start = stackptr->iptr;
+                oldstack->iptr = iptr;
+                iptr = instruction_start;
+                registers[0] = thiz;
+                for(uint32_t i = 0; i < callee->nargs - 1; i++) {
+                    registers[i + 1] = params[i];
+                }
             }
             continue;
         case OPCODE_RETURN:
@@ -345,7 +382,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             struct gc_OBJECT_REGISTRY* new_register = gc_register_object(registers[opcode_new_data->dest], new_allocation_size, ts_CATEGORY_CLAZZ);
             registers[opcode_new_data->dest].clazz_data->gc_registry_entry = new_register;
             memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(union itval) * opcode_new_data->clazz->nfields);
-            registers[opcode_new_data->dest].clazz_data->phi_table = opcode_new_data->clazz;
+            registers[opcode_new_data->dest].clazz_data->method_table = opcode_new_data->clazz->method_table;
             iptr++;
             continue;
         case OPCODE_ACCESS:
@@ -428,7 +465,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 struct it_OPCODE_DATA_CAST* data = (struct it_OPCODE_DATA_CAST*) iptr->payload;
                 union itval source = registers[data->source];
                 // We know data->source_register_type->barebones.category == ts_CATEGORY_CLAZZ
-                if(!ts_is_compatible((union ts_TYPE*) source.clazz_data->phi_table, data->target_type)) {
+                if(!ts_is_compatible((union ts_TYPE*) &source.clazz_data->method_table->type->clazz, data->target_type)) {
                     it_traceback(stackptr);
                     fatal("Incompatible cast");
                 }
@@ -440,7 +477,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             {
                 struct it_OPCODE_DATA_INSTANCEOF* data = (struct it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
                 union itval source = registers[data->source];
-                registers[data->destination] = (union itval) ((int64_t) ts_instanceof((union ts_TYPE*) source.clazz_data->phi_table, data->predicate_type));
+                registers[data->destination] = (union itval) ((int64_t) ts_instanceof((union ts_TYPE*) &source.clazz_data->method_table->type->clazz, data->predicate_type));
                 iptr++;
                 continue;
             }

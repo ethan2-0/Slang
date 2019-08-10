@@ -187,7 +187,7 @@ void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct 
                 }
             }
         } else if(entry->category == ts_CATEGORY_CLAZZ) {
-            struct ts_TYPE_CLAZZ* clazz_properties = entry->object.clazz_data->phi_table;
+            struct ts_TYPE_CLAZZ* clazz_properties = &entry->object.clazz_data->method_table->type->clazz;
             for(int i = 0; i < clazz_properties->nfields; i++) {
                 if(entry->object.clazz_data->itval[i].array_data == NULL) {
                     continue;

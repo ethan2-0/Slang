@@ -11,7 +11,8 @@ struct it_METHOD;
 enum ts_CATEGORY {
     ts_CATEGORY_PRIMITIVE,
     ts_CATEGORY_CLAZZ,
-    ts_CATEGORY_ARRAY
+    ts_CATEGORY_ARRAY,
+    ts_CATEGORY_INTERFACE
 };
 struct ts_TYPE_BAREBONES {
     enum ts_CATEGORY category;
@@ -25,6 +26,7 @@ struct ts_CLAZZ_FIELD {
     char* name;
     union ts_TYPE* type;
 };
+struct it_METHOD_TABLE;
 struct ts_TYPE_CLAZZ {
     enum ts_CATEGORY category;
     uint32_t id;
@@ -36,8 +38,10 @@ struct ts_TYPE_CLAZZ {
     int nfields;
     struct ts_CLAZZ_FIELD* fields;
     // This is a pointer to an array of pointers
-    struct it_METHOD** methods;
-    size_t methodc;
+    struct it_METHOD_TABLE* method_table;
+    int implemented_interfacesc;
+    // This is a pointer to an array of pointers
+    struct ts_TYPE_INTERFACE** implemented_interfaces;
 };
 struct ts_TYPE_ARRAY {
     enum ts_CATEGORY category;
@@ -48,10 +52,20 @@ struct ts_TYPE_ARRAY {
     union ts_TYPE** heirarchy;
     union ts_TYPE* parent_type;
 };
+struct ts_TYPE_INTERFACE {
+    enum ts_CATEGORY category;
+    uint32_t id;
+    char* name;
+    int heirarchy_len;
+    union ts_TYPE** heirarchy;
+    // Note that this is only used to keep references to the methods, not for lookup at runtime
+    struct it_METHOD_TABLE* methods;
+};
 union ts_TYPE {
     struct ts_TYPE_BAREBONES barebones;
     struct ts_TYPE_CLAZZ clazz;
     struct ts_TYPE_ARRAY array;
+    struct ts_TYPE_INTERFACE interface;
 };
 
 enum ts_CATEGORY ts_CATEGORY;
@@ -84,8 +98,22 @@ struct it_ARRAY_DATA {
     union itval elements[1];
 };
 
+struct it_INTERFACE_IMPLEMENTATION {
+    struct it_METHOD_TABLE* method_table;
+    uint32_t interface_id;
+};
+struct it_METHOD_TABLE {
+    enum ts_CATEGORY category;
+    union ts_TYPE* type;
+    uint32_t ninterface_implementations;
+    // This is a pointer to an array of pointers
+    struct it_INTERFACE_IMPLEMENTATION* interface_implementations;
+    uint32_t nmethods;
+    struct it_METHOD* methods[];
+};
+
 struct it_CLAZZ_DATA {
-    struct ts_TYPE_CLAZZ* phi_table;
+    struct it_METHOD_TABLE* method_table;
     struct gc_OBJECT_REGISTRY* gc_registry_entry;
     union itval itval[0];
 };
@@ -118,6 +146,7 @@ struct it_METHOD {
     // This is a pointer to an array
     union ts_TYPE** register_types;
     struct ts_TYPE_CLAZZ* containing_clazz;
+    struct ts_TYPE_INTERFACE* containing_interface;
     it_METHOD_REPLACEMENT_PTR replacement_ptr;
 };
 struct sv_STATIC_VAR {
@@ -138,11 +167,13 @@ struct it_PROGRAM {
     int clazz_index;
     // This is a pointer to an array of pointers of classes
     struct ts_TYPE_CLAZZ** clazzes;
-
     int static_varsc;
+    int static_var_index;
     // This is a pointer to the start of the array of static variables
     struct sv_STATIC_VAR* static_vars;
-    int static_var_index;
+    int interfacesc;
+    int interface_index;
+    struct ts_TYPE_INTERFACE** interfaces;
 };
 
 

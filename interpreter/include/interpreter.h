@@ -7,9 +7,8 @@
 
 #include "interpreter_export.h"
 
+union ts_TYPE* ts_get_type_optional(char* name);
 union ts_TYPE* ts_get_type(char* name);
-int ts_get_field_index(struct ts_TYPE_CLAZZ* clazz, char* name);
-int ts_get_method_index(struct ts_TYPE_CLAZZ* clazz, char* name);
 void ts_register_type(union ts_TYPE* type, char* name);
 uint32_t ts_allocate_type_id();
 bool ts_is_compatible(union ts_TYPE* type1, union ts_TYPE* type2);
@@ -29,7 +28,11 @@ void it_run(struct it_PROGRAM* prog, struct it_OPTIONS* options);
 void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options);
 void it_replace_methods(struct it_PROGRAM* prog);
 
-void cl_arrange_phi_tables(struct it_PROGRAM* program);
+void cl_arrange_method_tables(struct it_PROGRAM* program);
+int cl_get_field_index(struct ts_TYPE_CLAZZ* clazz, char* name);
+int cl_get_method_index(struct it_METHOD_TABLE* clazz, char* name);
+struct ts_TYPE_INTERFACE* cl_get_or_create_interface(char* name, struct it_PROGRAM* program);
+bool cl_class_implements_interface(struct ts_TYPE_CLAZZ* clazz, struct ts_TYPE_INTERFACE* interface);
 
 struct gc_OBJECT_REGISTRY* gc_register_object(union itval object, size_t allocation_size, enum ts_CATEGORY category);
 void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct it_STACKFRAME* current_frame, struct it_OPTIONS* options);

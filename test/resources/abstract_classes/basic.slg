@@ -22,9 +22,11 @@ class SubclassSubclass extends Subclass {
         return 16;
     }
 }
-entrypoint fn main() {
+entrypoint fn main(): int {
     let a: Superclass = new SubclassSubclass();
     if(a.method3() != 28) {
+        return a.method3();
         die("Failed");
     }
+    return 5;
 }

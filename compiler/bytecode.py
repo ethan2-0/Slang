@@ -92,7 +92,12 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
         ret = SegmentEmitter.emit(self, segment)
         header = struct.pack("!III", segment.num_registers, segment.signature.nargs, len(segment.opcodes)) + encode_str(segment.signature.name)
         body_header = b""
-        body_header += encode_str("" if segment.signature.containing_class is None else segment.signature.containing_class.name)
+        if segment.signature.is_class_method:
+            body_header += encode_str(segment.signature.containing_class.name)
+        elif segment.signature.is_interface_method:
+            body_header += encode_str(segment.signature.containing_interface.name)
+        else:
+            body_header += encode_str("")
         body_header += encode_str(segment.signature.returntype.name)
         for register in segment.scope.registers:
             body_header += encode_str(register.type.name)
@@ -123,6 +128,9 @@ class SegmentEmitterClazz(SegmentEmitter[emitter.ClazzSegment]):
         ret = SegmentEmitter.emit(self, segment)
         body = encode_str(segment.name)
         body += encode_str(segment.signature.parent_signature.name if segment.signature.parent_signature is not None else "")
+        body += struct.pack("!I", len(segment.signature.implemented_interfaces))
+        for interface in segment.signature.implemented_interfaces:
+            body += encode_str(interface.name)
         body += struct.pack("!I", len(segment.fields))
         for field in segment.fields:
             body += encode_str(field.name)

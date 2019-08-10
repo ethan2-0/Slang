@@ -169,7 +169,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to access something that isn't a class");
         }
-        data->property_index = ts_get_field_index(clazzreg_type, fr_getstr(state));
+        data->property_index = cl_get_field_index(clazzreg_type, fr_getstr(state));
         data->destination = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_ASSIGN) {
@@ -179,7 +179,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to assign to a property of something that isn't a class");
         }
-        data->property_index = ts_get_field_index(clazzreg_type, fr_getstr(state));
+        data->property_index = cl_get_field_index(clazzreg_type, fr_getstr(state));
         data->source = fr_getuint32(state);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_CLASSCALL) {
@@ -191,7 +191,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         }
         char* callee_name = fr_getstr(state);
         // data->callee = bc_resolve_name(program, callee_name);
-        data->callee_index = ts_get_method_index(clazzreg_type, callee_name);
+        data->callee_index = cl_get_method_index(clazzreg_type->method_table, callee_name);
         free(callee_name);
         data->returnreg = fr_getuint32(state);
         opcode->payload = data;
@@ -229,11 +229,8 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         data->target = fr_getuint32(state);
         data->target_type = method->register_types[data->target];
         data->source_register_type = method->register_types[data->target];
-        if(data->target_type->barebones.category != ts_CATEGORY_CLAZZ) {
-            fatal("Can't cast something that isn't a class. This is a compiler bug.");
-        }
-        if(data->target_type->barebones.category != ts_CATEGORY_CLAZZ) {
-            fatal("Cannot cast to a type that isn't a class. This is a compiler bug.");
+        if(data->target_type->barebones.category != ts_CATEGORY_CLAZZ && data->target_type->barebones.category != ts_CATEGORY_INTERFACE) {
+            fatal("Cannot cast to a type that isn't a class or interface. This is a compiler bug.");
         }
         opcode->payload = data;
     } else if(opcode_num == OPCODE_INSTANCEOF) {
@@ -273,10 +270,22 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         if(clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("First argument to CLASSCALLSPECIAL isn't a class");
         }
-        uint32_t method_index = ts_get_method_index(clazz, methodname);
-        data->method = clazz->methods[method_index];
+        uint32_t method_index = cl_get_method_index(clazz->method_table, methodname);
+        data->method = clazz->method_table->methods[method_index];
         free(classname);
         free(methodname);
+        opcode->payload = data;
+    } else if(opcode_num == OPCODE_INTERFACECALL) {
+        struct it_OPCODE_DATA_INTERFACECALL* data = mm_malloc(sizeof(struct it_OPCODE_DATA_INTERFACECALL));
+        data->callee_register = fr_getuint32(state);
+        char* method_name = fr_getstr(state);
+        struct ts_TYPE_INTERFACE* interface = &method->register_types[data->callee_register]->interface;
+        if(interface->category != ts_CATEGORY_INTERFACE) {
+            fatal("Attempt to do interface call on something that isn't an interface");
+        }
+        data->interface_id = interface->id;
+        data->method_index = cl_get_method_index(interface->methods, method_name);
+        data->destination_register = fr_getuint32(state);
         opcode->payload = data;
     } else {
         printf("Opcode: %2x\n", opcode_num);
@@ -323,6 +332,8 @@ struct bc_PRESCAN_RESULTS* bc_prescan(struct fr_STATE* state) {
             uint32_t length = fr_getuint32(state);
             results->num_static_variables = fr_getuint32(state);
             fr_advance(state, (int) length - 4);
+        } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+            free(fr_getstr(state));
         } else {
             fatal("Unrecognized segment type");
         }
@@ -388,6 +399,8 @@ void bc_scan_static_vars(struct it_PROGRAM* program, struct fr_STATE* state) {
                 free(name);
                 free(typename);
             }
+        } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+            free(fr_getstr(state));
         } else {
             fatal("Unrecognized segment type");
         }
@@ -478,6 +491,10 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
             fr_getuint32(state); // length
             char* clazzname = fr_getstr(state);
             char* parentname = fr_getstr(state);
+            uint32_t num_interfaces = fr_getuint32(state);
+            for(uint32_t i = 0; i < num_interfaces; i++) {
+                free(fr_getstr(state));
+            }
             #if DEBUG
             printf("Prescanning class '%s'\n", clazzname);
             #endif
@@ -495,6 +512,8 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
             clazz->heirarchy[0] = (union ts_TYPE*) clazz;
             clazz->nfields = -1;
             clazz->fields = NULL;
+            clazz->implemented_interfaces = mm_malloc(sizeof(struct ts_TYPE_INTERFACE*) * num_interfaces);
+            clazz->implemented_interfacesc = num_interfaces;
             // Check for duplicate class names
             for(int i = 0; i < program->clazz_index; i++) {
                 if(strcmp(program->clazzes[i]->name, clazz->name) == 0) {
@@ -506,10 +525,14 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
             program->clazzes[program->clazz_index++] = clazz;
             free(clazzname);
             free(parentname);
+        } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+            free(fr_getstr(state));
+            program->interfacesc++;
         } else {
             fatal("Unrecognized segment type");
         }
     }
+    program->interfaces = mm_malloc(sizeof(struct ts_TYPE_INTERFACE*) * program->interfacesc);
 }
 void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
     while(!fr_iseof(state)) {
@@ -540,6 +563,13 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             } else {
                 clazz->immediate_supertype = NULL;
             }
+            uint32_t num_interfaces = fr_getuint32(state);
+            for(uint32_t i = 0; i < num_interfaces; i++) {
+                char* name = fr_getstr(state);
+                struct ts_TYPE_INTERFACE* interface = cl_get_or_create_interface(name, program);
+                clazz->implemented_interfaces[i] = interface;
+                free(name);
+            }
             uint32_t numfields = fr_getuint32(state);
             clazz->nfields = numfields;
             clazz->fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * numfields);
@@ -552,6 +582,10 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             #endif
             free(supertype_name);
             free(clazzname);
+        } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+            char* name = fr_getstr(state);
+            cl_get_or_create_interface(name, program);
+            free(name);
         } else {
             fatal("Unrecognized segment type");
         }
@@ -578,10 +612,17 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             fr_getuint32(state);
             method->name = fr_getstr(state); // name
             char* containing_clazz_name = fr_getstr(state);
+            method->containing_clazz = NULL;
+            method->containing_interface = NULL;
             if(strlen(containing_clazz_name) > 0) {
-                method->containing_clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(containing_clazz_name);
-            } else {
-                method->containing_clazz = NULL;
+                union ts_TYPE* containing_type = ts_get_type(containing_clazz_name);
+                if(containing_type->barebones.category == ts_CATEGORY_CLAZZ) {
+                    method->containing_clazz = (struct ts_TYPE_CLAZZ*) containing_type;
+                } else if(containing_type->barebones.category == ts_CATEGORY_INTERFACE) {
+                    method->containing_interface = (struct ts_TYPE_INTERFACE*) containing_type;
+                } else {
+                    fatal("Method is contained in a type that isn't a class or an interface");
+                }
             }
             free(containing_clazz_name);
             // Make sure there are no duplicate method names
@@ -616,6 +657,8 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
         } else if(segment_type == SEGMENT_TYPE_CLASS) {
             uint32_t length = fr_getuint32(state);
             fr_advance(state, (int) length);
+        } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+            free(fr_getstr(state));
         } else {
             fatal("Unrecognized segment type");
         }
@@ -642,6 +685,8 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
     result->methodc = 0;
     result->entrypoint = -1;
     result->static_varsc = 0;
+    result->interfacesc = 0;
+    result->interface_index = 0;
     for(int i = 0; i < num_files; i++) {
         prescan[i] = bc_prescan(state[i]);
         fr_rewind(state[i]);
@@ -688,7 +733,7 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
         // Ignore the magic number
         fr_getuint32(state[i]);
     }
-    cl_arrange_phi_tables(result);
+    cl_arrange_method_tables(result);
 
     if(result->entrypoint == -1) {
         fatal("No entrypoint found");
@@ -717,6 +762,8 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
                 fr_advance(state[i], (int) length);
             } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
                 fr_advance(state[i], fr_getuint32(state[i]));
+            } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+                free(fr_getstr(state[i]));
             } else {
                 fatal("Unrecognized segment type");
             }

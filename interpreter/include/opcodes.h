@@ -8,6 +8,7 @@
 #define SEGMENT_TYPE_METADATA 0x01
 #define SEGMENT_TYPE_CLASS 0x02
 #define SEGMENT_TYPE_STATIC_VARIABLES 0x03
+#define SEGMENT_TYPE_INTERFACE 0x04
 
 #define OPCODE_ZERO 0x01
 #define OPCODE_ADD 0x02
@@ -45,6 +46,7 @@
 #define OPCODE_STATICVARGET 0x23
 #define OPCODE_STATICVARSET 0x24
 #define OPCODE_CLASSCALLSPECIAL 0x25
+#define OPCODE_INTERFACECALL 0x26
 
 struct it_OPCODE_DATA_LOAD {
     uint32_t target;
@@ -202,6 +204,12 @@ struct it_OPCODE_DATA_CLASSCALLSPECIAL {
     struct it_METHOD* method;
     uint32_t destination_register;
     uint32_t callee_register;
+};
+struct it_OPCODE_DATA_INTERFACECALL {
+    uint32_t method_index;
+    uint32_t interface_id;
+    uint32_t callee_register;
+    uint32_t destination_register;
 };
 
 #endif /* OPCODES_H */
