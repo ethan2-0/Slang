@@ -28,10 +28,10 @@ fn getNumber(instance: Interface, value: bool): int {
     return instance.getNumber(value);
 }
 entrypoint fn main() {
-    if(getNumber(new Class1() as Interface, true) != 2) {
+    if(getNumber(new Class1(), true) != 2) {
         die("Failed 1");
     }
-    if(getNumber(new Class2() as Interface, false) != 16) {
+    if(getNumber(new Class2(), false) != 16) {
         die("Failed 2");
     }
     if((new Class1()).getNumber(false) != 4) {

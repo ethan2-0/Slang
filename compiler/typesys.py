@@ -104,6 +104,8 @@ class ClazzType(AbstractType):
         self.signature = signature
 
     def is_assignable_to(self, other: AbstractType) -> bool:
+        if isinstance(other, InterfaceType):
+            return self.implements(other)
         if not isinstance(other, ClazzType):
             return False
 

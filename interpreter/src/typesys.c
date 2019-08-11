@@ -160,6 +160,12 @@ bool ts_instanceof(union ts_TYPE* lhs, union ts_TYPE* rhs) {
     #if DEBUG
     printf("Asked if %s instanceof %s\n", lhs->barebones.name, rhs->barebones.name);
     #endif
+    if(rhs->barebones.category == ts_CATEGORY_INTERFACE) {
+        if(lhs->barebones.category != ts_CATEGORY_CLAZZ) {
+            return false;
+        }
+        return cl_class_implements_interface((struct ts_TYPE_CLAZZ*) lhs, (struct ts_TYPE_INTERFACE*) rhs);
+    }
     if(lhs->barebones.heirarchy_len < rhs->barebones.heirarchy_len) {
         return false;
     }

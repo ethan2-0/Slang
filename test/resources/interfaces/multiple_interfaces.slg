@@ -21,8 +21,8 @@ class Class implements Interface1, Interface2 {
 }
 entrypoint fn main() {
     let instance = new Class();
-    let interface1 = instance as Interface1;
-    let interface2 = instance as Interface2;
+    let interface1: Interface1 = instance;
+    let interface2: Interface2 = instance;
     if(not interface1.method1().equals("Hello")) {
         die("Failed 1");
     }

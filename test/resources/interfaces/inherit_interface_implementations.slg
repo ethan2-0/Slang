@@ -1,0 +1,34 @@
+using stdlib;
+
+interface Interface1 {
+    fn doStuff1(): int;
+}
+interface Interface2 {
+    fn doStuff2(): int;
+}
+class Grandparent implements Interface1 {
+    ctor() {}
+    override fn doStuff1(): int {
+        return 2;
+    }
+}
+class Parent extends Grandparent implements Interface2 {
+    ctor() {}
+    override fn doStuff2(): int {
+        return 4;
+    }
+}
+class Child extends Parent {
+    ctor() {}
+}
+entrypoint fn main() {
+    let child = new Child();
+    let interface1: Interface1 = child;
+    let interface2: Interface2 = child;
+    if(interface1.doStuff1() != 2) {
+        die("Failed");
+    }
+    if(interface2.doStuff2() != 4) {
+        die("Failed");
+    }
+}

@@ -551,3 +551,13 @@ class TestInterfaces:
     def test_wrong_return_type_void(self):
         util.clean_tmp()
         path = util.assert_compile_fails("resources/interfaces/wrong_return_type_void.slg", message="Method 'method' of class 'Class' has return type :void that isn't assignable to return type :int of the corresponding method from interface Interface")
+
+    def test_inherit_interface_implementations(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/interfaces/inherit_interface_implementations.slg")
+        util.interpret(path)
+
+    def test_instanceof(self):
+        util.clean_tmp()
+        path = util.assert_compile_succeeds("resources/interfaces/instanceof.slg", no_warnings=False)
+        util.interpret(path)

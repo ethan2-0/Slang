@@ -240,7 +240,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         char* typename = fr_getstr(state);
         data->source_register_type = method->register_types[data->source];
         data->predicate_type = ts_get_type(typename);
-        if(data->predicate_type->barebones.category != ts_CATEGORY_CLAZZ) {
+        if(data->predicate_type->barebones.category != ts_CATEGORY_CLAZZ && data->predicate_type->barebones.category != ts_CATEGORY_INTERFACE) {
             fatal("Predicate type for instanceof must be a class. This is a compiler bug.");
         }
         free(typename);

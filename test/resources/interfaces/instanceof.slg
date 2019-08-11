@@ -1,0 +1,23 @@
+using stdlib;
+
+interface Interface {}
+class Class implements Interface {
+    ctor() {}
+}
+
+entrypoint fn main() {
+    let class_ = new Class();
+    if(not (class_ instanceof Class)) {
+        die("Failed 1");
+    }
+    if(not (class_ instanceof Interface)) {
+        die("Failed 2");
+    }
+    let interface_: Interface = class_;
+    if(not (interface_ instanceof Class)) {
+        die("Failed 3");
+    }
+    if(not (interface_ instanceof Interface)) {
+        die("Failed 4");
+    }
+}

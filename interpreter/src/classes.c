@@ -29,9 +29,11 @@ void cl_arrange_method_tables_inner(struct it_PROGRAM* program, bool* visited, s
             total_methods++;
         }
     }
+
     type->method_table = mm_malloc(sizeof(struct it_METHOD_TABLE) + sizeof(struct it_METHOD*) * total_methods);
     type->method_table->type = (union ts_TYPE*) type;
     type->method_table->category = type->category;
+
     int current_method_index = 0;
     if(type->immediate_supertype != NULL) {
         memcpy(&type->method_table->methods, &type->immediate_supertype->method_table->methods, sizeof(struct it_METHOD*) * type->immediate_supertype->method_table->nmethods);
@@ -54,7 +56,9 @@ void cl_arrange_method_tables_inner(struct it_PROGRAM* program, bool* visited, s
             }
         }
     }
+
     type->method_table->nmethods = current_method_index;
+
     if(type->immediate_supertype != NULL) {
         struct ts_CLAZZ_FIELD* old_fields = type->fields;
         type->fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * (type->nfields + type->immediate_supertype->nfields));
@@ -74,6 +78,14 @@ void cl_arrange_method_tables_inner(struct it_PROGRAM* program, bool* visited, s
         type->heirarchy_len = 1;
         type->heirarchy[0] = (union ts_TYPE*) type;
     }
+
+    if(type->immediate_supertype != NULL) {
+        int new_num_interfaces = type->implemented_interfacesc + type->immediate_supertype->implemented_interfacesc;
+        type->implemented_interfaces = realloc(type->implemented_interfaces, sizeof(struct it_INTERFACE_IMPLEMENTATION) * new_num_interfaces);
+        memcpy(type->implemented_interfaces + type->implemented_interfacesc, type->immediate_supertype->implemented_interfaces, sizeof(struct it_INTERFACE_IMPLEMENTATION) * type->immediate_supertype->implemented_interfacesc);
+        type->implemented_interfacesc = new_num_interfaces;
+    }
+
     int index = cl_get_index(program, type);
     visited[index] = true;
     #if DEBUG
@@ -135,7 +147,7 @@ void cl_arrange_interface_implementations(struct it_PROGRAM* program) {
 }
 void cl_arrange_method_tables(struct it_PROGRAM* program) {
     #if DEBUG
-    printf("Entering cl_arrange_phi_tables\n");
+    printf("Entering cl_arrange_method_tables\n");
     #endif
     if(program->clazzesc == 0) {
         return;
@@ -153,7 +165,7 @@ void cl_arrange_method_tables(struct it_PROGRAM* program) {
     cl_arrange_interface_methods(program);
     cl_arrange_interface_implementations(program);
     #if DEBUG
-    printf("Ending cl_arrange_phi_tables\n");
+    printf("Ending cl_arrange_method_tables\n");
     #endif
 }
 int cl_get_field_index(struct ts_TYPE_CLAZZ* clazz, char* name) {
