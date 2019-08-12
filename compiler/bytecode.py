@@ -93,8 +93,10 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
         header = struct.pack("!III", segment.num_registers, segment.signature.nargs, len(segment.opcodes)) + encode_str(segment.signature.name)
         body_header = b""
         if segment.signature.is_class_method:
+            assert segment.signature.containing_class is not None
             body_header += encode_str(segment.signature.containing_class.name)
         elif segment.signature.is_interface_method:
+            assert segment.signature.containing_interface is not None
             body_header += encode_str(segment.signature.containing_interface.name)
         else:
             body_header += encode_str("")

@@ -33,11 +33,12 @@ class HeaderMethodArgumentRepresentation:
 
 class HeaderMethodRepresentation:
     def __init__(self, name: str, args: List[HeaderMethodArgumentRepresentation], returntype: str,
-                containing_clazz: Optional[str], is_ctor: bool, entrypoint: bool, is_override: bool, is_abstract: bool):
+                containing_clazz: Optional[str], containing_interface: Optional[str], is_ctor: bool, entrypoint: bool, is_override: bool, is_abstract: bool):
         self.name = name
         self.args = args
         self.returntype = returntype
         self.containing_clazz = containing_clazz
+        self.containing_interface = containing_interface
         self.is_ctor = is_ctor
         self.entrypoint = entrypoint
         self.is_override = False
@@ -55,6 +56,7 @@ class HeaderMethodRepresentation:
             "numargs": len(self.args),
             "returns": self.returntype,
             "containingclass": self.containing_clazz,
+            "containinginterface": self.containing_interface,
             "entrypoint": self.entrypoint,
             "ctor": self.is_ctor,
             "override": self.is_override,
@@ -68,6 +70,7 @@ class HeaderMethodRepresentation:
             [HeaderMethodArgumentRepresentation.from_argument(arg, argtype.name) for arg, argtype in zip(method.signature.argnames, method.signature.args)],
             method.signature.returntype.name,
             method.signature.containing_class.name if method.signature.containing_class is not None else None,
+            method.signature.containing_interface.name if method.signature.containing_interface is not None else None,
             is_ctor=method.signature.is_ctor,
             entrypoint=entrypoint_id == method.signature.id,
             is_override=method.signature.is_override,
@@ -78,7 +81,17 @@ class HeaderMethodRepresentation:
         if input["type"] != "method":
             raise ValueError("Asked to unserialize type '%s' as method" % input["type"])
 
-        return HeaderMethodRepresentation(input["name"], [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]], input["returns"], input["containingclass"], is_ctor=input["ctor"], entrypoint=False, is_override=input["override"], is_abstract=input["abstract"])
+        return HeaderMethodRepresentation(
+            input["name"],
+            [HeaderMethodArgumentRepresentation.unserialize(argument) for argument in input["arguments"]],
+            input["returns"],
+            input["containingclass"],
+            input["containinginterface"],
+            is_ctor=input["ctor"],
+            entrypoint=False,
+            is_override=input["override"],
+            is_abstract=input["abstract"]
+        )
 
 class HeaderClazzFieldRepresentation:
     def __init__(self, name: str, type: str):
@@ -103,30 +116,31 @@ class HeaderClazzFieldRepresentation:
 
         return HeaderClazzFieldRepresentation(input["name"], input["fieldtype"])
 
-class HeaderClazzMethodRepresentation:
+class HeaderMemberMethodRepresentation:
     def __init__(self, name: str):
         self.name = name
 
     def serialize(self) -> JsonObject:
         return {
-            "type": "classmethod",
+            "type": "membermethod",
             "name": self.name
         }
 
     @staticmethod
-    def unserialize(input: JsonObject) -> "HeaderClazzMethodRepresentation":
-        if input["type"] != "classmethod":
-            raise ValueError("Asked to unserialize type '%s' as a classmethod" % input["type"])
-        return HeaderClazzMethodRepresentation(input["name"])
+    def unserialize(input: JsonObject) -> "HeaderMemberMethodRepresentation":
+        if input["type"] != "membermethod":
+            raise ValueError("Asked to unserialize type '%s' as a membermethod" % input["type"])
+        return HeaderMemberMethodRepresentation(input["name"])
 
 class HeaderClazzRepresentation:
-    def __init__(self, name: str, fields: List[HeaderClazzFieldRepresentation], methods: List[HeaderClazzMethodRepresentation],
-                ctors: List[HeaderClazzMethodRepresentation], parent: Optional[str], is_abstract: bool):
+    def __init__(self, name: str, fields: List[HeaderClazzFieldRepresentation], methods: List[HeaderMemberMethodRepresentation],
+                ctors: List[HeaderMemberMethodRepresentation], parent: Optional[str], interfaces: List[str], is_abstract: bool):
         self.name = name
         self.fields = fields
         self.methods = methods
         self.ctors = ctors
         self.parent = parent
+        self.interfaces = interfaces
         self.is_abstract = is_abstract
 
     def serialize(self) -> JsonObject:
@@ -136,6 +150,7 @@ class HeaderClazzRepresentation:
             "fields": [field.serialize() for field in self.fields],
             "methods": [method.serialize() for method in self.methods],
             "ctors": [method.serialize() for method in self.ctors],
+            "interfaces": self.interfaces,
             "parent": self.parent,
             "abstract": self.is_abstract
         }
@@ -145,9 +160,10 @@ class HeaderClazzRepresentation:
         return HeaderClazzRepresentation(
             signature.name,
             [HeaderClazzFieldRepresentation.from_field(field) for field in signature.fields],
-            [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.method_signatures],
-            [HeaderClazzMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures],
+            [HeaderMemberMethodRepresentation(methodsignature.name) for methodsignature in signature.method_signatures],
+            [HeaderMemberMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures],
             signature.parent_signature.name if signature.parent_signature is not None else None,
+            [interface.name for interface in signature.implemented_interfaces],
             signature.is_abstract
         )
 
@@ -158,9 +174,10 @@ class HeaderClazzRepresentation:
         return HeaderClazzRepresentation(
             input["name"],
             [HeaderClazzFieldRepresentation.unserialize(field) for field in input["fields"]],
-            [HeaderClazzMethodRepresentation.unserialize(method) for method in input["methods"]],
-            [HeaderClazzMethodRepresentation.unserialize(method) for method in input["ctors"]],
+            [HeaderMemberMethodRepresentation.unserialize(method) for method in input["methods"]],
+            [HeaderMemberMethodRepresentation.unserialize(method) for method in input["ctors"]],
             input["parent"],
+            input["interfaces"],
             input["abstract"]
         )
 
@@ -184,13 +201,34 @@ class HeaderStaticVariableRepresentation:
     def unserialize(input: JsonObject) -> "HeaderStaticVariableRepresentation":
         return HeaderStaticVariableRepresentation(input["name"], input["variabletype"])
 
+class HeaderInterfaceRepresentation:
+    def __init__(self, name: str, methods: List[HeaderMemberMethodRepresentation]):
+        self.name = name
+        self.methods = methods
+
+    def serialize(self) -> JsonObject:
+        return {
+            "name": self.name,
+            "methods": [method.serialize() for method in self.methods],
+            "type": "interface"
+        }
+
+    @staticmethod
+    def from_interface(interface: "emitter.Interface") -> "HeaderInterfaceRepresentation":
+        return HeaderInterfaceRepresentation(interface.name, [HeaderMemberMethodRepresentation(method.name) for method in interface.method_signatures])
+
+    @staticmethod
+    def unserialize(input: JsonObject) -> "HeaderInterfaceRepresentation":
+        return HeaderInterfaceRepresentation(input["name"], [HeaderMemberMethodRepresentation.unserialize(method) for method in input["methods"]])
+
 class HeaderRepresentation:
     # Filled in below
     HIDDEN: "HeaderRepresentation" = None # type: ignore
-    def __init__(self, methods: List[HeaderMethodRepresentation], clazzes: List[HeaderClazzRepresentation], static_variables: List[HeaderStaticVariableRepresentation], hidden: bool=False):
+    def __init__(self, methods: List[HeaderMethodRepresentation], clazzes: List[HeaderClazzRepresentation], static_variables: List[HeaderStaticVariableRepresentation], interfaces: List[HeaderInterfaceRepresentation], hidden: bool=False):
         self.methods = methods
         self.clazzes = clazzes
         self.static_variables = static_variables
+        self.interfaces = interfaces
         self.hidden = hidden
 
     def serialize(self) -> JsonObject:
@@ -203,6 +241,7 @@ class HeaderRepresentation:
             "methods": [method.serialize() for method in self.methods],
             "classes": [clazz.serialize() for clazz in self.clazzes],
             "staticvars": [var.serialize() for var in self.static_variables],
+            "interfaces": [interface.serialize() for interface in self.interfaces],
             "type": "metadata"
         }
 
@@ -211,7 +250,8 @@ class HeaderRepresentation:
         return HeaderRepresentation(
             [HeaderMethodRepresentation.from_method(method, program) for method in program.methods],
             [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures if not clazz.is_included],
-            [HeaderStaticVariableRepresentation.from_static_variable(var) for var in program.static_variables.variables.values() if not var.included]
+            [HeaderStaticVariableRepresentation.from_static_variable(var) for var in program.static_variables.variables.values() if not var.included],
+            [HeaderInterfaceRepresentation.from_interface(interface) for interface in program.interfaces]
         )
 
     @staticmethod
@@ -225,10 +265,11 @@ class HeaderRepresentation:
         return HeaderRepresentation(
             [HeaderMethodRepresentation.unserialize(method) for method in input["methods"]],
             [HeaderClazzRepresentation.unserialize(clazz) for clazz in input["classes"]],
-            [HeaderStaticVariableRepresentation.unserialize(var) for var in input["staticvars"]]
+            [HeaderStaticVariableRepresentation.unserialize(var) for var in input["staticvars"]],
+            [HeaderInterfaceRepresentation.unserialize(interface) for interface in input["interfaces"]]
         )
 
-HeaderRepresentation.HIDDEN = HeaderRepresentation([], [], [], hidden=True)
+HeaderRepresentation.HIDDEN = HeaderRepresentation([], [], [], [], hidden=True)
 
 def from_json(fname: str) -> "HeaderRepresentation":
     file_data = None

@@ -717,6 +717,12 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
         // Ignore the magic number
         fr_getuint32(state[i]);
     }
+    // Trust me, this is correct, though why that is isn't obvious.
+    for(int i = 0; i < result->interfacesc; i++) {
+        if(result->interfaces[i] == NULL) {
+            fatal("Duplicate interface name");
+        }
+    }
     #if DEBUG
     printf("Again, %d methods\n", result->methodc);
     #endif

@@ -876,9 +876,10 @@ class MetadataSegment(Segment):
         Segment.evaluate(self, program)
 
 class Interface:
-    def __init__(self, name: str, node: Optional[parser.Node]) -> None:
+    def __init__(self, name: str, node: Optional[parser.Node], included: bool = False) -> None:
         self.name = name
         self.node = node
+        self.included = included
         self.method_signatures: List[MethodSignature] = []
         self.type: Optional[typesys.InterfaceType]
 
@@ -1316,6 +1317,8 @@ class Program:
         for clazz in self.clazzes:
             clazz.evaluate(self)
         for interface in self.interfaces:
+            if interface.included:
+                continue
             interface_segment = InterfaceSegment(interface)
             self.segments.append(interface_segment)
             interface_segment.evaluate(self)
@@ -1378,6 +1381,8 @@ class Program:
             emitter.add_superclass_to_signature()
             emitter.add_interfaces_to_signature()
         for interface in self.interfaces:
+            if interface.included:
+                continue
             interface.add_signatures_from_node(self)
         self.clazz_emitters = clazz_emitters
         self.method_signatures += MethodSignature.scan(self.emitter.top, self)
@@ -1386,6 +1391,10 @@ class Program:
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
             self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, [], is_included=True))
+        for interface_header in headers.interfaces:
+            interface = Interface(interface_header.name, None, included=True)
+            self.interfaces.append(interface)
+            self.types.accept_interface(interface)
         for method in headers.methods:
             # elw
             self.method_signatures.append(MethodSignature(
@@ -1393,10 +1402,18 @@ class Program:
                 [self.types.resolve_strict(parser.parse_type(arg.type)) for arg in method.args],
                 [arg.name for arg in method.args],
                 self.types.resolve_strict(parser.parse_type(method.returntype)),
+                containing_class=util.nonnull(self.types.get_clazz_type_by_name(method.containing_clazz)).signature if method.containing_clazz is not None else None,
+                containing_interface=util.nonnull(self.types.get_interface_type_by_name(method.containing_interface)).interface if method.containing_interface is not None else None,
                 is_abstract=method.is_abstract,
                 is_override=method.is_override,
                 is_ctor=method.is_ctor
             ))
+        for interface_header in headers.interfaces:
+            interface = util.nonnull(self.types.get_interface_type_by_name(interface_header.name)).interface
+            method_names = set([member_method.name for member_method in interface_header.methods])
+            for method_signature in self.method_signatures:
+                if method_signature.containing_interface == interface and method_signature.name in method_names:
+                    interface.add_signature(method_signature)
         for clazz in headers.clazzes:
             methods = []
             for clazz_method in clazz.methods:
@@ -1417,7 +1434,7 @@ class Program:
                 ctors,
                 util.nonnull(parent_type) if clazz.parent is not None else None,
                 clazz.is_abstract,
-                [],
+                [cast(typesys.InterfaceType, self.types.resolve_strict(parser.parse_type(name))) for name in clazz.interfaces],
                 is_included=True
             )
             self.clazz_signatures.append(clazz_signature)

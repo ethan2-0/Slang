@@ -18,6 +18,15 @@ class AtomicInteger {
         return value;
     }
 }
+interface Interface {
+    fn getValue(): int;
+}
+class Class1 implements Interface {
+    ctor() {}
+    override fn getValue(): int {
+        return 5;
+    }
+}
 fn add(a: int, b: int): int {
     return a + b;
 }

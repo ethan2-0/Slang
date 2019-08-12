@@ -1,4 +1,15 @@
+class Class2 implements Interface {
+    ctor() {}
+    override fn getValue(): int {
+        return 7;
+    }
+}
+fn evaluate(inter: Interface): int {
+    return inter.getValue();
+}
 entrypoint fn main(): int {
     let num = new AtomicInteger(number - 5);
-    return add(num.incrementValue(), 2);
+    let value1: int = evaluate(new Class2());
+    let value2: int = evaluate(new Class1());
+    return add(num.incrementValue(), value1 - value2);
 }
