@@ -148,6 +148,8 @@ struct it_METHOD {
     struct ts_TYPE_CLAZZ* containing_clazz;
     struct ts_TYPE_INTERFACE* containing_interface;
     it_METHOD_REPLACEMENT_PTR replacement_ptr;
+    uint32_t typereferencec;
+    union ts_TYPE** typereferences;
 };
 struct sv_STATIC_VAR {
     union ts_TYPE* type;

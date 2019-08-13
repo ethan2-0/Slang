@@ -60,6 +60,10 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         data->callee = bc_resolve_name(program, callee_name);
         free(callee_name);
         data->returnval = fr_getuint32(state);
+        uint32_t num_types = fr_getuint32(state);
+        for(uint32_t i = 0; i < num_types; i++) {
+            fr_getuint32(state);
+        }
         opcode->payload = data;
     } else if(opcode_num == OPCODE_RETURN) {
         // RETURN
@@ -227,9 +231,8 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         struct it_OPCODE_DATA_CAST* data = mm_malloc(sizeof(struct it_OPCODE_DATA_CAST));
         data->source = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        data->target_type = method->register_types[data->target];
-        data->source_register_type = method->register_types[data->target];
-        if(data->target_type->barebones.category != ts_CATEGORY_CLAZZ && data->target_type->barebones.category != ts_CATEGORY_INTERFACE) {
+        union ts_TYPE* target_type = method->register_types[data->target];
+        if(target_type->barebones.category != ts_CATEGORY_CLAZZ && target_type->barebones.category != ts_CATEGORY_INTERFACE) {
             fatal("Cannot cast to a type that isn't a class or interface. This is a compiler bug.");
         }
         opcode->payload = data;
@@ -237,13 +240,11 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         struct it_OPCODE_DATA_INSTANCEOF* data = mm_malloc(sizeof(struct it_OPCODE_DATA_INSTANCEOF));
         data->source = fr_getuint32(state);
         data->destination = fr_getuint32(state);
-        char* typename = fr_getstr(state);
-        data->source_register_type = method->register_types[data->source];
-        data->predicate_type = ts_get_type(typename);
-        if(data->predicate_type->barebones.category != ts_CATEGORY_CLAZZ && data->predicate_type->barebones.category != ts_CATEGORY_INTERFACE) {
+        data->predicate_type_index = fr_getuint32(state);
+        union ts_TYPE* predicate_type = method->typereferences[data->predicate_type_index];
+        if(predicate_type->barebones.category != ts_CATEGORY_CLAZZ && predicate_type->barebones.category != ts_CATEGORY_INTERFACE) {
             fatal("Predicate type for instanceof must be a class. This is a compiler bug.");
         }
-        free(typename);
         opcode->payload = data;
     } else if(opcode_num == OPCODE_STATICVARGET) {
         struct it_OPCODE_DATA_STATICVARGET* data = mm_malloc(sizeof(struct it_OPCODE_DATA_STATICVARGET));
@@ -452,6 +453,17 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
         #endif
         result->register_types[i] = ts_get_type(typename);
     }
+    result->typereferencec = fr_getuint32(state);
+    result->typereferences = mm_malloc(sizeof(union ts_TYPE*) * result->typereferencec);
+    for(uint32_t i = 0; i < result->typereferencec; i++) {
+        char* typename = fr_getstr(state);
+        result->typereferences[i] = ts_get_type(typename);
+        free(typename);
+    }
+    uint32_t num_type_arguments = fr_getuint32(state);
+    for(uint32_t i = 0; i < num_type_arguments; i++) {
+        free(fr_getstr(state));
+    }
     for(int i = 0; i < opcodec; i++) {
         bc_parse_opcode(state, program, result, &opcode_buff[i]);
     }
@@ -614,6 +626,8 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             char* containing_clazz_name = fr_getstr(state);
             method->containing_clazz = NULL;
             method->containing_interface = NULL;
+            method->typereferencec = 0;
+            method->typereferences = NULL;
             if(strlen(containing_clazz_name) > 0) {
                 union ts_TYPE* containing_type = ts_get_type(containing_clazz_name);
                 if(containing_type->barebones.category == ts_CATEGORY_CLAZZ) {

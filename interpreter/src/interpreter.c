@@ -464,10 +464,22 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             {
                 struct it_OPCODE_DATA_CAST* data = (struct it_OPCODE_DATA_CAST*) iptr->payload;
                 union itval source = registers[data->source];
-                // We know data->source_register_type->barebones.category == ts_CATEGORY_CLAZZ
-                if(!ts_is_compatible((union ts_TYPE*) &source.clazz_data->method_table->type->clazz, data->target_type)) {
-                    it_traceback(stackptr);
-                    fatal("Incompatible cast");
+                union ts_TYPE* target_type = stackptr->method->register_types[data->target];
+                union ts_TYPE* source_register_type = stackptr->method->register_types[data->source];
+                if(source_register_type->barebones.category == ts_CATEGORY_PRIMITIVE) {
+                    if(target_type->barebones.category != ts_CATEGORY_PRIMITIVE) {
+                        fatal("Incompatible cast");
+                    }
+                } else if(source_register_type->barebones.category == ts_CATEGORY_ARRAY) {
+                    if(!ts_is_compatible((union ts_TYPE*) source.array_data->type, target_type)) {
+                        fatal("Incompatible cast");
+                    }
+                } else {
+                    // We know data->source_register_type->barebones.category == ts_CATEGORY_CLAZZ or ts_CATEGORY_INTERFACE
+                    if(!ts_is_compatible((union ts_TYPE*) &source.clazz_data->method_table->type->clazz, target_type)) {
+                        it_traceback(stackptr);
+                        fatal("Incompatible cast");
+                    }
                 }
                 registers[data->target] = source;
                 iptr++;
@@ -477,7 +489,9 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             {
                 struct it_OPCODE_DATA_INSTANCEOF* data = (struct it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
                 union itval source = registers[data->source];
-                registers[data->destination] = (union itval) ((int64_t) ts_instanceof((union ts_TYPE*) &source.clazz_data->method_table->type->clazz, data->predicate_type));
+                union ts_TYPE* source_type = (union ts_TYPE*) &source.clazz_data->method_table->type->clazz;
+                union ts_TYPE* predicate_type = stackptr->method->typereferences[data->predicate_type_index];
+                registers[data->destination] = (union itval) ((int64_t) ts_instanceof(source_type, predicate_type));
                 iptr++;
                 continue;
             }

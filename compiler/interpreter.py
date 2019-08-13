@@ -185,7 +185,7 @@ class Interpreter:
                     res += 1
             return self.create_int_value(res & bitmask)
         elif node.i("["):
-            typ = self.program.types.decide_type(node, emitter.Scopes())
+            typ = self.program.types.decide_type(node, emitter.Scopes(), None)
             if not isinstance(typ, typesys.ArrayType):
                 raise ValueError("This is a compiler bug.")
             # All of our typechecking has already been taken care of in
@@ -195,7 +195,7 @@ class Interpreter:
                 result_values.append(self.eval_expr(child))
             return self.create_array_value(typ, result_values)
         elif node.i("arrinst"):
-            typ = self.program.types.decide_type(node, emitter.Scopes())
+            typ = self.program.types.decide_type(node, emitter.Scopes(), None)
             if not isinstance(typ, typesys.ArrayType):
                 raise ValueError("This is a compiler bug.")
             # Same thing, all of our typechecking is delegated to typesys

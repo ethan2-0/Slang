@@ -56,7 +56,7 @@
     {
         "code": "0x06",
         "mneumonic": "CALL",
-        "params": ["method", "register"],
+        "params": ["method", "register", "types"],
         "writes": [1, "params"],
         "reads": ["params"]
     },

@@ -3,7 +3,7 @@
 import util
 import parser
 import emitter
-from typing import Optional, List, cast
+from typing import Optional, List, Dict, cast
 
 class TypingError(Exception):
     def __init__(self, node: parser.Node, error: str) -> None:
@@ -39,6 +39,9 @@ class AbstractType:
 
     def is_array(self) -> bool:
         # Contract: This returns true iff isinstance(self, ArrayType)
+        return False
+
+    def is_generic_argument(self) -> bool:
         return False
 
     def resolves(self, node: parser.Node, program: "emitter.Program") -> bool:
@@ -212,6 +215,62 @@ class ArrayType(AbstractType):
     def is_array(self) -> bool:
         return True
 
+class GenericTypeArgument(AbstractType):
+    def __init__(self, name: str):
+        AbstractType.__init__(self, name)
+
+    def is_assignable_to(self, other: AbstractType) -> bool:
+        return other == self
+
+class GenericTypeContext:
+    def __init__(self, parent: "Optional[GenericTypeContext]") -> None:
+        self.parent = parent
+        # Note that order is significant here
+        self.arguments: "List[GenericTypeArgument]" = []
+
+    @property
+    def num_arguments(self) -> int:
+        return len(self.arguments)
+
+    def is_generic_argument(self) -> bool:
+        return False
+
+    def resolve_optional(self, node: parser.Node, program: "emitter.Program") -> Optional[GenericTypeArgument]:
+        for typ in self.arguments:
+            if typ.resolves(node, program):
+                return typ
+        if self.parent is not None:
+            return self.parent.resolve_optional(node, program)
+        return None
+
+    def add_type_argument(self, name: str) -> None:
+        self.arguments.append(GenericTypeArgument(name))
+
+    def __repr__(self) -> str:
+        return "GenericTypeContext(parent=%s, arguments=[%s])" % (self.parent, ", ".join(str(arg) for arg in self.arguments))
+
+    def __str__(self) -> str:
+        return repr(self)
+
+class GenericTypeParameters:
+    def __init__(self, context: GenericTypeContext, parameters: List[AbstractType], types: "TypeSystem") -> None:
+        if len(parameters) != len(context.arguments):
+            raise ValueError("Wrong number of type parameters. This is a compiler bug.")
+        self.context = context
+        self.parameters = parameters
+        self.types = types
+        self.num_params = len(parameters)
+        self.mapping: Dict[GenericTypeArgument, AbstractType] = dict()
+        for i in range(self.num_params):
+            self.mapping[context.arguments[i]] = parameters[i]
+
+    def reify(self, parameter: AbstractType) -> AbstractType:
+        if isinstance(parameter, ArrayType):
+            return self.types.get_array_type(self.reify(parameter.parent_type))
+        if not isinstance(parameter, GenericTypeArgument):
+            return parameter
+        return self.mapping[parameter]
+
 class TypeSystem:
     def __init__(self, program: "emitter.Program"):
         self.program = program
@@ -222,18 +281,22 @@ class TypeSystem:
         self.array_types: List[ArrayType] = []
         self.clazz_signatures: "List[emitter.ClazzSignature]" = []
 
-    def resolve(self, node: parser.Node, fail_silent: bool=False) -> Optional[AbstractType]:
+    def resolve(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext],  fail_silent: bool=False) -> Optional[AbstractType]:
         for typ in self.types:
             if typ.resolves(node, self.program):
                 return typ
         if node.i("["):
-            element_type = self.resolve(node[0], fail_silent=fail_silent)
+            element_type = self.resolve(node[0], generic_type_context, fail_silent=fail_silent)
             if element_type is None:
                 if not fail_silent:
                     # TypeSystem.resolve will never return None if fail_silent == True
                     raise ValueError("This is a compiler bug")
                 return None
             return self.get_array_type(element_type)
+        if generic_type_context is not None:
+            ret = generic_type_context.resolve_optional(node, self.program)
+            if ret is not None:
+                return ret
         if not fail_silent:
             raise TypingError(node, "Could not resolve type: '%s' ('%s')" % (node, util.get_flattened(node)))
         else:
@@ -245,7 +308,7 @@ class TypeSystem:
         return typ
 
     def get_interface_type_by_name(self, name: str) -> Optional[InterfaceType]:
-        typ = self.resolve(parser.parse_type(name), fail_silent=True)
+        typ = self.resolve(parser.parse_type(name), None, fail_silent=True)
         if typ is None:
             return typ
         if not isinstance(typ, InterfaceType):
@@ -253,7 +316,7 @@ class TypeSystem:
         return typ
 
     def get_clazz_type_by_name(self, name: str) -> Optional[ClazzType]:
-        typ = self.resolve(parser.parse_type(name), fail_silent=True)
+        typ = self.resolve(parser.parse_type(name), None, fail_silent=True)
         if typ is None:
             return typ
         if not isinstance(typ, ClazzType):
@@ -266,8 +329,8 @@ class TypeSystem:
     def get_object_type(self) -> Optional[ClazzType]:
         return self.get_clazz_type_by_name("stdlib.Object")
 
-    def resolve_strict(self, node: parser.Node) -> AbstractType:
-        ret = self.resolve(node, fail_silent=False)
+    def resolve_strict(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext]) -> AbstractType:
+        ret = self.resolve(node, generic_type_context, fail_silent=False)
         if ret is None:
             # TypeSystem.resolve will never return None if fail_silent == True
             raise ValueError("This is a compiler bug.")
@@ -310,7 +373,7 @@ class TypeSystem:
         self.array_types.append(typ)
         return typ
 
-    def resolve_to_signature(self, node: parser.Node, scope: "emitter.Scopes") -> "emitter.MethodSignature":
+    def resolve_to_signature(self, node: parser.Node, scope: "emitter.Scopes", generic_type_context: Optional[GenericTypeContext]) -> "emitter.MethodSignature":
         if util.get_flattened(node) is not None and self.program.get_method_signature_optional(util.nonnull(util.get_flattened(node))) is not None:
             return self.program.get_method_signature(util.nonnull(util.get_flattened(node)))
         if node.i("ident"):
@@ -318,7 +381,7 @@ class TypeSystem:
             # Unreachable
             return None # type: ignore
         elif node.i("."):
-            typ = self.decide_type(node[0], scope)
+            typ = self.decide_type(node[0], scope, generic_type_context)
             if not node[1].i("ident"):
                 raise ValueError("This is a compiler bug")
             if isinstance(typ, ClazzType):
@@ -343,14 +406,14 @@ class TypeSystem:
             # Unreachable
             return None # type: ignore
 
-    def decide_type(self, expr: parser.Node, scope: "emitter.Scopes") -> AbstractType:
+    def decide_type(self, expr: parser.Node, scope: "emitter.Scopes", generic_type_context: Optional[GenericTypeContext]) -> AbstractType:
         if expr.i("as"):
-            return self.resolve_strict(expr[1])
+            return self.resolve_strict(expr[1], generic_type_context)
         elif expr.i("instanceof"):
             return self.bool_type
         elif expr.of("+", "*", "-", "^", "&", "|", "%", "/") and len(expr) == 2:
-            lhs_type = self.decide_type(expr[0], scope)
-            rhs_type = self.decide_type(expr[1], scope)
+            lhs_type = self.decide_type(expr[0], scope, generic_type_context)
+            rhs_type = self.decide_type(expr[1], scope, generic_type_context)
             if not lhs_type.is_numerical():
                 raise TypingError(expr[0], "Type %s is not numerical" % lhs_type)
 
@@ -362,8 +425,8 @@ class TypeSystem:
 
             return lhs_type
         elif expr.of(">=", "<=", ">", "<"):
-            lhs_type = self.decide_type(expr[0], scope)
-            rhs_type = self.decide_type(expr[1], scope)
+            lhs_type = self.decide_type(expr[0], scope, generic_type_context)
+            rhs_type = self.decide_type(expr[1], scope, generic_type_context)
             if not lhs_type.is_numerical():
                 raise TypingError(expr[0], "Type %s is not numerical" % lhs_type)
 
@@ -375,16 +438,16 @@ class TypeSystem:
 
             return self.bool_type
         elif expr.of("==", "!="):
-            lhs_type = self.decide_type(expr[0], scope)
-            rhs_type = self.decide_type(expr[1], scope)
+            lhs_type = self.decide_type(expr[0], scope, generic_type_context)
+            rhs_type = self.decide_type(expr[1], scope, generic_type_context)
             if not lhs_type.is_assignable_to(rhs_type) and not rhs_type.is_assignable_to(lhs_type):
                 raise TypingError(expr, "Incomparable types: '%s' and '%s'" % (lhs_type, rhs_type))
             return self.bool_type
         elif expr.i("number"):
             return self.int_type
         elif expr.of("and", "or"):
-            lhs_type = self.decide_type(expr[0], scope)
-            rhs_type = self.decide_type(expr[1], scope)
+            lhs_type = self.decide_type(expr[0], scope, generic_type_context)
+            rhs_type = self.decide_type(expr[1], scope, generic_type_context)
             if not lhs_type.is_boolean():
                 raise TypingError(expr[0], "Type %s is not boolean" % lhs_type)
 
@@ -393,12 +456,12 @@ class TypeSystem:
 
             return self.bool_type
         elif expr.i("not"):
-            type = self.decide_type(expr[0], scope)
+            type = self.decide_type(expr[0], scope, generic_type_context)
             if not type.is_boolean():
                 raise TypingError(expr[0], "Type %s is not boolean" % type)
             return self.bool_type
         elif expr.of("~", "-") and len(expr) == 1:
-            type = self.decide_type(expr[0], scope)
+            type = self.decide_type(expr[0], scope, generic_type_context)
             if not type.is_numerical():
                 raise TypingError(expr[0], "Type %s is not numerical" % type)
             return self.int_type
@@ -419,7 +482,7 @@ class TypeSystem:
             if len(expr) == 0:
                 expr.compile_error("Zero-length arrays must be instantiated with the arbitrary-length instantiation syntax")
             for child in expr:
-                current_child_type: AbstractType = self.decide_type(child, scope)
+                current_child_type: AbstractType = self.decide_type(child, scope, generic_type_context)
                 if current_type is None:
                     if not current_child_type.is_void():
                         current_type = current_child_type
@@ -442,20 +505,20 @@ class TypeSystem:
             else:
                 return self.get_array_type(current_type)
         elif expr.i("arrinst"):
-            return self.get_array_type(self.resolve_strict(expr[0]))
+            return self.get_array_type(self.resolve_strict(expr[0], generic_type_context))
         elif expr.i("#"):
-            if not self.decide_type(expr[0], scope).is_array():
+            if not self.decide_type(expr[0], scope, generic_type_context).is_array():
                 raise TypingError(expr[0], "Can't decide length of something that isn't an array")
             return self.int_type
         elif expr.i("access"):
-            lhs_type = self.decide_type(expr[0], scope)
+            lhs_type = self.decide_type(expr[0], scope, generic_type_context)
             if not lhs_type.is_array():
                 raise TypingError(expr, "Attempt to access element of something that isn't an array")
             assert isinstance(lhs_type, ArrayType)
             return lhs_type.parent_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.
-            signature = self.resolve_to_signature(expr[0], scope)
+            signature = self.resolve_to_signature(expr[0], scope, generic_type_context).reify([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program)
             if signature is not None:
                 return signature.returntype
             if expr[0].i("."):
@@ -468,7 +531,7 @@ class TypeSystem:
                 expr.compile_error("Unknown method name '%s'" % expr[0].data)
             return signature.returntype
         elif expr.i("new"):
-            ret = self.resolve_strict(expr[0])
+            ret = self.resolve_strict(expr[0], generic_type_context)
             if not ret.is_clazz():
                 raise TypingError(expr[0], "Type %s is not a class" % ret)
             return ret
@@ -476,7 +539,7 @@ class TypeSystem:
             # Ternary operator to satisfy typechecker (if-else statement would effectively require phi node which is ugly)
             lhs_typ: AbstractType = \
                 (scope.resolve(expr[0].data_strict, expr[0]).type) if expr[0].i("ident") \
-                else self.decide_type(expr[0], scope)
+                else self.decide_type(expr[0], scope, generic_type_context)
             if not lhs_typ.is_clazz():
                 expr.compile_error("Attempt to access an attribute of something that isn't a class")
             assert isinstance(lhs_typ, ClazzType)

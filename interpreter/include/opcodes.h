@@ -183,14 +183,11 @@ struct it_OPCODE_DATA_DIV {
 struct it_OPCODE_DATA_CAST {
     uint32_t source;
     uint32_t target;
-    union ts_TYPE* source_register_type;
-    union ts_TYPE* target_type;
 };
 struct it_OPCODE_DATA_INSTANCEOF {
     uint32_t source;
     uint32_t destination;
-    union ts_TYPE* source_register_type;
-    union ts_TYPE* predicate_type;
+    uint32_t predicate_type_index;
 };
 struct it_OPCODE_DATA_STATICVARGET {
     uint32_t source_var;

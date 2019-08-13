@@ -335,6 +335,17 @@ class Parser:
         self.expect(")")
         return nod
 
+    def parse_type_args(self) -> Node:
+        self.expect("<")
+        node = Node("typeargs")
+        while not self.isn(">"):
+            node.add(self.parse_type())
+            if not self.isn(","):
+                break
+            self.expect(",")
+        self.expect(">")
+        return node
+
     def parse_parens(self) -> Node:
         if self.peek().type in ["-", "~"]:
             return Node(self.next(), self.parse_parens())
@@ -347,7 +358,7 @@ class Parser:
         elif self.peek().of("true", "false", "null"):
             return Node(self.next())
         elif self.isn("new"):
-            return Node(self.next(), Node(self.expect("ident")), *self.parse_fcall_params())
+            return Node(self.next(), Node(self.expect("ident")), self.parse_fcall_params())
         elif self.isn("ident") or self.isn("(") or self.isn("super"):
             # Note that we'll end up parsing some `super` expressions that don't
             # make sense, like `super[0]` or `super.property`. We reject these
@@ -358,17 +369,25 @@ class Parser:
                 self.expect(")")
             else:
                 ret = Node(self.next())
-            while self.isn(".") or self.isn("(") or self.isn("["):
+            while self.isn(".") or self.isn("(") or self.isn("[") or self.isn("<"):
                 if self.isn("."):
                     ret = Node(self.expect("."), ret, Node(self.expect("ident")))
                 elif self.isn("("):
-                    ret = Node("call", ret, *self.parse_fcall_params())
+                    ret = Node("call", ret, Node("typeargs"), self.parse_fcall_params())
+                elif self.isn("<"):
+                    state = self.toker.get_state()
+                    try:
+                        type_args = self.parse_type_args()
+                    except ParseError:
+                        break
+                    finally:
+                        self.toker.set_state(state)
+                    self.parse_type_args()
+                    ret = Node("call", ret, type_args, self.parse_fcall_params())
                 elif self.isn("["):
                     self.expect("[")
                     ret = Node("access", ret, self.parse_expr())
                     self.expect("]")
-            while self.isn(";"):
-                self.expect(";")
             return ret
         elif self.isn("#"):
             # Why parse_add()? So that #a == b gets parsed as (#a) == (b) as opposed to #(a == b)
@@ -441,23 +460,15 @@ class Parser:
     def parse_expr(self) -> Node:
         return self.parse_logical()
 
-    def parse_fcall_params(self) -> List[Node]:
-        ret = []
+    def parse_fcall_params(self) -> Node:
+        ret = Node("params")
         self.expect("(")
         while not self.isn(")"):
-            ret.append(self.parse_expr())
+            ret.add(self.parse_expr())
             if self.isn(","):
                 self.next()
         self.expect(")")
         return ret
-
-    def parse_fcall(self) -> Node:
-        nod = Node("call", Node(self.expect("ident")), *self.parse_fcall_params())
-
-        while self.isn(";"):
-            self.expect(";")
-
-        return nod
 
     def parse_statement(self) -> Node:
         tok = self.peek()
@@ -533,9 +544,12 @@ class Parser:
                 while self.isn(";"):
                     self.expect(";")
                 return nod
-            return Node("expr", lhs_expr)
+            ret = Node("expr", lhs_expr)
+            while self.isn(";"):
+                self.expect(";")
+            return ret
         elif tok.isn("super"):
-            ret = Node(self.expect("super"), *self.parse_fcall_params())
+            ret = Node(self.expect("super"), self.parse_fcall_params())
             while self.isn(";"):
                 self.expect(";")
             return ret
@@ -551,6 +565,16 @@ class Parser:
             modifiers.add(modifier)
         self.expect("fn")
         name = self.parse_qualified_name()
+        type_parameters = Node("typeparams")
+        if self.isn("<"):
+            self.expect("<")
+            while True:
+                type_parameters.add(Node(self.expect("ident")))
+                if self.isn(","):
+                    self.expect(",")
+                else:
+                    self.expect(">")
+                    break
         params = self.parse_fn_params()
         type_annotation = self.parse_type_annotation() if self.isn(":") else Node("ident", data="void")
         if modifiers.has_child("abstract") or not allow_body:
@@ -559,7 +583,7 @@ class Parser:
                 self.expect(";")
         else:
             statements = self.parse_statement()
-        return Node("fn", name, params, type_annotation, statements, modifiers)
+        return Node("fn", name, params, type_annotation, statements, modifiers, type_parameters)
 
     def parse_ctor(self) -> Node:
         return Node(self.expect("ctor"), self.parse_fn_params(), self.parse_statement())

@@ -5,7 +5,7 @@ import emitter
 import typesys
 import parser
 
-OpcodeParamType = Union[int, str, "emitter.MethodSignature", "emitter.ClazzSignature", "emitter.RegisterHandle", typesys.AbstractType, "OpcodeInstance"]
+OpcodeParamType = Union[int, str, "emitter.MethodSignature", "emitter.ClazzSignature", "emitter.RegisterHandle", "OpcodeInstance", List[int]]
 
 class OpcodeInstance:
     def __init__(self, opcode: "Opcode", params: List[OpcodeParamType], node: Optional[parser.Node], annotation: Optional[str]=None):
@@ -67,7 +67,10 @@ class Opcode:
                 if not isinstance(arg, emitter.ClazzSignature):
                     complain_about_typechecking()
             elif param_type == "type":
-                if not isinstance(arg, typesys.AbstractType):
+                if not isinstance(arg, int):
+                    complain_about_typechecking()
+            elif param_type == "types":
+                if not isinstance(arg, list):
                     complain_about_typechecking()
             elif param_type == "staticvar":
                 if not isinstance(arg, str):
