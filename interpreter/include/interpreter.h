@@ -7,12 +7,15 @@
 
 #include "interpreter_export.h"
 
-union ts_TYPE* ts_get_type_optional(char* name);
-union ts_TYPE* ts_get_type(char* name);
+union ts_TYPE* ts_get_type_optional(char* name, struct ts_GENERIC_TYPE_CONTEXT* context);
+union ts_TYPE* ts_get_type(char* name, struct ts_GENERIC_TYPE_CONTEXT* context);
 void ts_register_type(union ts_TYPE* type, char* name);
 uint32_t ts_allocate_type_id();
 bool ts_is_compatible(union ts_TYPE* type1, union ts_TYPE* type2);
 bool ts_instanceof(union ts_TYPE* lhs, union ts_TYPE* rhs);
+struct ts_GENERIC_TYPE_CONTEXT* ts_create_generic_type_context(uint32_t num_arguments, struct ts_GENERIC_TYPE_CONTEXT* parent);
+void ts_init_type_parameter(struct ts_TYPE_PARAMETER* parameter, char* name);
+void ts_walk_and_reify_methods(struct it_PROGRAM* program);
 
 void sv_add_static_var(struct it_PROGRAM* program, union ts_TYPE* type, char* name, union itval value);
 struct sv_STATIC_VAR* sv_get_var_by_name(struct it_PROGRAM* program, char* name);

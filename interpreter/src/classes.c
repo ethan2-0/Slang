@@ -191,7 +191,7 @@ int cl_get_method_index(struct it_METHOD_TABLE* method_table, char* name) {
     return -1; // Unreachable
 }
 struct ts_TYPE_INTERFACE* cl_get_or_create_interface(char* name, struct it_PROGRAM* program) {
-    union ts_TYPE* type = ts_get_type_optional(name);
+    union ts_TYPE* type = ts_get_type_optional(name, NULL);
     if(type != NULL) {
         if(type->barebones.category != ts_CATEGORY_INTERFACE) {
             printf("Name: '%s'\n", name);

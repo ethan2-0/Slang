@@ -90,8 +90,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             // this desperately needs optimization.
             struct it_METHOD* callee;
             if(iptr->type == OPCODE_CALL) {
-                uint32_t callee_id = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->callee;
-                callee = &prog->methods[callee_id];
+                callee = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->callee;
             } else {
                 callee = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->method;
             }
@@ -488,10 +487,23 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
         case OPCODE_INSTANCEOF:
             {
                 struct it_OPCODE_DATA_INSTANCEOF* data = (struct it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
-                union itval source = registers[data->source];
-                union ts_TYPE* source_type = (union ts_TYPE*) &source.clazz_data->method_table->type->clazz;
+                union ts_TYPE* source_register_type = stackptr->method->register_types[data->source];
                 union ts_TYPE* predicate_type = stackptr->method->typereferences[data->predicate_type_index];
-                registers[data->destination] = (union itval) ((int64_t) ts_instanceof(source_type, predicate_type));
+                bool result;
+                if(source_register_type->barebones.category == ts_CATEGORY_PRIMITIVE) {
+                    result = ts_instanceof(source_register_type, predicate_type);
+                } else if(source_register_type->barebones.category == ts_CATEGORY_TYPE_PARAMETER) {
+                    fatal("Instanceof parameter wasn't reified. This is an interpreter bug.");
+                } else if(source_register_type->barebones.category == ts_CATEGORY_CLAZZ) {
+                    union itval source = registers[data->source];
+                    union ts_TYPE* source_type = (union ts_TYPE*) &source.clazz_data->method_table->type->clazz;
+                    result = ts_instanceof(source_type, predicate_type);
+                } else if(source_register_type->barebones.category == ts_CATEGORY_ARRAY) {
+                    union itval source = registers[data->source];
+                    union ts_TYPE* source_type = (union ts_TYPE*) source.array_data->type;
+                    result = ts_instanceof(source_type, predicate_type);
+                }
+                registers[data->destination] = (union itval) ((int64_t) result);
                 iptr++;
                 continue;
             }

@@ -5,6 +5,8 @@
 #ifndef INTERPRETER_EXPORTS_H
 #define INTERPRETER_EXPORTS_H
 
+#define TS_MAX_TYPE_ARGS 16
+
 union ts_TYPE;
 struct it_METHOD;
 
@@ -12,7 +14,8 @@ enum ts_CATEGORY {
     ts_CATEGORY_PRIMITIVE,
     ts_CATEGORY_CLAZZ,
     ts_CATEGORY_ARRAY,
-    ts_CATEGORY_INTERFACE
+    ts_CATEGORY_INTERFACE,
+    ts_CATEGORY_TYPE_PARAMETER
 };
 struct ts_TYPE_BAREBONES {
     enum ts_CATEGORY category;
@@ -61,11 +64,24 @@ struct ts_TYPE_INTERFACE {
     // Note that this is only used to keep references to the methods, not for lookup at runtime
     struct it_METHOD_TABLE* methods;
 };
+struct ts_TYPE_PARAMETER {
+    enum ts_CATEGORY category;
+    uint32_t id;
+    char* name;
+    int heirarchy_len;
+    union ts_TYPE** heirarchy;
+};
 union ts_TYPE {
     struct ts_TYPE_BAREBONES barebones;
     struct ts_TYPE_CLAZZ clazz;
     struct ts_TYPE_ARRAY array;
     struct ts_TYPE_INTERFACE interface;
+    struct ts_TYPE_PARAMETER type_parameter;
+};
+struct ts_GENERIC_TYPE_CONTEXT {
+    struct ts_GENERIC_TYPE_CONTEXT* parent;
+    uint32_t count;
+    struct ts_TYPE_PARAMETER arguments[];
 };
 
 enum ts_CATEGORY ts_CATEGORY;
@@ -150,6 +166,10 @@ struct it_METHOD {
     it_METHOD_REPLACEMENT_PTR replacement_ptr;
     uint32_t typereferencec;
     union ts_TYPE** typereferences;
+    struct ts_GENERIC_TYPE_CONTEXT* type_parameters;
+    // This is a pointer to an array of pointers
+    struct it_METHOD** reifications;
+    int reificationsc;
 };
 struct sv_STATIC_VAR {
     union ts_TYPE* type;

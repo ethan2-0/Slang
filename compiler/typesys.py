@@ -518,7 +518,14 @@ class TypeSystem:
             return lhs_type.parent_type
         elif expr.i("call"):
             # TODO: Move method call typechecking in here from emitter.py.
-            signature = self.resolve_to_signature(expr[0], scope, generic_type_context).reify([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program)
+            signature = self.resolve_to_signature(
+                expr[0],
+                scope,
+                generic_type_context
+            )
+            if len(expr["typeargs"]) != (len(signature.generic_type_context.arguments) if signature.generic_type_context is not None else 0):
+                expr.compile_error("Wrong number of type arguments (expected %s, got %s)" % (len(signature.generic_type_context.arguments), len(expr["typeargs"])))
+            signature = signature.reify([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program)
             if signature is not None:
                 return signature.returntype
             if expr[0].i("."):

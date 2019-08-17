@@ -1,0 +1,16 @@
+using stdlib;
+
+fn isString<T>(t: T): bool {
+    return t instanceof String;
+}
+entrypoint fn main() {
+    if(isString<Object>(new Object())) {
+        die("Failed");
+    }
+    if(not isString<Object>("hi")) {
+        die("Failed");
+    }
+    if(isString<int>(5)) {
+        die("Failed");
+    }
+}

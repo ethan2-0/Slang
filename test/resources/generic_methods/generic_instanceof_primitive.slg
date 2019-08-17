@@ -1,0 +1,16 @@
+using stdlib;
+
+fn isInt<T>(t: T): bool {
+    return t instanceof int;
+}
+entrypoint fn main() {
+    if(isInt<Object>(new Object())) {
+        die("Failed");
+    }
+    if(isInt<Object>("hi")) {
+        die("Failed");
+    }
+    if(not isInt<int>(5)) {
+        die("Failed");
+    }
+}

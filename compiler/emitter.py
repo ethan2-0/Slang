@@ -444,7 +444,7 @@ class MethodEmitter(SegmentEmitter):
                 node.compile_error("Instanceof does not yet support generics")
             if lhs_reg.type.is_assignable_to(rhs_type):
                 node.warn("Tautology: %s always instanceof %s" % (lhs_reg.type, rhs_type))
-            if (not lhs_reg.type.is_assignable_to(rhs_type)) and (not rhs_type.is_assignable_to(lhs_reg.type)):
+            if (not isinstance(lhs_reg.type, typesys.GenericTypeArgument)) and (not isinstance(rhs_type, typesys.GenericTypeArgument)) and (not lhs_reg.type.is_assignable_to(rhs_type)) and (not rhs_type.is_assignable_to(lhs_reg.type)):
                 node.warn("Contradiction: there cannot exist any %s instanceof %s" % (lhs_reg.type, rhs_type))
             type_index = self.type_references.add_type_reference(rhs_type)
             opcodes.append(ops["instanceof"].ins(lhs_reg, register, type_index, node=node))
@@ -571,7 +571,8 @@ class MethodEmitter(SegmentEmitter):
             elif signature.is_interface_method:
                 opcodes.append(ops["interfacecall"].ins(util.nonnull(optional_lhs_reg), signature, register, node=node))
             else:
-                opcodes.append(ops["call"].ins(signature, register, typeargs if typeargs is not None else [], node=node))
+                typeargs_typerefs = [self.type_references.add_type_reference(typ) for typ in typeargs] if typeargs is not None else []
+                opcodes.append(ops["call"].ins(signature, register, typeargs_typerefs, node=node))
         elif node.i("new"):
             typ = self.types.resolve_strict(node[0], self.generic_type_context)
             if not isinstance(typ, typesys.ClazzType):

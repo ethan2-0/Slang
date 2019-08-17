@@ -57,12 +57,17 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         // CALL
         struct it_OPCODE_DATA_CALL* data = mm_malloc(sizeof(struct it_OPCODE_DATA_CALL));
         char* callee_name = fr_getstr(state);
-        data->callee = bc_resolve_name(program, callee_name);
+        data->callee = &program->methods[bc_resolve_name(program, callee_name)];
         free(callee_name);
         data->returnval = fr_getuint32(state);
+        memset(data->type_params, 0, sizeof(data->type_params));
         uint32_t num_types = fr_getuint32(state);
+        if(num_types > TS_MAX_TYPE_ARGS) {
+            fatal("Maximum number of type arguments exceeded");
+        }
+        data->type_paramsc = num_types;
         for(uint32_t i = 0; i < num_types; i++) {
-            fr_getuint32(state);
+            data->type_params[i] = fr_getuint32(state);
         }
         opcode->payload = data;
     } else if(opcode_num == OPCODE_RETURN) {
@@ -160,7 +165,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         opcode->payload = data;
     } else if(opcode_num == OPCODE_NEW) {
         struct it_OPCODE_DATA_NEW* data = mm_malloc(sizeof(struct it_OPCODE_DATA_NEW));
-        data->clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(fr_getstr(state));
+        data->clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(fr_getstr(state), method->type_parameters);
         if(data->clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to instantiate something that isn't a class");
         }
@@ -241,10 +246,6 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         data->source = fr_getuint32(state);
         data->destination = fr_getuint32(state);
         data->predicate_type_index = fr_getuint32(state);
-        union ts_TYPE* predicate_type = method->typereferences[data->predicate_type_index];
-        if(predicate_type->barebones.category != ts_CATEGORY_CLAZZ && predicate_type->barebones.category != ts_CATEGORY_INTERFACE) {
-            fatal("Predicate type for instanceof must be a class. This is a compiler bug.");
-        }
         opcode->payload = data;
     } else if(opcode_num == OPCODE_STATICVARGET) {
         struct it_OPCODE_DATA_STATICVARGET* data = mm_malloc(sizeof(struct it_OPCODE_DATA_STATICVARGET));
@@ -266,7 +267,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         char* methodname = fr_getstr(state);
         data->destination_register = fr_getuint32(state);
         data->callee_register = fr_getuint32(state);
-        struct ts_TYPE_CLAZZ* clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(classname);
+        struct ts_TYPE_CLAZZ* clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(classname, method->type_parameters);
         // This is safe since every member of union ts_TYPE has offsetof(category) the same
         if(clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("First argument to CLASSCALLSPECIAL isn't a class");
@@ -394,7 +395,7 @@ void bc_scan_static_vars(struct it_PROGRAM* program, struct fr_STATE* state) {
             for(int i = 0; i < num_static_vars; i++) {
                 char* name = fr_getstr(state);
                 char* typename = fr_getstr(state);
-                union ts_TYPE* type = ts_get_type(typename);
+                union ts_TYPE* type = ts_get_type(typename, NULL);
                 union itval value = bc_create_staticvar_value(program, state, type);
                 sv_add_static_var(program, type, strdup(name), value);
                 free(name);
@@ -438,51 +439,63 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     uint32_t opcodec = fr_getuint32(state);
     char* name = fr_getstr(state);
     uint32_t id = bc_resolve_name(program, name);
+
     #if DEBUG
     printf("Register count %d\n", registerc);
     printf("Id %d\n", id);
     printf("Nargs %d\n", nargs);
     #endif
-    free(fr_getstr(state));
-    result->returntype = ts_get_type(fr_getstr(state));
+
+    free(fr_getstr(state)); // Containing class/interface
+
+    uint32_t num_type_arguments = fr_getuint32(state);
+    result->type_parameters = ts_create_generic_type_context(num_type_arguments, NULL);
+    for(uint32_t i = 0; i < num_type_arguments; i++) {
+        ts_init_type_parameter(&result->type_parameters->arguments[i], fr_getstr(state));
+    }
+
+    result->returntype = ts_get_type(fr_getstr(state), result->type_parameters);
     result->register_types = mm_malloc(sizeof(union ts_TYPE*) * registerc);
     for(int i = 0; i < registerc; i++) {
         char* typename = fr_getstr(state);
         #if DEBUG
         printf("Got register type '%s'\n", typename);
         #endif
-        result->register_types[i] = ts_get_type(typename);
+        result->register_types[i] = ts_get_type(typename, result->type_parameters);
     }
+
     result->typereferencec = fr_getuint32(state);
     result->typereferences = mm_malloc(sizeof(union ts_TYPE*) * result->typereferencec);
     for(uint32_t i = 0; i < result->typereferencec; i++) {
         char* typename = fr_getstr(state);
-        result->typereferences[i] = ts_get_type(typename);
+        result->typereferences[i] = ts_get_type(typename, result->type_parameters);
         free(typename);
     }
-    uint32_t num_type_arguments = fr_getuint32(state);
-    for(uint32_t i = 0; i < num_type_arguments; i++) {
-        free(fr_getstr(state));
-    }
+
     for(int i = 0; i < opcodec; i++) {
         bc_parse_opcode(state, program, result, &opcode_buff[i]);
     }
     for(int i = 0; i < opcodec; i++) {
         opcode_buff[i].linenum = fr_getuint32(state);
     }
+
     result->registerc = registerc;
     result->id = id;
     result->nargs = nargs;
     result->opcodec = opcodec;
+
     #if DEBUG
     printf("Opcodec: %d\n", result->opcodec);
     #endif
+
     result->opcodes = mm_malloc(sizeof(struct it_OPCODE) * opcodec);
+
     #if DEBUG
     for(int i = 0; i < opcodec; i++) {
         printf("Opcode--: %02x\n", opcode_buff[i].type);
     }
     #endif
+
     memcpy(result->opcodes, opcode_buff, sizeof(struct it_OPCODE) * opcodec);
 
     #if DEBUG
@@ -560,12 +573,12 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             fr_getuint32(state);
             char* clazzname = fr_getstr(state);
             char* supertype_name = fr_getstr(state);
-            struct ts_TYPE_CLAZZ* clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(clazzname);
+            struct ts_TYPE_CLAZZ* clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(clazzname, NULL);
             if(clazz->category != ts_CATEGORY_CLAZZ) {
                 fatal("Tried to extend something that isn't a class");
             }
             if(strlen(supertype_name) > 0) {
-                clazz->immediate_supertype = (struct ts_TYPE_CLAZZ*) ts_get_type(supertype_name);
+                clazz->immediate_supertype = (struct ts_TYPE_CLAZZ*) ts_get_type(supertype_name, NULL);
                 if(clazz->immediate_supertype == NULL) {
                     fatal("Couldn't find superclass");
                 }
@@ -587,7 +600,7 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             clazz->fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * numfields);
             for(uint32_t i = 0; i < numfields; i++) {
                 clazz->fields[i].name = fr_getstr(state);
-                clazz->fields[i].type = ts_get_type(fr_getstr(state));
+                clazz->fields[i].type = ts_get_type(fr_getstr(state), NULL);
             }
             #if DEBUG
             printf("Scanning class '%s'\n", clazzname);
@@ -628,8 +641,10 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             method->containing_interface = NULL;
             method->typereferencec = 0;
             method->typereferences = NULL;
+            method->reificationsc = 0;
+            method->reifications = NULL;
             if(strlen(containing_clazz_name) > 0) {
-                union ts_TYPE* containing_type = ts_get_type(containing_clazz_name);
+                union ts_TYPE* containing_type = ts_get_type(containing_clazz_name, NULL);
                 if(containing_type->barebones.category == ts_CATEGORY_CLAZZ) {
                     method->containing_clazz = (struct ts_TYPE_CLAZZ*) containing_type;
                 } else if(containing_type->barebones.category == ts_CATEGORY_INTERFACE) {
@@ -789,6 +804,8 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
             }
         }
     }
+
+    ts_walk_and_reify_methods(result);
 
     free(opcodes);
     for(int i = 0; i < num_files; i++) {

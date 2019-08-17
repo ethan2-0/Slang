@@ -74,8 +74,10 @@ struct it_OPCODE_DATA_MODULO {
     uint32_t target;
 };
 struct it_OPCODE_DATA_CALL {
-    uint32_t callee;
+    struct it_METHOD* callee;
     uint32_t returnval;
+    int type_paramsc;
+    uint32_t type_params[TS_MAX_TYPE_ARGS];
 };
 struct it_OPCODE_DATA_RETURN {
     uint32_t target;

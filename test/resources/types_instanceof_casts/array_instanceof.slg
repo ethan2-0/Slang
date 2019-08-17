@@ -1,0 +1,7 @@
+using stdlib;
+
+entrypoint fn main() {
+    if(not ([5] instanceof [int])) {
+        die("Failed");
+    }
+}

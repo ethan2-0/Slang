@@ -1,0 +1,11 @@
+using stdlib;
+
+fn echo<T>(t: T): T {
+    return t;
+}
+entrypoint fn main() {
+    let i: int = echo<int>(5);
+    if(i != 5) {
+        die("Failed");
+    }
+}

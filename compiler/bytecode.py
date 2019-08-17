@@ -106,18 +106,18 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
             body_header += encode_str(segment.signature.containing_interface.name)
         else:
             body_header += encode_str("")
-        body_header += encode_str(segment.signature.returntype.name)
-        for register in segment.scope.registers:
-            body_header += encode_str(register.type.name)
-        body_header += struct.pack("!I", len(segment.emitter.type_references))
-        for typ in segment.emitter.type_references:
-            body_header += encode_str(typ.name)
         if segment.signature.generic_type_context is not None:
             body_header += struct.pack("!I", len(segment.signature.generic_type_context.arguments))
             for argument in segment.signature.generic_type_context.arguments:
                 body_header += encode_str(argument.name)
         else:
             body_header += struct.pack("!I", 0)
+        body_header += encode_str(segment.signature.returntype.name)
+        for register in segment.scope.registers:
+            body_header += encode_str(register.type.name)
+        body_header += struct.pack("!I", len(segment.emitter.type_references))
+        for typ in segment.emitter.type_references:
+            body_header += encode_str(typ.name)
         body = body_header + MethodBytecodeEmitter(segment.opcodes).emit()
         length = struct.pack("!I", len(header + body))
         return ret + length + header + body
