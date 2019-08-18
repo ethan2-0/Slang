@@ -1,0 +1,14 @@
+using stdlib;
+
+fn genericRecurse<T>(i: int, t: T): [T] {
+    if(i > 0) {
+        return genericRecurse<[T]>(i - 1, [t])[0];
+    } else {
+        return [t];
+    }
+}
+entrypoint fn main() {
+    if(genericRecurse<int>(20, 5)[0] != 5) {
+        die("Failed");
+    }
+}

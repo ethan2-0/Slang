@@ -643,6 +643,7 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             method->typereferences = NULL;
             method->reificationsc = 0;
             method->reifications = NULL;
+            method->has_had_references_reified = false;
             if(strlen(containing_clazz_name) > 0) {
                 union ts_TYPE* containing_type = ts_get_type(containing_clazz_name, NULL);
                 if(containing_type->barebones.category == ts_CATEGORY_CLAZZ) {
@@ -804,8 +805,6 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
             }
         }
     }
-
-    ts_walk_and_reify_methods(result);
 
     free(opcodes);
     for(int i = 0; i < num_files; i++) {

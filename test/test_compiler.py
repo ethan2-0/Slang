@@ -573,7 +573,7 @@ class TestGenericMethods:
         path = util.assert_compile_succeeds("resources/generic_methods/basic.slg")
         util.interpret(path)
 
-    def test_generic_instanceof_string(self):
+    def test_generic_instanceof_object(self):
         util.clean_tmp()
         path = util.assert_compile_succeeds("resources/generic_methods/generic_instanceof_object.slg")
         util.interpret(path)
@@ -583,7 +583,7 @@ class TestGenericMethods:
         path = util.assert_compile_succeeds("resources/generic_methods/generic_instanceof_primitive.slg")
         util.interpret(path)
 
-    def test_generic_stack_overflow(self):
+    def test_generic_recursion(self):
         util.clean_tmp()
-        path = util.assert_compile_succeeds("resources/generic_methods/generic_stack_overflow.slg")
-        assert "Infinite or near infinite recursion in generic method reification" in util.interpret(path, expect_fail=True)
+        path = util.assert_compile_succeeds("resources/generic_methods/generic_recursion.slg")
+        util.interpret(path)

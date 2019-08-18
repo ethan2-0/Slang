@@ -54,6 +54,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
         stack[i].registers = 0;
         stack[i].index = i;
     }
+    ts_reify_generic_references(&prog->methods[prog->entrypoint]);
     load_method(stackptr, &prog->methods[prog->entrypoint]);
     union itval* registers = stackptr->registers;
     #if DEBUG
@@ -93,6 +94,9 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 callee = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->callee;
             } else {
                 callee = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->method;
+            }
+            if(!callee->has_had_references_reified) {
+                ts_reify_generic_references(callee);
             }
             if(iptr->type == OPCODE_CLASSCALLSPECIAL) {
                 if(registers[((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->callee_register].clazz_data == NULL) {

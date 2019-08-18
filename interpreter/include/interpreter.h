@@ -16,6 +16,7 @@ bool ts_instanceof(union ts_TYPE* lhs, union ts_TYPE* rhs);
 struct ts_GENERIC_TYPE_CONTEXT* ts_create_generic_type_context(uint32_t num_arguments, struct ts_GENERIC_TYPE_CONTEXT* parent);
 void ts_init_type_parameter(struct ts_TYPE_PARAMETER* parameter, char* name);
 void ts_walk_and_reify_methods(struct it_PROGRAM* program);
+void ts_reify_generic_references(struct it_METHOD* method);
 
 void sv_add_static_var(struct it_PROGRAM* program, union ts_TYPE* type, char* name, union itval value);
 struct sv_STATIC_VAR* sv_get_var_by_name(struct it_PROGRAM* program, char* name);

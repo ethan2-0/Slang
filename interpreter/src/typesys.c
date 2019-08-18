@@ -234,19 +234,6 @@ void ts_init_type_parameter(struct ts_TYPE_PARAMETER* parameter, char* name) {
 bool ts_method_is_generic(struct it_METHOD* method) {
     return method->type_parameters->count > 0;
 }
-struct ts_WALK_QUEUE {
-    int size;
-    int index;
-    struct it_METHOD** queue;
-};
-void ts_add_to_walk_queue(struct it_METHOD* method, struct ts_WALK_QUEUE* queue) {
-    queue->index++;
-    if(queue->index >= queue->size) {
-        queue->size *= 2;
-        queue->queue = realloc(queue->queue, sizeof(struct it_METHOD*) * queue->size);
-    }
-    queue->queue[queue->index] = method;
-}
 union ts_TYPE* ts_reify_type(union ts_TYPE* type, struct ts_GENERIC_TYPE_CONTEXT* context, int typeargsc, union ts_TYPE** typeargs) {
     if(typeargsc != context->count) {
         fatal("ts_reify_type: typeargsc != context->count");
@@ -315,50 +302,29 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, in
 
     return ret;
 }
-void ts_walk_and_reify_methods(struct it_PROGRAM* program) {
-    // We walk through all the methods, skipping those that have unreified
-    // types (since the method could reference those as type parameters). Every
-    // time we see a call that includes type arguments, we create a reified
-    // version of the method that's referenced with the type arguments.
-    struct ts_WALK_QUEUE queue;
-    queue.size = program->methodc * 2;
-    queue.index = program->methodc - 1;
-    queue.queue = mm_malloc(sizeof(struct it_METHOD*) * queue.size);
-    for(int i = 0; i < program->methodc; i++) {
-        queue.queue[i] = &program->methods[i];
+void ts_reify_generic_references(struct it_METHOD* method) {
+    if(ts_method_is_generic(method)) {
+        // We shouldn't need this check but it won't hurt
+        return;
     }
-    int num_iterations = 0;
-    // The index becomes negative once we've exhausted the queue
-    while(queue.index >= 0) {
-        if(num_iterations++ > program->methodc * 10) {
-            fatal("Infinite or near infinite recursion in generic method reification");
-        }
-        struct it_METHOD* method = queue.queue[queue.index--];
-        if(ts_method_is_generic(method)) {
-            // We'll produce a fully reified version of this method if/when it
-            // is referenced elsewhere.
+    for(int i = 0; i < method->opcodec; i++) {
+        struct it_OPCODE* opcode = &method->opcodes[i];
+        if(opcode->type != OPCODE_CALL) {
             continue;
         }
-        for(int i = 0; i < method->opcodec; i++) {
-            struct it_OPCODE* opcode = &method->opcodes[i];
-            if(opcode->type != OPCODE_CALL) {
-                continue;
-            }
-            struct it_OPCODE_DATA_CALL* data = (struct it_OPCODE_DATA_CALL*) opcode->payload;
-            if(!ts_method_is_generic(data->callee)) {
-                continue;
-            }
-            // I could use a VLA here but it's not necessary
-            union ts_TYPE* type_arguments[TS_MAX_TYPE_ARGS];
-            for(int i = 0; i < data->type_paramsc; i++) {
-                type_arguments[i] = method->typereferences[data->type_params[i]];
-            }
-            struct it_METHOD* reification = ts_get_method_reification(data->callee, data->type_paramsc, type_arguments);
-            ts_add_to_walk_queue(reification, &queue);
-            opcode->payload = mm_malloc(sizeof(struct it_OPCODE_DATA_CALL));
-            memcpy(opcode->payload, data, sizeof(struct it_OPCODE_DATA_CALL));
-            ((struct it_OPCODE_DATA_CALL*) opcode->payload)->callee = reification;
+        struct it_OPCODE_DATA_CALL* data = (struct it_OPCODE_DATA_CALL*) opcode->payload;
+        if(!ts_method_is_generic(data->callee)) {
+            continue;
         }
+        // I could use a VLA here but it's not necessary
+        union ts_TYPE* type_arguments[TS_MAX_TYPE_ARGS];
+        for(int i = 0; i < data->type_paramsc; i++) {
+            type_arguments[i] = method->typereferences[data->type_params[i]];
+        }
+        struct it_METHOD* reification = ts_get_method_reification(data->callee, data->type_paramsc, type_arguments);
+        opcode->payload = mm_malloc(sizeof(struct it_OPCODE_DATA_CALL));
+        memcpy(opcode->payload, data, sizeof(struct it_OPCODE_DATA_CALL));
+        ((struct it_OPCODE_DATA_CALL*) opcode->payload)->callee = reification;
     }
-    free(queue.queue);
+    method->has_had_references_reified = true;
 }
