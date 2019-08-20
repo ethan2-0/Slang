@@ -4,7 +4,7 @@
 #include "interpreter.h"
 #include "common.h"
 
-void sv_add_static_var(struct it_PROGRAM* program, union ts_TYPE* type, char* name, union itval value) {
+void sv_add_static_var(struct it_PROGRAM* program, struct ts_TYPE* type, char* name, union itval value) {
     program->static_vars[program->static_var_index].type = type;
     program->static_vars[program->static_var_index].name = name;
     program->static_vars[program->static_var_index].value = value;

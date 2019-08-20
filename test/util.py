@@ -19,6 +19,8 @@ def do_compile(filename, outfile, include=[], include_json=[], parse_only=False)
     return subprocess.run(["python3", resolve_filename("../compiler/compiler.py"), "-o", outfile,] + include_specifiers + (["--parse-only"] if parse_only else []) + [resolve_filename(filename)] + ['--ast', '--segments'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 def assert_compile_succeeds(filename, message="", include=[], include_json=[], parse_only=False, no_warnings=True):
+    if not os.path.isdir(tmpdir):
+        os.makedirs(tmpdir)
     assert isinstance(include, list)
     assert isinstance(include_json, list)
     if not isinstance(message, list):
@@ -51,10 +53,3 @@ def interpret(*filenames, expect_fail=False, stdin=None):
         print(result.stdout.decode("utf8"))
         assert success
     return result.stdout.decode("utf8")
-
-def clean_tmp():
-    if not os.path.isdir(tmpdir):
-        os.makedirs(tmpdir)
-    # This won't clear subdirectories, but it shouldn't matter
-    for file in os.listdir(tmpdir):
-        os.remove(os.path.join(tmpdir, file))

@@ -2,12 +2,14 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#ifndef INTERPRETER_EXPORTS_H
-#define INTERPRETER_EXPORTS_H
+#ifndef INTERPRETER_EXPORT_H
+#define INTERPRETER_EXPORT_H
 
 #define TS_MAX_TYPE_ARGS 16
 
-union ts_TYPE;
+#include "opcodes.h"
+
+struct ts_TYPE;
 struct it_METHOD;
 
 enum ts_CATEGORY {
@@ -17,71 +19,45 @@ enum ts_CATEGORY {
     ts_CATEGORY_INTERFACE,
     ts_CATEGORY_TYPE_PARAMETER
 };
-struct ts_TYPE_BAREBONES {
-    enum ts_CATEGORY category;
-    uint32_t id;
-    char* name;
-    int heirarchy_len;
-    // This is a pointer to an array of pointers
-    union ts_TYPE** heirarchy;
-};
 struct ts_CLAZZ_FIELD {
     char* name;
-    union ts_TYPE* type;
+    struct ts_TYPE* type;
 };
 struct it_METHOD_TABLE;
 struct ts_TYPE_CLAZZ {
-    enum ts_CATEGORY category;
-    uint32_t id;
-    char* name;
-    int heirarchy_len;
-    // This is a pointer to an array of pointers
-    union ts_TYPE** heirarchy;
-    struct ts_TYPE_CLAZZ* immediate_supertype;
+    struct ts_TYPE* immediate_supertype;
     int nfields;
     struct ts_CLAZZ_FIELD* fields;
     // This is a pointer to an array of pointers
     struct it_METHOD_TABLE* method_table;
     int implemented_interfacesc;
     // This is a pointer to an array of pointers
-    struct ts_TYPE_INTERFACE** implemented_interfaces;
+    struct ts_TYPE** implemented_interfaces;
 };
 struct ts_TYPE_ARRAY {
+    struct ts_TYPE* parent_type;
+};
+struct ts_TYPE_INTERFACE {
+    // Note that this is only used to keep references to the methods, not for lookup at runtime
+    struct it_METHOD_TABLE* methods;
+};
+struct ts_TYPE {
     enum ts_CATEGORY category;
     uint32_t id;
     char* name;
     int heirarchy_len;
     // This is a pointer to an array of pointers
-    union ts_TYPE** heirarchy;
-    union ts_TYPE* parent_type;
-};
-struct ts_TYPE_INTERFACE {
-    enum ts_CATEGORY category;
-    uint32_t id;
-    char* name;
-    int heirarchy_len;
-    union ts_TYPE** heirarchy;
-    // Note that this is only used to keep references to the methods, not for lookup at runtime
-    struct it_METHOD_TABLE* methods;
-};
-struct ts_TYPE_PARAMETER {
-    enum ts_CATEGORY category;
-    uint32_t id;
-    char* name;
-    int heirarchy_len;
-    union ts_TYPE** heirarchy;
-};
-union ts_TYPE {
-    struct ts_TYPE_BAREBONES barebones;
-    struct ts_TYPE_CLAZZ clazz;
-    struct ts_TYPE_ARRAY array;
-    struct ts_TYPE_INTERFACE interface;
-    struct ts_TYPE_PARAMETER type_parameter;
+    struct ts_TYPE** heirarchy;
+    union {
+        struct ts_TYPE_CLAZZ clazz;
+        struct ts_TYPE_ARRAY array;
+        struct ts_TYPE_INTERFACE interface;
+    } data;
 };
 struct ts_GENERIC_TYPE_CONTEXT {
     struct ts_GENERIC_TYPE_CONTEXT* parent;
     uint32_t count;
-    struct ts_TYPE_PARAMETER arguments[];
+    struct ts_TYPE arguments[];
 };
 
 enum ts_CATEGORY ts_CATEGORY;
@@ -110,7 +86,7 @@ struct gc_OBJECT_REGISTRY {
 struct it_ARRAY_DATA {
     uint64_t length;
     struct gc_OBJECT_REGISTRY* gc_registry_entry;
-    struct ts_TYPE_ARRAY* type;
+    struct ts_TYPE* type;
     union itval elements[1];
 };
 
@@ -120,7 +96,7 @@ struct it_INTERFACE_IMPLEMENTATION {
 };
 struct it_METHOD_TABLE {
     enum ts_CATEGORY category;
-    union ts_TYPE* type;
+    struct ts_TYPE* type;
     uint32_t ninterface_implementations;
     // This is a pointer to an array of pointers
     struct it_INTERFACE_IMPLEMENTATION* interface_implementations;
@@ -136,8 +112,8 @@ struct it_CLAZZ_DATA {
 
 struct it_OPCODE {
     uint8_t type;
-    void* payload;
     uint32_t linenum;
+    union it_OPCODE_DATA data;
 };
 struct it_STACKFRAME {
     union itval* registers;
@@ -158,14 +134,14 @@ struct it_METHOD {
     char* name;
     uint32_t registerc;
     struct it_OPCODE* opcodes;
-    union ts_TYPE* returntype;
+    struct ts_TYPE* returntype;
     // This is a pointer to an array
-    union ts_TYPE** register_types;
-    struct ts_TYPE_CLAZZ* containing_clazz;
-    struct ts_TYPE_INTERFACE* containing_interface;
+    struct ts_TYPE** register_types;
+    struct ts_TYPE* containing_clazz;
+    struct ts_TYPE* containing_interface;
     it_METHOD_REPLACEMENT_PTR replacement_ptr;
     uint32_t typereferencec;
-    union ts_TYPE** typereferences;
+    struct ts_TYPE** typereferences;
     struct ts_GENERIC_TYPE_CONTEXT* type_parameters;
     // This is a pointer to an array of pointers
     struct it_METHOD** reifications;
@@ -174,7 +150,7 @@ struct it_METHOD {
     bool has_had_references_reified;
 };
 struct sv_STATIC_VAR {
-    union ts_TYPE* type;
+    struct ts_TYPE* type;
     char* name;
     union itval value;
 };
@@ -190,15 +166,15 @@ struct it_PROGRAM {
     int clazzesc;
     int clazz_index;
     // This is a pointer to an array of pointers of classes
-    struct ts_TYPE_CLAZZ** clazzes;
+    struct ts_TYPE** clazzes;
     int static_varsc;
     int static_var_index;
     // This is a pointer to the start of the array of static variables
     struct sv_STATIC_VAR* static_vars;
     int interfacesc;
     int interface_index;
-    struct ts_TYPE_INTERFACE** interfaces;
+    struct ts_TYPE** interfaces;
 };
 
 
-#endif /* INTERPRETER_EXPORTS_H */
+#endif /* INTERPRETER_EXPORT_H */

@@ -129,7 +129,7 @@ void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct 
             if(currentptr->registers[i].array_data == NULL) {
                 continue;
             }
-            enum ts_CATEGORY category = method->register_types[i]->barebones.category;
+            enum ts_CATEGORY category = method->register_types[i]->category;
             if(category == ts_CATEGORY_ARRAY) {
                 add_parity++;
                 struct it_ARRAY_DATA* array_data = currentptr->registers[i].array_data;
@@ -141,7 +141,7 @@ void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct 
         }
     }
     for(int i = 0; i < program->static_varsc; i++) {
-        enum ts_CATEGORY category = program->static_vars[i].type->barebones.category;
+        enum ts_CATEGORY category = program->static_vars[i].type->category;
         // Note that itval.array_data == NULL iff itval.clazz_data == NULL
         if(program->static_vars[i].value.array_data == NULL) {
             continue;
@@ -167,9 +167,9 @@ void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct 
         entry->visited = gc_current_pass;
         if(entry->category == ts_CATEGORY_ARRAY) {
             struct it_ARRAY_DATA* arr_data = entry->object.array_data;
-            if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_PRIMITIVE) {
+            if(arr_data->type->data.array.parent_type->category == ts_CATEGORY_PRIMITIVE) {
                 continue;
-            } else if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_ARRAY) {
+            } else if(arr_data->type->data.array.parent_type->category == ts_CATEGORY_ARRAY) {
                 for(int i = 0; i < arr_data->length; i++) {
                     if(arr_data->elements[i].array_data == NULL) {
                         continue;
@@ -177,7 +177,7 @@ void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct 
                     add_parity++;
                     gc_add_to_queue(arr_data->elements[i].array_data->gc_registry_entry, &properties);
                 }
-            } else if(arr_data->type->parent_type->barebones.category == ts_CATEGORY_CLAZZ) {
+            } else if(arr_data->type->data.array.parent_type->category == ts_CATEGORY_CLAZZ) {
                 for(int i = 0; i < arr_data->length; i++) {
                     if(arr_data->elements[i].clazz_data == NULL) {
                         continue;
@@ -187,16 +187,16 @@ void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct 
                 }
             }
         } else if(entry->category == ts_CATEGORY_CLAZZ) {
-            struct ts_TYPE_CLAZZ* clazz_properties = &entry->object.clazz_data->method_table->type->clazz;
-            for(int i = 0; i < clazz_properties->nfields; i++) {
+            struct ts_TYPE* clazz_properties = entry->object.clazz_data->method_table->type;
+            for(int i = 0; i < clazz_properties->data.clazz.nfields; i++) {
                 if(entry->object.clazz_data->itval[i].array_data == NULL) {
                     continue;
-                } else if(clazz_properties->fields[i].type->barebones.category == ts_CATEGORY_PRIMITIVE) {
+                } else if(clazz_properties->data.clazz.fields[i].type->category == ts_CATEGORY_PRIMITIVE) {
                     continue;
-                } else if(clazz_properties->fields[i].type->barebones.category == ts_CATEGORY_ARRAY) {
+                } else if(clazz_properties->data.clazz.fields[i].type->category == ts_CATEGORY_ARRAY) {
                     add_parity++;
                     gc_add_to_queue(entry->object.clazz_data->itval[i].array_data->gc_registry_entry, &properties);
-                } else if(clazz_properties->fields[i].type->barebones.category == ts_CATEGORY_CLAZZ) {
+                } else if(clazz_properties->data.clazz.fields[i].type->category == ts_CATEGORY_CLAZZ) {
                     add_parity++;
                     gc_add_to_queue(entry->object.clazz_data->itval[i].clazz_data->gc_registry_entry, &properties);
                 }

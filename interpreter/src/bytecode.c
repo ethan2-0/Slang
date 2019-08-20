@@ -17,45 +17,32 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
     printf("Opcode %02x\n", opcode_num);
     #endif
     if(opcode_num == OPCODE_LOAD) {
-        // LOAD
-        struct it_OPCODE_DATA_LOAD* data = mm_malloc(sizeof(struct it_OPCODE_DATA_LOAD));
+        struct it_OPCODE_DATA_LOAD* data = &opcode->data.load;
         data->target = fr_getuint32(state);
         data->data = fr_getuint64(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ZERO) {
-        // ZERO
-        struct it_OPCODE_DATA_ZERO* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ZERO));
+        struct it_OPCODE_DATA_ZERO* data = &opcode->data.zero;
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ADD) {
-        // ADD
-        struct it_OPCODE_DATA_ADD* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ADD));
+        struct it_OPCODE_DATA_ADD* data = &opcode->data.add;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_TWOCOMP) {
-        // TWOCOMP
-        struct it_OPCODE_DATA_TWOCOMP* data = mm_malloc(sizeof(struct it_OPCODE_DATA_TWOCOMP));
+        struct it_OPCODE_DATA_TWOCOMP* data = &opcode->data.twocomp;
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_MULT) {
-        // MULT
-        struct it_OPCODE_DATA_MULT* data = mm_malloc(sizeof(struct it_OPCODE_DATA_MULT));
+        struct it_OPCODE_DATA_MULT* data = &opcode->data.mult;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_MODULO) {
-        // MODULO
-        struct it_OPCODE_DATA_MODULO* data = mm_malloc(sizeof(struct it_OPCODE_DATA_MODULO));
+        struct it_OPCODE_DATA_MODULO* data = &opcode->data.modulo;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_CALL) {
-        // CALL
-        struct it_OPCODE_DATA_CALL* data = mm_malloc(sizeof(struct it_OPCODE_DATA_CALL));
+        struct it_OPCODE_DATA_CALL* data = &opcode->data.call;
         char* callee_name = fr_getstr(state);
         data->callee = &program->methods[bc_resolve_name(program, callee_name)];
         free(callee_name);
@@ -69,226 +56,180 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         for(uint32_t i = 0; i < num_types; i++) {
             data->type_params[i] = fr_getuint32(state);
         }
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_RETURN) {
-        // RETURN
-        struct it_OPCODE_DATA_RETURN* data = mm_malloc(sizeof(struct it_OPCODE_DATA_RETURN));
+        struct it_OPCODE_DATA_RETURN* data = &opcode->data.return_;
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_EQUALS) {
-        // EQUALS
-        struct it_OPCODE_DATA_EQUALS* data = mm_malloc(sizeof(struct it_OPCODE_DATA_EQUALS));
+        struct it_OPCODE_DATA_EQUALS* data = &opcode->data.equals;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_INVERT) {
-        // INVERT
-        struct it_OPCODE_DATA_INVERT* data = mm_malloc(sizeof(struct it_OPCODE_DATA_INVERT));
+        struct it_OPCODE_DATA_INVERT* data = &opcode->data.invert;
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_LTEQ) {
-        // LTEQ
-        struct it_OPCODE_DATA_LTEQ* data = mm_malloc(sizeof(struct it_OPCODE_DATA_LTEQ));
+        struct it_OPCODE_DATA_LTEQ* data = &opcode->data.lteq;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_GT) {
-        // GT
-        struct it_OPCODE_DATA_GT* data = mm_malloc(sizeof(struct it_OPCODE_DATA_GT));
+        struct it_OPCODE_DATA_GT* data = &opcode->data.gt;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_GOTO) {
-        // GOTO
-        struct it_OPCODE_DATA_GOTO* data = mm_malloc(sizeof(struct it_OPCODE_DATA_GOTO));
+        struct it_OPCODE_DATA_GOTO* data = &opcode->data.goto_;
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_JF) {
-        // JF
-        struct it_OPCODE_DATA_JF* data = mm_malloc(sizeof(struct it_OPCODE_DATA_JF));
+        struct it_OPCODE_DATA_JF* data = &opcode->data.jf;
         data->predicate = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_PARAM) {
-        // PARAM
-        struct it_OPCODE_DATA_PARAM* data = mm_malloc(sizeof(struct it_OPCODE_DATA_PARAM));
+        struct it_OPCODE_DATA_PARAM* data = &opcode->data.param;
         data->source = fr_getuint32(state);
         data->target = fr_getuint8(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_GTEQ) {
-        // GTEQ
-        struct it_OPCODE_DATA_GTEQ* data = mm_malloc(sizeof(struct it_OPCODE_DATA_GTEQ));
+        struct it_OPCODE_DATA_GTEQ* data = &opcode->data.gteq;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_XOR) {
-        // XOR
-        struct it_OPCODE_DATA_XOR* data = mm_malloc(sizeof(struct it_OPCODE_DATA_XOR));
+        struct it_OPCODE_DATA_XOR* data = &opcode->data.xor;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_AND) {
-        // AND
-        struct it_OPCODE_DATA_AND* data = mm_malloc(sizeof(struct it_OPCODE_DATA_AND));
+        struct it_OPCODE_DATA_AND* data = &opcode->data.and;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_OR) {
-        // OR
-        struct it_OPCODE_DATA_OR* data = mm_malloc(sizeof(struct it_OPCODE_DATA_OR));
+        struct it_OPCODE_DATA_OR* data = &opcode->data.or;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_MOV) {
-        // MOV
-        struct it_OPCODE_DATA_MOV* data = mm_malloc(sizeof(struct it_OPCODE_DATA_MOV));
+        struct it_OPCODE_DATA_MOV* data = &opcode->data.mov;
         data->source = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_NOP) {
-        // NOP
         // Do nothing
         ;
     } else if(opcode_num == OPCODE_LT) {
-        // LT
-        struct it_OPCODE_DATA_LT* data = mm_malloc(sizeof(struct it_OPCODE_DATA_LT));
+        struct it_OPCODE_DATA_LT* data = &opcode->data.lt;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_NEW) {
-        struct it_OPCODE_DATA_NEW* data = mm_malloc(sizeof(struct it_OPCODE_DATA_NEW));
-        data->clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(fr_getstr(state), method->type_parameters);
+        struct it_OPCODE_DATA_NEW* data = &opcode->data.new;
+        data->clazz = ts_get_type(fr_getstr(state), method->type_parameters);
         if(data->clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to instantiate something that isn't a class");
         }
         data->dest = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ACCESS) {
-        struct it_OPCODE_DATA_ACCESS* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ACCESS));
+        struct it_OPCODE_DATA_ACCESS* data = &opcode->data.access;
         data->clazzreg = fr_getuint32(state);
-        struct ts_TYPE_CLAZZ* clazzreg_type = (struct ts_TYPE_CLAZZ*) method->register_types[data->clazzreg];
+        struct ts_TYPE* clazzreg_type = method->register_types[data->clazzreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to access something that isn't a class");
         }
         data->property_index = cl_get_field_index(clazzreg_type, fr_getstr(state));
         data->destination = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ASSIGN) {
-        struct it_OPCODE_DATA_ASSIGN* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ASSIGN));
+        struct it_OPCODE_DATA_ASSIGN* data = &opcode->data.assign;
         data->clazzreg = fr_getuint32(state);
-        struct ts_TYPE_CLAZZ* clazzreg_type = (struct ts_TYPE_CLAZZ*) method->register_types[data->clazzreg];
+        struct ts_TYPE* clazzreg_type = method->register_types[data->clazzreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to assign to a property of something that isn't a class");
         }
         data->property_index = cl_get_field_index(clazzreg_type, fr_getstr(state));
         data->source = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_CLASSCALL) {
-        struct it_OPCODE_DATA_CLASSCALL* data = mm_malloc(sizeof(struct it_OPCODE_DATA_CLASSCALL));
+        struct it_OPCODE_DATA_CLASSCALL* data = &opcode->data.classcall;
         data->targetreg = fr_getuint32(state);
-        struct ts_TYPE_CLAZZ* clazzreg_type = (struct ts_TYPE_CLAZZ*) method->register_types[data->targetreg];
+        struct ts_TYPE* clazzreg_type = method->register_types[data->targetreg];
         if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to call a method of something that isn't a class");
         }
         char* callee_name = fr_getstr(state);
-        // data->callee = bc_resolve_name(program, callee_name);
-        data->callee_index = cl_get_method_index(clazzreg_type->method_table, callee_name);
+        data->callee_index = cl_get_method_index(clazzreg_type->data.clazz.method_table, callee_name);
         free(callee_name);
         data->returnreg = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRALLOC) {
-        struct it_OPCODE_DATA_ARRALLOC* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ARRALLOC));
+        struct it_OPCODE_DATA_ARRALLOC* data = &opcode->data.arralloc;
         data->arrreg = fr_getuint32(state);
         data->lengthreg = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRACCESS) {
-        struct it_OPCODE_DATA_ARRACCESS* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ARRACCESS));
+        struct it_OPCODE_DATA_ARRACCESS* data = &opcode->data.arraccess;
         data->arrreg = fr_getuint32(state);
         data->indexreg = fr_getuint32(state);
         data->elementreg = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRASSIGN) {
-        struct it_OPCODE_DATA_ARRASSIGN* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ARRASSIGN));
+        struct it_OPCODE_DATA_ARRASSIGN* data = &opcode->data.arrassign;
         data->arrreg = fr_getuint32(state);
         data->indexreg = fr_getuint32(state);
         data->elementreg = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_ARRLEN) {
-        struct it_OPCODE_DATA_ARRLEN* data = mm_malloc(sizeof(struct it_OPCODE_DATA_ARRLEN));
+        struct it_OPCODE_DATA_ARRLEN* data = &opcode->data.arrlen;
         data->arrreg = fr_getuint32(state);
         data->resultreg = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_DIV) {
-        struct it_OPCODE_DATA_DIV* data = mm_malloc(sizeof(struct it_OPCODE_DATA_DIV));
+        struct it_OPCODE_DATA_DIV* data = &opcode->data.div;
         data->source1 = fr_getuint32(state);
         data->source2 = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_CAST) {
-        struct it_OPCODE_DATA_CAST* data = mm_malloc(sizeof(struct it_OPCODE_DATA_CAST));
+        struct it_OPCODE_DATA_CAST* data = &opcode->data.cast;
         data->source = fr_getuint32(state);
         data->target = fr_getuint32(state);
-        union ts_TYPE* target_type = method->register_types[data->target];
-        if(target_type->barebones.category != ts_CATEGORY_CLAZZ && target_type->barebones.category != ts_CATEGORY_INTERFACE) {
+        struct ts_TYPE* target_type = method->register_types[data->target];
+        if(target_type->category != ts_CATEGORY_CLAZZ && target_type->category != ts_CATEGORY_INTERFACE) {
             fatal("Cannot cast to a type that isn't a class or interface. This is a compiler bug.");
         }
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_INSTANCEOF) {
-        struct it_OPCODE_DATA_INSTANCEOF* data = mm_malloc(sizeof(struct it_OPCODE_DATA_INSTANCEOF));
+        struct it_OPCODE_DATA_INSTANCEOF* data = &opcode->data.instanceof;
         data->source = fr_getuint32(state);
         data->destination = fr_getuint32(state);
         data->predicate_type_index = fr_getuint32(state);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_STATICVARGET) {
-        struct it_OPCODE_DATA_STATICVARGET* data = mm_malloc(sizeof(struct it_OPCODE_DATA_STATICVARGET));
+        struct it_OPCODE_DATA_STATICVARGET* data = &opcode->data.staticvarget;
         char* source_var_name = fr_getstr(state);
         data->source_var = sv_get_static_var_index_by_name(program, source_var_name);
         data->destination = fr_getuint32(state);
         free(source_var_name);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_STATICVARSET) {
-        struct it_OPCODE_DATA_STATICVARSET* data = mm_malloc(sizeof(struct it_OPCODE_DATA_STATICVARSET));
+        struct it_OPCODE_DATA_STATICVARSET* data = &opcode->data.staticvarset;
         data->source = fr_getuint32(state);
         char* dest_var_name = fr_getstr(state);
         data->destination_var = sv_get_static_var_index_by_name(program, dest_var_name);
         free(dest_var_name);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_CLASSCALLSPECIAL) {
-        struct it_OPCODE_DATA_CLASSCALLSPECIAL* data = mm_malloc(sizeof(struct it_OPCODE_DATA_CLASSCALLSPECIAL));
+        struct it_OPCODE_DATA_CLASSCALLSPECIAL* data = &opcode->data.classcallspecial;
         char* classname = fr_getstr(state);
         char* methodname = fr_getstr(state);
         data->destination_register = fr_getuint32(state);
         data->callee_register = fr_getuint32(state);
-        struct ts_TYPE_CLAZZ* clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(classname, method->type_parameters);
+        struct ts_TYPE* clazz = ts_get_type(classname, method->type_parameters);
         // This is safe since every member of union ts_TYPE has offsetof(category) the same
         if(clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("First argument to CLASSCALLSPECIAL isn't a class");
         }
-        uint32_t method_index = cl_get_method_index(clazz->method_table, methodname);
-        data->method = clazz->method_table->methods[method_index];
+        uint32_t method_index = cl_get_method_index(clazz->data.clazz.method_table, methodname);
+        data->method = clazz->data.clazz.method_table->methods[method_index];
         free(classname);
         free(methodname);
-        opcode->payload = data;
     } else if(opcode_num == OPCODE_INTERFACECALL) {
-        struct it_OPCODE_DATA_INTERFACECALL* data = mm_malloc(sizeof(struct it_OPCODE_DATA_INTERFACECALL));
+        struct it_OPCODE_DATA_INTERFACECALL* data = &opcode->data.interfacecall;
         data->callee_register = fr_getuint32(state);
         char* method_name = fr_getstr(state);
-        struct ts_TYPE_INTERFACE* interface = &method->register_types[data->callee_register]->interface;
+        struct ts_TYPE* interface = method->register_types[data->callee_register];
         if(interface->category != ts_CATEGORY_INTERFACE) {
             fatal("Attempt to do interface call on something that isn't an interface");
         }
         data->interface_id = interface->id;
-        data->method_index = cl_get_method_index(interface->methods, method_name);
+        data->method_index = cl_get_method_index(interface->data.interface.methods, method_name);
         data->destination_register = fr_getuint32(state);
-        opcode->payload = data;
     } else {
         printf("Opcode: %2x\n", opcode_num);
         fatal("Unrecognized opcode");
@@ -347,25 +288,25 @@ struct bc_PRESCAN_RESULTS* bc_prescan(struct fr_STATE* state) {
     #endif
     return results;
 }
-union itval bc_create_staticvar_value(struct it_PROGRAM* program, struct fr_STATE* state, union ts_TYPE* type) {
-    if(type->barebones.category == ts_CATEGORY_PRIMITIVE) {
+union itval bc_create_staticvar_value(struct it_PROGRAM* program, struct fr_STATE* state, struct ts_TYPE* type) {
+    if(type->category == ts_CATEGORY_PRIMITIVE) {
         union itval ret;
         ret.number = fr_getuint64(state);
         return ret;
-    } else if(type->barebones.category == ts_CATEGORY_ARRAY) {
+    } else if(type->category == ts_CATEGORY_ARRAY) {
         uint64_t length = fr_getuint64(state);
         size_t allocation_size = sizeof(struct it_ARRAY_DATA) + (length == 0 ? 0 : (length - 1) * sizeof(union itval));
         struct it_ARRAY_DATA* array_data = mm_malloc(allocation_size);
         array_data->length = length;
-        array_data->type = (struct ts_TYPE_ARRAY*) type;
+        array_data->type = type;
         for(uint64_t i = 0; i < length; i++) {
-            array_data->elements[i] = bc_create_staticvar_value(program, state, type->array.parent_type);
+            array_data->elements[i] = bc_create_staticvar_value(program, state, type->data.array.parent_type);
         }
         union itval ret;
         ret.array_data = array_data;
         ret.array_data->gc_registry_entry = gc_register_object(ret, allocation_size, ts_CATEGORY_ARRAY);
         return ret;
-    } else if(type->barebones.category == ts_CATEGORY_CLAZZ) {
+    } else if(type->category == ts_CATEGORY_CLAZZ) {
         union itval ret;
         ret.clazz_data = NULL;
         fr_getuint64(state);
@@ -395,7 +336,7 @@ void bc_scan_static_vars(struct it_PROGRAM* program, struct fr_STATE* state) {
             for(int i = 0; i < num_static_vars; i++) {
                 char* name = fr_getstr(state);
                 char* typename = fr_getstr(state);
-                union ts_TYPE* type = ts_get_type(typename, NULL);
+                struct ts_TYPE* type = ts_get_type(typename, NULL);
                 union itval value = bc_create_staticvar_value(program, state, type);
                 sv_add_static_var(program, type, strdup(name), value);
                 free(name);
@@ -455,7 +396,7 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     }
 
     result->returntype = ts_get_type(fr_getstr(state), result->type_parameters);
-    result->register_types = mm_malloc(sizeof(union ts_TYPE*) * registerc);
+    result->register_types = mm_malloc(sizeof(struct ts_TYPE*) * registerc);
     for(int i = 0; i < registerc; i++) {
         char* typename = fr_getstr(state);
         #if DEBUG
@@ -465,7 +406,7 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     }
 
     result->typereferencec = fr_getuint32(state);
-    result->typereferences = mm_malloc(sizeof(union ts_TYPE*) * result->typereferencec);
+    result->typereferences = mm_malloc(sizeof(struct ts_TYPE*) * result->typereferencec);
     for(uint32_t i = 0; i < result->typereferencec; i++) {
         char* typename = fr_getstr(state);
         result->typereferences[i] = ts_get_type(typename, result->type_parameters);
@@ -528,17 +469,17 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
                 free(fr_getstr(state));
                 free(fr_getstr(state));
             }
-            struct ts_TYPE_CLAZZ* clazz = mm_malloc(sizeof(struct ts_TYPE_CLAZZ));
+            struct ts_TYPE* clazz = mm_malloc(sizeof(struct ts_TYPE));
             clazz->category = ts_CATEGORY_CLAZZ;
             clazz->id = ts_allocate_type_id();
             clazz->name = strdup(clazzname);
             clazz->heirarchy_len = 1;
-            clazz->heirarchy = mm_malloc(sizeof(union ts_TYPE*) * 1);
-            clazz->heirarchy[0] = (union ts_TYPE*) clazz;
-            clazz->nfields = -1;
-            clazz->fields = NULL;
-            clazz->implemented_interfaces = mm_malloc(sizeof(struct ts_TYPE_INTERFACE*) * num_interfaces);
-            clazz->implemented_interfacesc = num_interfaces;
+            clazz->heirarchy = mm_malloc(sizeof(struct ts_TYPE*) * 1);
+            clazz->heirarchy[0] = clazz;
+            clazz->data.clazz.nfields = -1;
+            clazz->data.clazz.fields = NULL;
+            clazz->data.clazz.implemented_interfaces = mm_malloc(sizeof(struct ts_TYPE*) * num_interfaces);
+            clazz->data.clazz.implemented_interfacesc = num_interfaces;
             // Check for duplicate class names
             for(int i = 0; i < program->clazz_index; i++) {
                 if(strcmp(program->clazzes[i]->name, clazz->name) == 0) {
@@ -546,7 +487,7 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
                     fatal("Duplicate class name");
                 }
             }
-            ts_register_type((union ts_TYPE*) clazz, strdup(clazzname));
+            ts_register_type(clazz, strdup(clazzname));
             program->clazzes[program->clazz_index++] = clazz;
             free(clazzname);
             free(parentname);
@@ -557,7 +498,7 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
             fatal("Unrecognized segment type");
         }
     }
-    program->interfaces = mm_malloc(sizeof(struct ts_TYPE_INTERFACE*) * program->interfacesc);
+    program->interfaces = mm_malloc(sizeof(struct ts_TYPE*) * program->interfacesc);
 }
 void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
     while(!fr_iseof(state)) {
@@ -573,34 +514,34 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             fr_getuint32(state);
             char* clazzname = fr_getstr(state);
             char* supertype_name = fr_getstr(state);
-            struct ts_TYPE_CLAZZ* clazz = (struct ts_TYPE_CLAZZ*) ts_get_type(clazzname, NULL);
+            struct ts_TYPE* clazz = ts_get_type(clazzname, NULL);
             if(clazz->category != ts_CATEGORY_CLAZZ) {
                 fatal("Tried to extend something that isn't a class");
             }
             if(strlen(supertype_name) > 0) {
-                clazz->immediate_supertype = (struct ts_TYPE_CLAZZ*) ts_get_type(supertype_name, NULL);
-                if(clazz->immediate_supertype == NULL) {
+                clazz->data.clazz.immediate_supertype = ts_get_type(supertype_name, NULL);
+                if(clazz->data.clazz.immediate_supertype == NULL) {
                     fatal("Couldn't find superclass");
                 }
-                if(clazz->immediate_supertype->category != ts_CATEGORY_CLAZZ) {
+                if(clazz->data.clazz.immediate_supertype->category != ts_CATEGORY_CLAZZ) {
                     fatal("Tried to extend something that isn't a class");
                 }
             } else {
-                clazz->immediate_supertype = NULL;
+                clazz->data.clazz.immediate_supertype = NULL;
             }
             uint32_t num_interfaces = fr_getuint32(state);
             for(uint32_t i = 0; i < num_interfaces; i++) {
                 char* name = fr_getstr(state);
-                struct ts_TYPE_INTERFACE* interface = cl_get_or_create_interface(name, program);
-                clazz->implemented_interfaces[i] = interface;
+                struct ts_TYPE* interface = cl_get_or_create_interface(name, program);
+                clazz->data.clazz.implemented_interfaces[i] = interface;
                 free(name);
             }
             uint32_t numfields = fr_getuint32(state);
-            clazz->nfields = numfields;
-            clazz->fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * numfields);
+            clazz->data.clazz.nfields = numfields;
+            clazz->data.clazz.fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * numfields);
             for(uint32_t i = 0; i < numfields; i++) {
-                clazz->fields[i].name = fr_getstr(state);
-                clazz->fields[i].type = ts_get_type(fr_getstr(state), NULL);
+                clazz->data.clazz.fields[i].name = fr_getstr(state);
+                clazz->data.clazz.fields[i].type = ts_get_type(fr_getstr(state), NULL);
             }
             #if DEBUG
             printf("Scanning class '%s'\n", clazzname);
@@ -645,11 +586,11 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             method->reifications = NULL;
             method->has_had_references_reified = false;
             if(strlen(containing_clazz_name) > 0) {
-                union ts_TYPE* containing_type = ts_get_type(containing_clazz_name, NULL);
-                if(containing_type->barebones.category == ts_CATEGORY_CLAZZ) {
-                    method->containing_clazz = (struct ts_TYPE_CLAZZ*) containing_type;
-                } else if(containing_type->barebones.category == ts_CATEGORY_INTERFACE) {
-                    method->containing_interface = (struct ts_TYPE_INTERFACE*) containing_type;
+                struct ts_TYPE* containing_type = ts_get_type(containing_clazz_name, NULL);
+                if(containing_type->category == ts_CATEGORY_CLAZZ) {
+                    method->containing_clazz = containing_type;
+                } else if(containing_type->category == ts_CATEGORY_INTERFACE) {
+                    method->containing_interface = containing_type;
                 } else {
                     fatal("Method is contained in a type that isn't a class or an interface");
                 }
@@ -734,7 +675,7 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
     printf("%d methods\n", result->methodc);
     #endif
     result->methods = mm_malloc(sizeof(struct it_METHOD) * result->methodc);
-    result->clazzes = mm_malloc(sizeof(struct ts_TYPE_CLAZZ*) * result->clazzesc);
+    result->clazzes = mm_malloc(sizeof(struct ts_TYPE*) * result->clazzesc);
     for(int i = 0; i < num_files; i++) {
         bc_scan_types_firstpass(result, prescan[i], state[i]);
         fr_rewind(state[i]);

@@ -1,8 +1,12 @@
 #include <stdint.h>
-#include "interpreter.h"
 
 #ifndef OPCODES_H
 #define OPCODES_H
+
+#define TS_MAX_TYPE_ARGS 16
+
+struct it_METHOD;
+struct ts_TYPE;
 
 #define SEGMENT_TYPE_METHOD 0x00
 #define SEGMENT_TYPE_METADATA 0x01
@@ -141,7 +145,7 @@ struct it_OPCODE_DATA_LT {
     uint32_t target;
 };
 struct it_OPCODE_DATA_NEW {
-    struct ts_TYPE_CLAZZ* clazz;
+    struct ts_TYPE* clazz;
     uint32_t dest;
 };
 struct it_OPCODE_DATA_ACCESS {
@@ -209,6 +213,45 @@ struct it_OPCODE_DATA_INTERFACECALL {
     uint32_t interface_id;
     uint32_t callee_register;
     uint32_t destination_register;
+};
+
+union it_OPCODE_DATA {
+    struct it_OPCODE_DATA_LOAD load;
+    struct it_OPCODE_DATA_ARRALLOC arralloc;
+    struct it_OPCODE_DATA_ARRACCESS arraccess;
+    struct it_OPCODE_DATA_ARRASSIGN arrassign;
+    struct it_OPCODE_DATA_ARRLEN arrlen;
+    struct it_OPCODE_DATA_ZERO zero;
+    struct it_OPCODE_DATA_CLASSCALL classcall;
+    struct it_OPCODE_DATA_INTERFACECALL interfacecall;
+    struct it_OPCODE_DATA_CALL call;
+    struct it_OPCODE_DATA_NEW new;
+    struct it_OPCODE_DATA_ACCESS access;
+    struct it_OPCODE_DATA_ASSIGN assign;
+    struct it_OPCODE_DATA_PARAM param;
+    struct it_OPCODE_DATA_RETURN return_;
+    struct it_OPCODE_DATA_GOTO goto_;
+    struct it_OPCODE_DATA_JF jf;
+    struct it_OPCODE_DATA_EQUALS equals;
+    struct it_OPCODE_DATA_LT lt;
+    struct it_OPCODE_DATA_LTEQ lteq;
+    struct it_OPCODE_DATA_GT gt;
+    struct it_OPCODE_DATA_GTEQ gteq;
+    struct it_OPCODE_DATA_ADD add;
+    struct it_OPCODE_DATA_TWOCOMP twocomp;
+    struct it_OPCODE_DATA_MULT mult;
+    struct it_OPCODE_DATA_DIV div;
+    struct it_OPCODE_DATA_CAST cast;
+    struct it_OPCODE_DATA_INSTANCEOF instanceof;
+    struct it_OPCODE_DATA_STATICVARGET staticvarget;
+    struct it_OPCODE_DATA_STATICVARSET staticvarset;
+    struct it_OPCODE_DATA_CLASSCALLSPECIAL classcallspecial;
+    struct it_OPCODE_DATA_MODULO modulo;
+    struct it_OPCODE_DATA_XOR xor;
+    struct it_OPCODE_DATA_AND and;
+    struct it_OPCODE_DATA_OR or;
+    struct it_OPCODE_DATA_INVERT invert;
+    struct it_OPCODE_DATA_MOV mov;
 };
 
 #endif /* OPCODES_H */

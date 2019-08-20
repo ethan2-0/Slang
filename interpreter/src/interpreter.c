@@ -80,26 +80,24 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
         #endif
         switch(iptr->type) {
         case OPCODE_PARAM:
-            params[((struct it_OPCODE_DATA_PARAM*) iptr->payload)->target] = registers[((struct it_OPCODE_DATA_PARAM*) iptr->payload)->source];
+            params[iptr->data.param.target] = registers[iptr->data.param.source];
             iptr++;
             continue;
         case OPCODE_CALL:
-        case OPCODE_CLASSCALLSPECIAL:
-            ; // Labels can't be immediately followed by declarations, because
-              // C is a barbaric language
+        case OPCODE_CLASSCALLSPECIAL: {
             // TODO: Especially after the introduction of CLASSCALLSPECIAL,
             // this desperately needs optimization.
             struct it_METHOD* callee;
             if(iptr->type == OPCODE_CALL) {
-                callee = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->callee;
+                callee = iptr->data.call.callee;
             } else {
-                callee = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->method;
+                callee = iptr->data.classcallspecial.method;
             }
             if(!callee->has_had_references_reified) {
                 ts_reify_generic_references(callee);
             }
             if(iptr->type == OPCODE_CLASSCALLSPECIAL) {
-                if(registers[((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->callee_register].clazz_data == NULL) {
+                if(registers[iptr->data.classcallspecial.callee_register].clazz_data == NULL) {
                     it_traceback(stackptr);
                     fatal("Attempt to do a non-virtual class call on null");
                 }
@@ -109,7 +107,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 printf("Calling replaced method %s\n", callee->name);
                 #endif
                 stackptr->iptr = iptr;
-                uint32_t returnreg = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+                uint32_t returnreg = iptr->data.call.returnval;
                 registers[returnreg] = callee->replacement_ptr(prog, stackptr, params);
                 iptr++;
                 continue;
@@ -131,9 +129,9 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             #endif
 
             if(iptr->type == OPCODE_CLASSCALLSPECIAL) {
-                oldstack->returnreg = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) iptr->payload)->destination_register;
+                oldstack->returnreg = iptr->data.classcallspecial.destination_register;
             } else {
-                oldstack->returnreg = ((struct it_OPCODE_DATA_CALL*) iptr->payload)->returnval;
+                oldstack->returnreg = iptr->data.call.returnval;
             }
 
             #if DEBUG
@@ -149,15 +147,15 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             oldstack->iptr = iptr;
             iptr = instruction_start;
             if(oldstack->iptr->type == OPCODE_CLASSCALLSPECIAL) {
-                uint32_t reg = ((struct it_OPCODE_DATA_CLASSCALLSPECIAL*) oldstack->iptr->payload)->callee_register;
+                uint32_t reg = iptr->data.classcallspecial.callee_register;
                 registers[0] = oldstack->registers[reg];
             }
             for(uint32_t i = 0; i < callee->nargs - (oldstack->iptr->type == OPCODE_CLASSCALLSPECIAL ? 1 : 0); i++) {
                 registers[i + (oldstack->iptr->type == OPCODE_CALL ? 0 : 1)] = params[i];
             }
             continue;
-        case OPCODE_CLASSCALL:
-            ;
+        }
+        case OPCODE_CLASSCALL: {
             struct it_STACKFRAME* classcall_oldstack = stackptr;
             stackptr++;
             if(stackptr >= stackend) {
@@ -166,12 +164,12 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 fatal("Stack overflow");
             }
 
-            struct it_OPCODE_DATA_CLASSCALL* classcalldata = ((struct it_OPCODE_DATA_CLASSCALL*) iptr->payload);
+            struct it_OPCODE_DATA_CLASSCALL* data = &iptr->data.classcall;
 
-            uint32_t classcall_callee_index = classcalldata->callee_index;
+            uint32_t classcall_callee_index = data->callee_index;
 
-            classcall_oldstack->returnreg = classcalldata->returnreg;
-            union itval thiz = registers[classcalldata->targetreg];
+            classcall_oldstack->returnreg = data->returnreg;
+            union itval thiz = registers[data->targetreg];
             if(thiz.clazz_data == NULL) {
                 stackptr--;
                 it_traceback(stackptr);
@@ -198,47 +196,45 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 registers[i + 1] = params[i];
             }
             continue;
-        case OPCODE_INTERFACECALL:
-            {
-                struct it_STACKFRAME* oldstack = stackptr;
-                stackptr++;
-                if(stackptr >= stackend) {
-                    stackptr--;
-                    it_traceback(stackptr);
-                    fatal("Stack overflow");
-                }
-                struct it_OPCODE_DATA_INTERFACECALL* data = ((struct it_OPCODE_DATA_INTERFACECALL*) iptr->payload);
-                oldstack->returnreg = data->destination_register;
-                union itval thiz = registers[data->callee_register];
-                if(thiz.clazz_data == NULL) {
-                    stackptr--;
-                    it_traceback(stackptr);
-                    fatal("Attempt to call method of null interface reference");
-                }
-                struct it_INTERFACE_IMPLEMENTATION* implementations = thiz.clazz_data->method_table->interface_implementations;
-                struct it_INTERFACE_IMPLEMENTATION* implementation;
-                for(int i = 0; i < thiz.clazz_data->method_table->ninterface_implementations; i++) {
-                    if(implementations[i].interface_id == data->interface_id) {
-                        implementation = &implementations[i];
-                        break;
-                    }
-                }
-                struct it_METHOD* callee = implementation->method_table->methods[data->method_index];
-                load_method(stackptr, callee);
-                registers = stackptr->registers;
-                instruction_start = stackptr->iptr;
-                oldstack->iptr = iptr;
-                iptr = instruction_start;
-                registers[0] = thiz;
-                for(uint32_t i = 0; i < callee->nargs - 1; i++) {
-                    registers[i + 1] = params[i];
+        }
+        case OPCODE_INTERFACECALL: {
+            struct it_STACKFRAME* oldstack = stackptr;
+            stackptr++;
+            if(stackptr >= stackend) {
+                stackptr--;
+                it_traceback(stackptr);
+                fatal("Stack overflow");
+            }
+            struct it_OPCODE_DATA_INTERFACECALL* data = &iptr->data.interfacecall;
+            oldstack->returnreg = data->destination_register;
+            union itval thiz = registers[data->callee_register];
+            if(thiz.clazz_data == NULL) {
+                stackptr--;
+                it_traceback(stackptr);
+                fatal("Attempt to call method of null interface reference");
+            }
+            struct it_INTERFACE_IMPLEMENTATION* implementations = thiz.clazz_data->method_table->interface_implementations;
+            struct it_INTERFACE_IMPLEMENTATION* implementation;
+            for(int i = 0; i < thiz.clazz_data->method_table->ninterface_implementations; i++) {
+                if(implementations[i].interface_id == data->interface_id) {
+                    implementation = &implementations[i];
+                    break;
                 }
             }
+            struct it_METHOD* callee = implementation->method_table->methods[data->method_index];
+            load_method(stackptr, callee);
+            registers = stackptr->registers;
+            instruction_start = stackptr->iptr;
+            oldstack->iptr = iptr;
+            iptr = instruction_start;
+            registers[0] = thiz;
+            for(uint32_t i = 0; i < callee->nargs - 1; i++) {
+                registers[i + 1] = params[i];
+            }
             continue;
-        case OPCODE_RETURN:
-            ; // Labels can't be immediately followed by declarations, because
-              // C is a barbaric language
-            union itval result = registers[((struct it_OPCODE_DATA_RETURN*) iptr->payload)->target];
+        }
+        case OPCODE_RETURN: {
+            union itval result = registers[iptr->data.return_.target];
             if(stackptr <= stack) {
                 if(options->print_return_value) {
                     printf("Returned 0x%08lx\n", result.number);
@@ -258,190 +254,207 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             printf("Returned to %s\n", stackptr->method->name);
             #endif
             continue;
-        case OPCODE_ZERO:
-            registers[((struct it_OPCODE_DATA_ZERO*) iptr->payload)->target].number = 0x00000000;
+        }
+        case OPCODE_ZERO: {
+            registers[iptr->data.zero.target].number = 0;
             iptr++;
             continue;
-        case OPCODE_ADD:
-            registers[((struct it_OPCODE_DATA_ADD*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_ADD*) iptr->payload)->source1].number + registers[((struct it_OPCODE_DATA_ADD*) iptr->payload)->source2].number;
+        }
+        case OPCODE_ADD: {
+            registers[iptr->data.add.target].number = registers[iptr->data.add.source1].number + registers[iptr->data.add.source2].number;
             iptr++;
             continue;
-        case OPCODE_TWOCOMP:
-            registers[((struct it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number = -registers[((struct it_OPCODE_DATA_TWOCOMP*) iptr->payload)->target].number;
+        }
+        case OPCODE_TWOCOMP: {
+            registers[iptr->data.twocomp.target].number = -registers[iptr->data.twocomp.target].number;
             iptr++;
             continue;
-        case OPCODE_MULT:
-            registers[((struct it_OPCODE_DATA_MULT*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_MULT*) iptr->payload)->source1].number * registers[((struct it_OPCODE_DATA_MULT*) iptr->payload)->source2].number;
+        }
+        case OPCODE_MULT: {
+            registers[iptr->data.mult.target].number = registers[iptr->data.mult.source1].number * registers[iptr->data.mult.source2].number;
             iptr++;
             continue;
-        case OPCODE_MODULO:
-            registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number % registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
+        }
+        case OPCODE_MODULO: {
+            registers[iptr->data.modulo.target].number = registers[iptr->data.modulo.source1].number % registers[iptr->data.modulo.source2].number;
             iptr++;
             continue;
-        case OPCODE_DIV:
-            registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source1].number / registers[((struct it_OPCODE_DATA_MODULO*) iptr->payload)->source2].number;
+        }
+        case OPCODE_DIV: {
+            registers[iptr->data.div.target].number = registers[iptr->data.div.source1].number / registers[iptr->data.div.source2].number;
             iptr++;
             continue;
-        case OPCODE_EQUALS:
-            // TODO: Make this work on systems where sizeof(union itval.number) != sizeof(union itval.clazz_data), etc
-            //       This probably involves a specialized EQUALS opcode, either in the compiler or
-            //       just specializing in bytecode.c.
-            if(registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->source1].number == registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->source2].number) {
-                registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x1;
+        }
+        case OPCODE_EQUALS: {
+            if(registers[iptr->data.equals.source1].number == registers[iptr->data.equals.source2].number) {
+                registers[iptr->data.equals.target].number = 1;
             } else {
-                registers[((struct it_OPCODE_DATA_EQUALS*) iptr->payload)->target].number = 0x0;
+                registers[iptr->data.equals.target].number = 0;
             }
             iptr++;
             continue;
-        case OPCODE_INVERT:
-            if(registers[((struct it_OPCODE_DATA_INVERT*) iptr->payload)->target].number == 0x0) {
-                registers[((struct it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x1;
+        }
+        case OPCODE_INVERT: {
+            if(registers[iptr->data.invert.target].number == 0) {
+                registers[iptr->data.invert.target].number = 1;
             } else {
-                registers[((struct it_OPCODE_DATA_INVERT*) iptr->payload)->target].number = 0x0;
+                registers[iptr->data.invert.target].number = 0;
             }
             iptr++;
             continue;
-        case OPCODE_LTEQ:
-            if(registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->source1].number <= registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->source2].number) {
-                registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x1;
+        }
+        case OPCODE_LTEQ: {
+            if(registers[iptr->data.lteq.source1].number <= registers[iptr->data.lteq.source2].number) {
+                registers[iptr->data.lteq.target].number = 1;
             } else {
-                registers[((struct it_OPCODE_DATA_LTEQ*) iptr->payload)->target].number = 0x0;
+                registers[iptr->data.lteq.target].number = 0;
             }
             iptr++;
             continue;
-        case OPCODE_GT:
-            if(registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->source1].number > registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->source2].number) {
-                registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x1;
+        }
+        case OPCODE_GT: {
+            if(registers[iptr->data.gt.source1].number > registers[iptr->data.gt.source2].number) {
+                registers[iptr->data.gt.target].number = 1;
             } else {
-                registers[((struct it_OPCODE_DATA_GT*) iptr->payload)->target].number = 0x0;
+                registers[iptr->data.gt.target].number = 0;
             }
             iptr++;
             continue;
-        case OPCODE_GOTO:
+        }
+        case OPCODE_GOTO: {
             #if DEBUG
-            printf("Jumping to %d\n", ((struct it_OPCODE_DATA_GOTO*) iptr->payload)->target);
+            printf("Jumping to %d\n", iptr->data.goto_.target);
             #endif
-            iptr = instruction_start + ((struct it_OPCODE_DATA_GOTO*) iptr->payload)->target;
+            iptr = instruction_start + iptr->data.goto_.target;
             continue;
-        case OPCODE_JF:
+        }
+        case OPCODE_JF: {
             // JF stands for Jump if False.
-            if(registers[((struct it_OPCODE_DATA_JF*) iptr->payload)->predicate].number == 0x00) {
+            if(registers[iptr->data.jf.predicate].number == 0) {
                 #if DEBUG
-                printf("Jumping to %d\n", ((struct it_OPCODE_DATA_JF*) iptr->payload)->target);
+                printf("Jumping to %d\n", iptr->data.jf.target);
                 #endif
-                iptr = instruction_start + ((struct it_OPCODE_DATA_JF*) iptr->payload)->target;
+                iptr = instruction_start + iptr->data.jf.target;
             } else {
                 iptr++;
             }
             continue;
-        case OPCODE_GTEQ:
-            if(registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->source1].number >= registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->source2].number) {
-                registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x1;
+        }
+        case OPCODE_GTEQ: {
+            if(registers[iptr->data.gteq.source1].number >= registers[iptr->data.gteq.source2].number) {
+                registers[iptr->data.gteq.target].number = 1;
             } else {
-                registers[((struct it_OPCODE_DATA_GTEQ*) iptr->payload)->target].number = 0x0;
+                registers[iptr->data.gteq.target].number = 0;
             }
             iptr++;
             continue;
-        case OPCODE_XOR:
-            registers[((struct it_OPCODE_DATA_XOR*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_XOR*) iptr->payload)->source1].number ^ registers[((struct it_OPCODE_DATA_XOR*) iptr->payload)->source2].number;
+        }
+        case OPCODE_XOR: {
+            registers[iptr->data.xor.target].number = registers[iptr->data.xor.source1].number ^ registers[iptr->data.xor.source2].number;
             iptr++;
             continue;
-        case OPCODE_AND:
-            registers[((struct it_OPCODE_DATA_AND*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_AND*) iptr->payload)->source1].number & registers[((struct it_OPCODE_DATA_AND*) iptr->payload)->source2].number;
+        }
+        case OPCODE_AND: {
+            registers[iptr->data.and.target].number = registers[iptr->data.and.source1].number & registers[iptr->data.and.source2].number;
             iptr++;
             continue;
-        case OPCODE_OR:
-            registers[((struct it_OPCODE_DATA_OR*) iptr->payload)->target].number = registers[((struct it_OPCODE_DATA_OR*) iptr->payload)->source1].number | registers[((struct it_OPCODE_DATA_OR*) iptr->payload)->source2].number;
+        }
+        case OPCODE_OR: {
+            registers[iptr->data.or.target].number = registers[iptr->data.or.source1].number | registers[iptr->data.or.source2].number;
             iptr++;
             continue;
-        case OPCODE_MOV:
-            registers[((struct it_OPCODE_DATA_MOV*) iptr->payload)->target] = registers[((struct it_OPCODE_DATA_MOV*) iptr->payload)->source];
+        }
+        case OPCODE_MOV: {
+            registers[iptr->data.mov.target] = registers[iptr->data.mov.source];
             iptr++;
             continue;
-        case OPCODE_NOP:
+        }
+        case OPCODE_NOP: {
             // Do nothing
             iptr++;
             continue;
-        case OPCODE_LOAD:
-            registers[((struct it_OPCODE_DATA_LOAD*) iptr->payload)->target].number = ((struct it_OPCODE_DATA_LOAD*) iptr->payload)->data;
+        }
+        case OPCODE_LOAD: {
+            registers[iptr->data.load.target].number = iptr->data.load.data;
             iptr++;
             continue;
-        case OPCODE_LT:
-            if(registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->source1].number < registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->source2].number) {
-                registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x1;
+        }
+        case OPCODE_LT: {
+            if(registers[iptr->data.lt.source1].number < registers[iptr->data.lt.source2].number) {
+                registers[iptr->data.lt.target].number = 0x1;
             } else {
-                registers[((struct it_OPCODE_DATA_LT*) iptr->payload)->target].number = 0x0;
+                registers[iptr->data.lt.target].number = 0x0;
             }
             iptr++;
             continue;
-        case OPCODE_NEW:
-            ;
+        }
+        case OPCODE_NEW: {
             if(gc_needs_collection) {
                 gc_collect(prog, stack, stackptr, options);
             }
-            struct it_OPCODE_DATA_NEW* opcode_new_data = (struct it_OPCODE_DATA_NEW*) iptr->payload;
-            size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(union itval) * opcode_new_data->clazz->nfields;
+            struct it_OPCODE_DATA_NEW* opcode_new_data = &iptr->data.new;
+            size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(union itval) * opcode_new_data->clazz->data.clazz.nfields;
             registers[opcode_new_data->dest].clazz_data = mm_malloc(new_allocation_size);
             struct gc_OBJECT_REGISTRY* new_register = gc_register_object(registers[opcode_new_data->dest], new_allocation_size, ts_CATEGORY_CLAZZ);
             registers[opcode_new_data->dest].clazz_data->gc_registry_entry = new_register;
-            memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(union itval) * opcode_new_data->clazz->nfields);
-            registers[opcode_new_data->dest].clazz_data->method_table = opcode_new_data->clazz->method_table;
+            memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(union itval) * opcode_new_data->clazz->data.clazz.nfields);
+            registers[opcode_new_data->dest].clazz_data->method_table = opcode_new_data->clazz->data.clazz.method_table;
             iptr++;
             continue;
-        case OPCODE_ACCESS:
-            ;
-            struct it_OPCODE_DATA_ACCESS* opcode_access_data = (struct it_OPCODE_DATA_ACCESS*) iptr->payload;
-            if(registers[opcode_access_data->clazzreg].clazz_data == NULL) {
+        }
+        case OPCODE_ACCESS: {
+            struct it_OPCODE_DATA_ACCESS* data = &iptr->data.access;
+            if(registers[data->clazzreg].clazz_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Null pointer on access");
             }
-            struct it_CLAZZ_DATA* clazz_data = registers[opcode_access_data->clazzreg].clazz_data;
-            registers[opcode_access_data->destination] = clazz_data->itval[opcode_access_data->property_index];
+            struct it_CLAZZ_DATA* clazz_data = registers[data->clazzreg].clazz_data;
+            registers[data->destination] = clazz_data->itval[data->property_index];
             iptr++;
             continue;
-        case OPCODE_ASSIGN:
-            ;
-            struct it_OPCODE_DATA_ASSIGN* opcode_assign_data = (struct it_OPCODE_DATA_ASSIGN*) iptr->payload;
-            if(registers[opcode_assign_data->clazzreg].clazz_data == NULL) {
+        }
+        case OPCODE_ASSIGN: {
+            struct it_OPCODE_DATA_ASSIGN* data = &iptr->data.assign;
+            if(registers[data->clazzreg].clazz_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Null pointer on access");
             }
-            registers[opcode_assign_data->clazzreg].clazz_data->itval[opcode_assign_data->property_index] = registers[opcode_assign_data->source];
+            registers[data->clazzreg].clazz_data->itval[data->property_index] = registers[data->source];
             iptr++;
             continue;
-        case OPCODE_ARRALLOC:
-            ;
+        }
+        case OPCODE_ARRALLOC: {
             if(gc_needs_collection) {
                 gc_collect(prog, stack, stackptr, options);
             }
-            struct it_OPCODE_DATA_ARRALLOC* opcode_arralloc_data = (struct it_OPCODE_DATA_ARRALLOC*) iptr->payload;
-            uint64_t length = registers[opcode_arralloc_data->lengthreg].number;
+            struct it_OPCODE_DATA_ARRALLOC* data = &iptr->data.arralloc;
+            uint64_t length = registers[data->lengthreg].number;
             size_t arralloc_allocation_size = sizeof(struct it_ARRAY_DATA) + sizeof(union itval) * (length <= 0 ? 1 : length - 1);
-            registers[opcode_arralloc_data->arrreg].array_data = (struct it_ARRAY_DATA*) mm_malloc(arralloc_allocation_size);
-            registers[opcode_arralloc_data->arrreg].array_data->length = length;
-            memset(&registers[opcode_arralloc_data->arrreg].array_data->elements, 0, length * sizeof(union itval));
-            registers[opcode_arralloc_data->arrreg].array_data->type = (struct ts_TYPE_ARRAY*) stackptr->method->register_types[opcode_arralloc_data->arrreg];
-            struct gc_OBJECT_REGISTRY* arralloc_registry = gc_register_object(registers[opcode_arralloc_data->arrreg], arralloc_allocation_size, ts_CATEGORY_ARRAY);
-            registers[opcode_arralloc_data->arrreg].array_data->gc_registry_entry = arralloc_registry;
+            registers[data->arrreg].array_data = (struct it_ARRAY_DATA*) mm_malloc(arralloc_allocation_size);
+            registers[data->arrreg].array_data->length = length;
+            memset(&registers[data->arrreg].array_data->elements, 0, length * sizeof(union itval));
+            registers[data->arrreg].array_data->type = stackptr->method->register_types[data->arrreg];
+            struct gc_OBJECT_REGISTRY* arralloc_registry = gc_register_object(registers[data->arrreg], arralloc_allocation_size, ts_CATEGORY_ARRAY);
+            registers[data->arrreg].array_data->gc_registry_entry = arralloc_registry;
             iptr++;
             continue;
-        case OPCODE_ARRACCESS:
-            ;
-            struct it_OPCODE_DATA_ARRACCESS* opcode_arraccess_data = (struct it_OPCODE_DATA_ARRACCESS*) iptr->payload;
-            if(registers[opcode_arraccess_data->arrreg].array_data == NULL) {
+        }
+        case OPCODE_ARRACCESS: {
+            struct it_OPCODE_DATA_ARRACCESS* data = &iptr->data.arraccess;
+            if(registers[data->arrreg].array_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Attempt to access null array");
             }
-            if(registers[opcode_arraccess_data->indexreg].number >= registers[opcode_arraccess_data->arrreg].array_data->length) {
+            if(registers[data->indexreg].number >= registers[data->arrreg].array_data->length) {
                 it_traceback(stackptr);
                 fatal("Array index out of bounds");
             }
-            registers[opcode_arraccess_data->elementreg] = registers[opcode_arraccess_data->arrreg].array_data->elements[registers[opcode_arraccess_data->indexreg].number];
+            registers[data->elementreg] = registers[data->arrreg].array_data->elements[registers[data->indexreg].number];
             iptr++;
             continue;
-        case OPCODE_ARRASSIGN:
-            ;
-            struct it_OPCODE_DATA_ARRASSIGN* opcode_arrassign_data = (struct it_OPCODE_DATA_ARRASSIGN*) iptr->payload;
+        }
+        case OPCODE_ARRASSIGN: {
+            struct it_OPCODE_DATA_ARRASSIGN* opcode_arrassign_data = &iptr->data.arrassign;
             if(registers[opcode_arrassign_data->arrreg].array_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Attempt to assign to null array");
@@ -453,9 +466,9 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             registers[opcode_arrassign_data->arrreg].array_data->elements[registers[opcode_arrassign_data->indexreg].number] = registers[opcode_arrassign_data->elementreg];
             iptr++;
             continue;
-        case OPCODE_ARRLEN:
-            ;
-            struct it_OPCODE_DATA_ARRLEN* opcode_arrlen_data = (struct it_OPCODE_DATA_ARRLEN*) iptr->payload;
+        }
+        case OPCODE_ARRLEN: {
+            struct it_OPCODE_DATA_ARRLEN* opcode_arrlen_data = &iptr->data.arrlen;
             if(registers[opcode_arrlen_data->arrreg].array_data == NULL) {
                 it_traceback(stackptr);
                 fatal("Attempt to find length of null");
@@ -463,68 +476,65 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             registers[opcode_arrlen_data->resultreg].number = registers[opcode_arrlen_data->arrreg].array_data->length;
             iptr++;
             continue;
-        case OPCODE_CAST:
-            {
-                struct it_OPCODE_DATA_CAST* data = (struct it_OPCODE_DATA_CAST*) iptr->payload;
+        }
+        case OPCODE_CAST: {
+            struct it_OPCODE_DATA_CAST* data = &iptr->data.cast;
+            union itval source = registers[data->source];
+            struct ts_TYPE* target_type = stackptr->method->register_types[data->target];
+            struct ts_TYPE* source_register_type = stackptr->method->register_types[data->source];
+            if(source_register_type->category == ts_CATEGORY_PRIMITIVE) {
+                if(target_type->category != ts_CATEGORY_PRIMITIVE) {
+                    fatal("Incompatible cast");
+                }
+            } else if(source_register_type->category == ts_CATEGORY_ARRAY) {
+                if(!ts_is_compatible(source.array_data->type, target_type)) {
+                    fatal("Incompatible cast");
+                }
+            } else {
+                // We know data->source_register_type->category == ts_CATEGORY_CLAZZ or ts_CATEGORY_INTERFACE
+                if(!ts_is_compatible(source.clazz_data->method_table->type, target_type)) {
+                    it_traceback(stackptr);
+                    fatal("Incompatible cast");
+                }
+            }
+            registers[data->target] = source;
+            iptr++;
+            continue;
+        }
+        case OPCODE_INSTANCEOF: {
+            struct it_OPCODE_DATA_INSTANCEOF* data = &iptr->data.instanceof;
+            struct ts_TYPE* source_register_type = stackptr->method->register_types[data->source];
+            struct ts_TYPE* predicate_type = stackptr->method->typereferences[data->predicate_type_index];
+            bool result;
+            if(source_register_type->category == ts_CATEGORY_PRIMITIVE) {
+                result = ts_instanceof(source_register_type, predicate_type);
+            } else if(source_register_type->category == ts_CATEGORY_TYPE_PARAMETER) {
+                fatal("Instanceof parameter wasn't reified. This is an interpreter bug.");
+            } else if(source_register_type->category == ts_CATEGORY_CLAZZ) {
                 union itval source = registers[data->source];
-                union ts_TYPE* target_type = stackptr->method->register_types[data->target];
-                union ts_TYPE* source_register_type = stackptr->method->register_types[data->source];
-                if(source_register_type->barebones.category == ts_CATEGORY_PRIMITIVE) {
-                    if(target_type->barebones.category != ts_CATEGORY_PRIMITIVE) {
-                        fatal("Incompatible cast");
-                    }
-                } else if(source_register_type->barebones.category == ts_CATEGORY_ARRAY) {
-                    if(!ts_is_compatible((union ts_TYPE*) source.array_data->type, target_type)) {
-                        fatal("Incompatible cast");
-                    }
-                } else {
-                    // We know data->source_register_type->barebones.category == ts_CATEGORY_CLAZZ or ts_CATEGORY_INTERFACE
-                    if(!ts_is_compatible((union ts_TYPE*) &source.clazz_data->method_table->type->clazz, target_type)) {
-                        it_traceback(stackptr);
-                        fatal("Incompatible cast");
-                    }
-                }
-                registers[data->target] = source;
-                iptr++;
-                continue;
+                struct ts_TYPE* source_type = source.clazz_data->method_table->type;
+                result = ts_instanceof(source_type, predicate_type);
+            } else if(source_register_type->category == ts_CATEGORY_ARRAY) {
+                union itval source = registers[data->source];
+                struct ts_TYPE* source_type = source.array_data->type;
+                result = ts_instanceof(source_type, predicate_type);
             }
-        case OPCODE_INSTANCEOF:
-            {
-                struct it_OPCODE_DATA_INSTANCEOF* data = (struct it_OPCODE_DATA_INSTANCEOF*) iptr->payload;
-                union ts_TYPE* source_register_type = stackptr->method->register_types[data->source];
-                union ts_TYPE* predicate_type = stackptr->method->typereferences[data->predicate_type_index];
-                bool result;
-                if(source_register_type->barebones.category == ts_CATEGORY_PRIMITIVE) {
-                    result = ts_instanceof(source_register_type, predicate_type);
-                } else if(source_register_type->barebones.category == ts_CATEGORY_TYPE_PARAMETER) {
-                    fatal("Instanceof parameter wasn't reified. This is an interpreter bug.");
-                } else if(source_register_type->barebones.category == ts_CATEGORY_CLAZZ) {
-                    union itval source = registers[data->source];
-                    union ts_TYPE* source_type = (union ts_TYPE*) &source.clazz_data->method_table->type->clazz;
-                    result = ts_instanceof(source_type, predicate_type);
-                } else if(source_register_type->barebones.category == ts_CATEGORY_ARRAY) {
-                    union itval source = registers[data->source];
-                    union ts_TYPE* source_type = (union ts_TYPE*) source.array_data->type;
-                    result = ts_instanceof(source_type, predicate_type);
-                }
-                registers[data->destination] = (union itval) ((int64_t) result);
-                iptr++;
-                continue;
-            }
-        case OPCODE_STATICVARGET:
-            {
-                struct it_OPCODE_DATA_STATICVARGET* data = (struct it_OPCODE_DATA_STATICVARGET*) iptr->payload;
-                registers[data->destination] = prog->static_vars[data->source_var].value;
-                iptr++;
-                continue;
-            }
-        case OPCODE_STATICVARSET:
-            {
-                struct it_OPCODE_DATA_STATICVARSET* data = (struct it_OPCODE_DATA_STATICVARSET*) iptr->payload;
-                prog->static_vars[data->destination_var].value = registers[data->source];
-                iptr++;
-                continue;
-            }
+            registers[data->destination] = (union itval) ((int64_t) result);
+            iptr++;
+            continue;
+        }
+        case OPCODE_STATICVARGET: {
+            struct it_OPCODE_DATA_STATICVARGET* data = &iptr->data.staticvarget;
+            registers[data->destination] = prog->static_vars[data->source_var].value;
+            iptr++;
+            continue;
+        }
+        case OPCODE_STATICVARSET: {
+            struct it_OPCODE_DATA_STATICVARSET* data = &iptr->data.staticvarset;
+            prog->static_vars[data->destination_var].value = registers[data->source];
+            iptr++;
+            continue;
+        }
         default:
             it_traceback(stackptr);
             fatal("Unexpected opcode");
