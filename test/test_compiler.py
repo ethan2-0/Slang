@@ -474,3 +474,8 @@ class TestGenericMethods:
     def test_generic_recursion(self):
         path = util.assert_compile_succeeds("resources/generic_methods/generic_recursion.slg")
         util.interpret(path)
+
+    def test_reification_reuse(self):
+        path = util.assert_compile_succeeds("resources/generic_methods/reification_reuse.slg")
+        # TODO: Figure out some way of calibrating this or do it based on memory use or something
+        util.interpret(path, timeout=0.5)

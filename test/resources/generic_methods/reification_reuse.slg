@@ -1,0 +1,12 @@
+using stdlib;
+
+fn causeEponentialWork<T>(t: T, n: int): T {
+    if(n <= 0) {
+        return t;
+    }
+    let a = causeEponentialWork<[T]>([t], n - 1);
+    return causeEponentialWork<[T]>([t], n - 1)[0];
+}
+entrypoint fn main() {
+    causeEponentialWork<bool>(true, 18);
+}

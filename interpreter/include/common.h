@@ -6,9 +6,11 @@
 #define COMMON_H
 
 #define DEBUG 0
+#define ASSERTIONS 1
 
 void fatal(char* description);
 void fatal_with_errcode(char* description, int errcode);
+void assert(bool b);
 
 struct fr_STATE {
     FILE* fp;

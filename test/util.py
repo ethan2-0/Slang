@@ -45,8 +45,8 @@ def assert_compile_fails(filename, message="", include=[]):
         assert False
     return outfile
 
-def interpret(*filenames, expect_fail=False, stdin=None):
-    result = subprocess.run(["../interpreter/builddir/interpreter"] + list(filenames), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, input=stdin)
+def interpret(*filenames, expect_fail=False, stdin=None, timeout=None):
+    result = subprocess.run(["../interpreter/builddir/interpreter"] + list(filenames), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, input=stdin, timeout=timeout)
     success = (result.returncode == 0) ^ expect_fail
     if not success:
         print("Stdout:")

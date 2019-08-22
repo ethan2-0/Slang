@@ -146,6 +146,8 @@ struct it_METHOD {
     // This is a pointer to an array of pointers
     struct it_METHOD** reifications;
     int reificationsc;
+    int reifications_size;
+    struct ts_TYPE** typeargs;
     // This is set to true in ts_reify_generic_references(..)
     bool has_had_references_reified;
 };

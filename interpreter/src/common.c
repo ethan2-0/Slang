@@ -12,6 +12,13 @@ void fatal_with_errcode(char* description, int errcode) {
 void fatal(char* description) {
     fatal_with_errcode(description, EXIT_FAILURE);
 }
+void assert(bool b) {
+    #if ASSERTIONS
+    if(!b) {
+        fatal("Assertion failed");
+    }
+    #endif
+}
 
 struct fr_STATE* fr_new(FILE* fp) {
     struct fr_STATE* state = malloc(sizeof(struct fr_STATE));

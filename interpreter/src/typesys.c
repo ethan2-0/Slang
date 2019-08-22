@@ -256,6 +256,33 @@ struct ts_TYPE* ts_reify_type(struct ts_TYPE* type, struct ts_GENERIC_TYPE_CONTE
     return NULL; // Unreachable
 }
 struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, int typeargsc, struct ts_TYPE** typeargs) {
+    if(generic_method->reifications != NULL) {
+        for(int i = 0; i < generic_method->reificationsc; i++) {
+            // We know reification->typeargs has length typeargsc
+            struct it_METHOD* reification = generic_method->reifications[i];
+            assert(reification != NULL);
+            assert(reification->typeargs != NULL);
+            bool compatible = true;
+            for(int j = 0; j < typeargsc; j++) {
+                if(reification->typeargs[j] != typeargs[j]) {
+                    compatible = false;
+                    break;
+                }
+            }
+            if(compatible) {
+                return reification;
+            }
+        }
+    }
+
+    if(generic_method->reifications_size < generic_method->reificationsc + 1) {
+        generic_method->reifications_size *= 2;
+        if(generic_method->reifications_size < 8) {
+            generic_method->reifications_size = 8;
+        }
+        generic_method->reifications = realloc(generic_method->reifications, sizeof(struct it_METHOD*) * generic_method->reifications_size);
+    }
+
     struct it_METHOD* ret = mm_malloc(sizeof(struct it_METHOD));
     memcpy(ret, generic_method, sizeof(struct it_METHOD));
 
@@ -270,6 +297,9 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, in
     ret->type_parameters = mm_malloc(sizeof(struct ts_GENERIC_TYPE_CONTEXT));
     ret->type_parameters->parent = NULL;
     ret->type_parameters->count = 0;
+
+    ret->typeargs = mm_malloc(sizeof(struct ts_TYPE*) * typeargsc);
+    memcpy(ret->typeargs, typeargs, sizeof(struct ts_TYPE*) * typeargsc);
 
     // TODO: Switch to using indirect method references like we do with type
     // references (so we can use the same opcodes for every instance of a
@@ -291,6 +321,8 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, in
     // Reify return type
     // (parameters are reified via register types)
     ret->returntype = ts_reify_type(ret->returntype, generic_method->type_parameters, typeargsc, typeargs);
+
+    generic_method->reifications[generic_method->reificationsc++] = ret;
 
     return ret;
 }

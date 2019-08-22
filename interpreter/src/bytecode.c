@@ -584,7 +584,9 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             method->typereferences = NULL;
             method->reificationsc = 0;
             method->reifications = NULL;
+            method->reifications_size = 0;
             method->has_had_references_reified = false;
+            method->typeargs = NULL;
             if(strlen(containing_clazz_name) > 0) {
                 struct ts_TYPE* containing_type = ts_get_type(containing_clazz_name, NULL);
                 if(containing_type->category == ts_CATEGORY_CLAZZ) {
