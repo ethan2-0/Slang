@@ -66,7 +66,24 @@ void ts_register_type(struct ts_TYPE* type, char* name) {
     end->next->type = type;
     end->next->next = NULL;
 }
-struct ts_TYPE* ts_get_type_inner(char* name) {
+bool ts_is_subcontext(struct ts_GENERIC_TYPE_CONTEXT* child, struct ts_GENERIC_TYPE_CONTEXT* parent) {
+    if(child == parent) {
+        return true;
+    }
+    if(child->parent != NULL && ts_is_subcontext(child->parent, parent)) {
+        return true;
+    }
+    return false;
+}
+bool ts_is_from_context(struct ts_TYPE* type, struct ts_GENERIC_TYPE_CONTEXT* context) {
+    if(type->category == ts_CATEGORY_TYPE_PARAMETER) {
+        return ts_is_subcontext(context, type->data.type_parameter.context);
+    } else if(type->category == ts_CATEGORY_ARRAY) {
+        return ts_is_from_context(type->data.array.parent_type, context);
+    }
+    return true;
+}
+struct ts_TYPE* ts_get_type_inner(char* name, struct ts_GENERIC_TYPE_CONTEXT* context) {
     #if DEBUG
     printf("Searching for type '%s'\n", name);
     #endif
@@ -76,7 +93,9 @@ struct ts_TYPE* ts_get_type_inner(char* name) {
     struct ts_TYPE_REGISTRY* registry = global_registry;
     while(registry != NULL) {
         if(strcmp(registry->name, name) == 0) {
-            return registry->type;
+            if(ts_is_from_context(registry->type, context)) {
+                return registry->type;
+            }
         }
         registry = registry->next;
     }
@@ -137,7 +156,7 @@ struct ts_TYPE* ts_get_type_optional(char* name, struct ts_GENERIC_TYPE_CONTEXT*
         typ = ts_search_generic_type_context_optional(name, context);
     }
     if(typ == NULL) {
-        typ = ts_get_type_inner(name);
+        typ = ts_get_type_inner(name, context);
     }
     if(typ == NULL) {
         if(name[0] == '[') {
@@ -223,13 +242,14 @@ struct ts_GENERIC_TYPE_CONTEXT* ts_create_generic_type_context(uint32_t num_argu
     context->parent = NULL;
     return context;
 }
-void ts_init_type_parameter(struct ts_TYPE* parameter, char* name) {
+void ts_init_type_parameter(struct ts_TYPE* parameter, char* name, struct ts_GENERIC_TYPE_CONTEXT* context) {
     parameter->category = ts_CATEGORY_TYPE_PARAMETER;
     parameter->heirarchy = mm_malloc(sizeof(struct ts_TYPE*));
     parameter->heirarchy[0] = parameter;
     parameter->heirarchy_len = 1;
     parameter->id = ts_allocate_type_id();
     parameter->name = name;
+    parameter->data.type_parameter.context = context;
 }
 bool ts_method_is_generic(struct it_METHOD* method) {
     return method->type_parameters->count > 0;
@@ -277,8 +297,8 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, in
 
     if(generic_method->reifications_size < generic_method->reificationsc + 1) {
         generic_method->reifications_size *= 2;
-        if(generic_method->reifications_size < 8) {
-            generic_method->reifications_size = 8;
+        if(generic_method->reifications_size < 1) {
+            generic_method->reifications_size = 1;
         }
         generic_method->reifications = realloc(generic_method->reifications, sizeof(struct it_METHOD*) * generic_method->reifications_size);
     }
@@ -312,11 +332,11 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, in
 
     // Reify register types
     for(int i = 0; i < ret->registerc; i++) {
-        ret->register_types[i] = ts_reify_type(ret->register_types[i], generic_method->type_parameters, typeargsc, typeargs);
+        ret->register_types[i] = ts_reify_type(generic_method->register_types[i], generic_method->type_parameters, typeargsc, typeargs);
     }
     // Reify type references
     for(int i = 0; i < ret->typereferencec; i++) {
-        ret->typereferences[i] = ts_reify_type(ret->typereferences[i], generic_method->type_parameters, typeargsc, typeargs);
+        ret->typereferences[i] = ts_reify_type(generic_method->typereferences[i], generic_method->type_parameters, typeargsc, typeargs);
     }
     // Reify return type
     // (parameters are reified via register types)

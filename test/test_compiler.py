@@ -335,6 +335,14 @@ class TestStdlib:
         path = util.assert_compile_succeeds("resources/stdlib/string_advanced.slg")
         util.interpret(path)
 
+    def test_numerical(self):
+        path = util.assert_compile_succeeds("resources/stdlib/numerical.slg")
+        util.interpret(path)
+
+    def test_array_methods(self):
+        path = util.assert_compile_succeeds("resources/stdlib/array_methods.slg")
+        util.interpret(path)
+
 class TestReplacedMethods:
     def test_print(self):
         path = util.assert_compile_succeeds("resources/replaced_methods/print.slg")

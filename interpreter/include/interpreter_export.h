@@ -41,6 +41,10 @@ struct ts_TYPE_INTERFACE {
     // Note that this is only used to keep references to the methods, not for lookup at runtime
     struct it_METHOD_TABLE* methods;
 };
+struct ts_TYPE_PARAMETER {
+    struct ts_GENERIC_TYPE_CONTEXT* context;
+};
+struct ts_GENERIC_TYPE_CONTEXT;
 struct ts_TYPE {
     enum ts_CATEGORY category;
     uint32_t id;
@@ -52,6 +56,7 @@ struct ts_TYPE {
         struct ts_TYPE_CLAZZ clazz;
         struct ts_TYPE_ARRAY array;
         struct ts_TYPE_INTERFACE interface;
+        struct ts_TYPE_PARAMETER type_parameter;
     } data;
 };
 struct ts_GENERIC_TYPE_CONTEXT {
@@ -59,9 +64,6 @@ struct ts_GENERIC_TYPE_CONTEXT {
     uint32_t count;
     struct ts_TYPE arguments[];
 };
-
-enum ts_CATEGORY ts_CATEGORY;
-
 
 struct it_CLAZZ_DATA;
 struct it_ARRAY_DATA;

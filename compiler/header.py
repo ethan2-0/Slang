@@ -31,9 +31,30 @@ class HeaderMethodArgumentRepresentation:
 
         return HeaderMethodArgumentRepresentation(input["name"], input["argtype"])
 
+class HeaderGenericParameterRepresentation:
+    def __init__(self, name: str):
+        self.name = name
+
+    def serialize(self) -> JsonObject:
+        return {
+            "type": "typeparam",
+            "name": self.name
+        }
+
+    @staticmethod
+    def unserialize(input: JsonObject) -> "HeaderGenericParameterRepresentation":
+        if input["type"] != "typeparam":
+            raise ValueError()
+        return HeaderGenericParameterRepresentation(input["name"])
+
+    @staticmethod
+    def from_generic_type_parameter(parameter: typesys.GenericTypeArgument) -> "HeaderGenericParameterRepresentation":
+        return HeaderGenericParameterRepresentation(parameter.name)
+
 class HeaderMethodRepresentation:
     def __init__(self, name: str, args: List[HeaderMethodArgumentRepresentation], returntype: str,
-                containing_clazz: Optional[str], containing_interface: Optional[str], is_ctor: bool, entrypoint: bool, is_override: bool, is_abstract: bool):
+                containing_clazz: Optional[str], containing_interface: Optional[str], is_ctor: bool,
+                entrypoint: bool, is_override: bool, is_abstract: bool, type_params: List[HeaderGenericParameterRepresentation]):
         self.name = name
         self.args = args
         self.returntype = returntype
@@ -43,6 +64,7 @@ class HeaderMethodRepresentation:
         self.entrypoint = entrypoint
         self.is_override = False
         self.is_abstract = is_abstract
+        self.type_params = type_params
 
     @property
     def numargs(self) -> int:
@@ -60,7 +82,8 @@ class HeaderMethodRepresentation:
             "entrypoint": self.entrypoint,
             "ctor": self.is_ctor,
             "override": self.is_override,
-            "abstract": self.is_abstract
+            "abstract": self.is_abstract,
+            "typeparams": [param.serialize() for param in self.type_params]
         }
 
     @staticmethod
@@ -74,7 +97,9 @@ class HeaderMethodRepresentation:
             is_ctor=method.signature.is_ctor,
             entrypoint=entrypoint_id == method.signature.id,
             is_override=method.signature.is_override,
-            is_abstract=method.signature.is_abstract)
+            is_abstract=method.signature.is_abstract,
+            type_params=[HeaderGenericParameterRepresentation.from_generic_type_parameter(argument) for argument in method.signature.generic_type_context.arguments] if method.signature.generic_type_context is not None else []
+        )
 
     @staticmethod
     def unserialize(input: JsonObject) -> "HeaderMethodRepresentation":
@@ -90,7 +115,8 @@ class HeaderMethodRepresentation:
             is_ctor=input["ctor"],
             entrypoint=False,
             is_override=input["override"],
-            is_abstract=input["abstract"]
+            is_abstract=input["abstract"],
+            type_params=[HeaderGenericParameterRepresentation.unserialize(param) for param in input["typeparams"]]
         )
 
 class HeaderClazzFieldRepresentation:

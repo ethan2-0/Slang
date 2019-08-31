@@ -1,0 +1,43 @@
+using stdlib;
+
+fn testArrayEquals() {
+    if(not arrayEquals<int>([1, 2, 3, 4, 5], [1, 2, 3, 4, 5])) {
+        die("Failed arrayEquals 1");
+    }
+    if(arrayEquals<int>([1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6])) {
+        die("Failed arrayEquals 2");
+    }
+    if(arrayEquals<int>([1, 2, 3], [1, 2, 4])) {
+        die("Failed arrayEquals 3");
+    }
+}
+fn testArrayCopy() {
+    let arr = [1, 2, 3, 4, 5];
+    let copy = arrayCopy<int>(arr);
+    if(not arrayEquals<int>(arr, copy)) {
+        die("Failed arrayCopy 1");
+    }
+    let arr2 = [String: 1024];
+    for(let i = 0; i < #arr2; i++) {
+        arr2[i] = itos(i);
+    }
+    let copy = arrayCopy<String>(arr2);
+    for(let i = 0; i < #arr2; i++) {
+        if(stoi(copy[i]) != i) {
+            die("Failed arrayCopy 2");
+        }
+    }
+}
+fn testArrayReverse() {
+    if(not arrayEquals<int>(arrayReverse<int>([1, 2, 3, 4, 5]), [5, 4, 3, 2, 1])) {
+        die("Failed arrayReverse 1");
+    }
+    if(not arrayEquals<int>(arrayReverse<int>([1, 2, 3, 4]), [4, 3, 2, 1])) {
+        die("Failed arrayReverse 2");
+    }
+}
+entrypoint fn main() {
+    testArrayEquals();
+    testArrayCopy();
+    testArrayReverse();
+}

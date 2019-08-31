@@ -390,8 +390,8 @@ class Parser:
                     self.expect("]")
             return ret
         elif self.isn("#"):
-            # Why parse_add()? So that #a == b gets parsed as (#a) == (b) as opposed to #(a == b)
-            return Node(self.expect("#"), self.parse_add())
+            # Why parse_parens()? So that #a + 1 gets parsed as (#a) + (!) as opposed to #(a + 1)
+            return Node(self.expect("#"), self.parse_parens())
         elif self.isn("["):
             self.expect("[")
             state = self.toker.get_state()

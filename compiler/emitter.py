@@ -370,7 +370,7 @@ class MethodEmitter(SegmentEmitter):
                 elif typ.method_signature_optional(node[1].data_strict) is not None:
                     reg = self.scope.allocate(typ)
                     opcodes += self.emit_expr(node[0], reg)
-                    return typ.method_signature(node[1].data_strict, node), reg
+                    return typ.method_signature_strict(node[1].data_strict, node), reg
                 else:
                     node.compile_error("Attempt to perform property access that doesn't make sense")
                     # Unreachable
@@ -378,7 +378,7 @@ class MethodEmitter(SegmentEmitter):
             elif isinstance(typ, typesys.InterfaceType):
                 reg = self.scope.allocate(typ)
                 opcodes += self.emit_expr(node[0], reg)
-                return typ.method_signature(node[1].data_strict, node), reg
+                return typ.method_signature_strict(node[1].data_strict, node), reg
             else:
                 node.compile_error("Cannot perform access on something that isn't an instance of a class or an interface")
         else:
@@ -705,7 +705,7 @@ class MethodEmitter(SegmentEmitter):
                 opcodes += new_opcodes
                 claims.add_claims_conservative(*new_claim_space.claims)
         elif node.i("call") or node.i("expr"):
-            result = self.scope.allocate(self.types.decide_type(node if node.i("call") else node[0], self.scope, self.generic_type_context))
+            result = self.scope.allocate(self.types.decide_type(node if node.i("call") else node[0], self.scope, self.generic_type_context, suppress_coercing_void_warning=True))
             opcodes += self.emit_expr(node if node.i("call") else node[0], result)
         elif node.i("let"):
             # Notice that a variable may have only exactly one let statement
@@ -1483,18 +1483,21 @@ class Program:
             self.interfaces.append(interface)
             self.types.accept_interface(interface)
         for method in headers.methods:
+            generic_type_context = typesys.GenericTypeContext(None)
+            for argument in method.type_params:
+                generic_type_context.add_type_argument(argument.name)
             self.method_signatures.append(MethodSignature(
                 method.name,
-                [self.types.resolve_strict(parser.parse_type(arg.type), None) for arg in method.args],
+                [self.types.resolve_strict(parser.parse_type(arg.type), generic_type_context) for arg in method.args],
                 [arg.name for arg in method.args],
-                self.types.resolve_strict(parser.parse_type(method.returntype), None),
+                self.types.resolve_strict(parser.parse_type(method.returntype), generic_type_context),
                 containing_class=util.nonnull(self.types.get_clazz_type_by_name(method.containing_clazz)).signature if method.containing_clazz is not None else None,
                 containing_interface=util.nonnull(self.types.get_interface_type_by_name(method.containing_interface)).interface if method.containing_interface is not None else None,
                 is_abstract=method.is_abstract,
                 is_override=method.is_override,
                 is_ctor=method.is_ctor,
-                generic_type_context=None,
-                is_entrypoint=False
+                is_entrypoint=False,
+                generic_type_context=generic_type_context
             ))
         for interface_header in headers.interfaces:
             interface = util.nonnull(self.types.get_interface_type_by_name(interface_header.name)).interface
@@ -1530,7 +1533,15 @@ class Program:
             for method_signature in methods + ctors:
                 method_signature.containing_class = clazz_signature
         for staticvar in headers.static_variables:
-            self.static_variables.add_variable(StaticVariable(self.static_variables, staticvar.name, self.types.resolve_strict(parser.parse_type(staticvar.type), None), self.interpreter.null, included=True))
+            self.static_variables.add_variable(
+                StaticVariable(
+                    self.static_variables,
+                    staticvar.name,
+                    self.types.resolve_strict(parser.parse_type(staticvar.type), None),
+                    self.interpreter.null,
+                    included=True
+                )
+            )
 
 class Emitter:
     def __init__(self, top: parser.Node) -> None:

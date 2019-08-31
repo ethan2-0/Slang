@@ -1,0 +1,25 @@
+using stdlib;
+
+entrypoint fn main() {
+    if(abs(2) != 2) {
+        die("Failed 1");
+    }
+    if(abs(-2) != 2) {
+        die("Failed 2");
+    }
+    if(abs(0) != 0) {
+        die("Failed 3");
+    }
+    if(min(-2, 1) != -2) {
+        die("Failed 4");
+    }
+    if(min(3, 3) != 3) {
+        die("Failed 5");
+    }
+    if(max(-2, 1) != 1) {
+        die("Failed 6");
+    }
+    if(max(3, 3) != 3) {
+        die("Failed 7");
+    }
+}

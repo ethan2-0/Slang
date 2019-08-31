@@ -3,6 +3,7 @@
 import util
 import parser
 import emitter
+import enum
 from typing import Optional, List, Dict, cast
 
 class TypingError(Exception):
@@ -100,7 +101,29 @@ class VoidType(AbstractType):
     def is_assignable_to(self, other: AbstractType) -> bool:
         return True
 
-class ClazzType(AbstractType):
+class CallableTypeCategory(enum.IntEnum):
+    NOT_CALLABLE = enum.auto()
+    CLASS = enum.auto()
+    INTERFACE = enum.auto()
+
+class AbstractCallableType(AbstractType):
+    def __init__(self, name: str) -> None:
+        AbstractType.__init__(self, name)
+
+    def get_category(self) -> CallableTypeCategory:
+        raise NotImplementedError()
+
+    def method_signature_optional(self, name: str) -> "Optional[emitter.MethodSignature]":
+        raise NotImplementedError()
+
+    def method_signature_strict(self, name: str, node: parser.Node) -> "emitter.MethodSignature":
+        ret = self.method_signature_optional(name)
+        if ret is None:
+            node.compile_error("Invalid member method name '%s'" % name)
+        assert ret is not None
+        return ret
+
+class ClazzType(AbstractCallableType):
     def __init__(self, signature: "emitter.ClazzSignature", typesys: "TypeSystem") -> None:
         AbstractType.__init__(self, signature.name)
         self.typesys = typesys
@@ -145,13 +168,7 @@ class ClazzType(AbstractType):
             node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
         return None
 
-    def method_signature(self, name: str, node: parser.Node) -> "emitter.MethodSignature":
-        ret = self.method_signature_optional(name, node)
-        if ret is None:
-            node.compile_error("Invalid class method name '%s' for type '%s'" % (name, self.name))
-        return ret
-
-    def method_signature_optional(self, name: str, node: parser.Node=None) -> "Optional[emitter.MethodSignature]":
+    def method_signature_optional(self, name: str) -> "Optional[emitter.MethodSignature]":
         for method in self.signature.method_signatures:
             if method.name == name:
                 return method
@@ -160,8 +177,6 @@ class ClazzType(AbstractType):
             ret = supertype.method_signature_optional(name)
             if ret is not None:
                 return ret
-        if node is not None:
-            node.compile_error("Invalid class method name '%s' for type '%s'" % (name, self.name))
         return None
 
     def is_clazz(self) -> bool:
@@ -176,7 +191,7 @@ class ClazzType(AbstractType):
             return True
         return False
 
-class InterfaceType(AbstractType):
+class InterfaceType(AbstractCallableType):
     def __init__(self, interface: "emitter.Interface") -> None:
         AbstractType.__init__(self, interface.name)
         self.interface = interface
@@ -186,12 +201,6 @@ class InterfaceType(AbstractType):
 
     def get_supertype(self) -> Optional[AbstractType]:
         return None
-
-    def method_signature(self, name: str, node: parser.Node) -> "emitter.MethodSignature":
-        ret = self.method_signature_optional(name)
-        if ret is None:
-            node.compile_error("Invalid interface method name '%s' for type '%s'" % (name, self.name))
-        return ret
 
     def method_signature_optional(self, name: str) -> "Optional[emitter.MethodSignature]":
         return self.interface.get_signature_by_name(name)
@@ -225,7 +234,7 @@ class GenericTypeArgument(AbstractType):
 class GenericTypeContext:
     def __init__(self, parent: "Optional[GenericTypeContext]") -> None:
         self.parent = parent
-        # Note that order is significant here
+        # Note that order is significant for this array
         self.arguments: "List[GenericTypeArgument]" = []
 
     @property
@@ -390,13 +399,13 @@ class TypeSystem:
                     # Unreachable
                     return None # type: ignore
                 elif typ.method_signature_optional(node[1].data_strict) is not None:
-                    return typ.method_signature(node[1].data_strict, node)
+                    return typ.method_signature_strict(node[1].data_strict, node)
                 else:
                     node.compile_error("Attempt to perform property access that doesn't make sense (perhaps the property doesn't exist or is spelled wrong?)")
                     # Unreachabe
                     return None # type: ignore
             elif isinstance(typ, InterfaceType):
-                return typ.method_signature(node[1].data_strict, node)
+                return typ.method_signature_strict(node[1].data_strict, node)
             else:
                 node.compile_error("Cannot perform access on something that isn't an instance of a class or an interface")
                 # Unreachable
@@ -406,7 +415,7 @@ class TypeSystem:
             # Unreachable
             return None # type: ignore
 
-    def decide_type(self, expr: parser.Node, scope: "emitter.Scopes", generic_type_context: Optional[GenericTypeContext]) -> AbstractType:
+    def decide_type(self, expr: parser.Node, scope: "emitter.Scopes", generic_type_context: Optional[GenericTypeContext], suppress_coercing_void_warning: bool = False) -> AbstractType:
         if expr.i("as"):
             return self.resolve_strict(expr[1], generic_type_context)
         elif expr.i("instanceof"):
@@ -524,9 +533,11 @@ class TypeSystem:
                 generic_type_context
             )
             if len(expr["typeargs"]) != (len(signature.generic_type_context.arguments) if signature.generic_type_context is not None else 0):
-                expr.compile_error("Wrong number of type arguments (expected %s, got %s)" % (len(signature.generic_type_context.arguments), len(expr["typeargs"])))
+                expr.compile_error("Wrong number of type arguments (expected %s, got %s)" % (len(signature.generic_type_context.arguments) if signature.generic_type_context is not None else 0, len(expr["typeargs"])))
             signature = signature.reify([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program)
             if signature is not None:
+                if (not suppress_coercing_void_warning) and isinstance(signature.returntype, VoidType):
+                    expr.warn("Coercing void")
                 return signature.returntype
             if expr[0].i("."):
                 dot_node = expr[0]
@@ -536,6 +547,8 @@ class TypeSystem:
                 signature = lhs_type.method_signature(dot_node[1].data)
             if signature is None:
                 expr.compile_error("Unknown method name '%s'" % expr[0].data)
+            if (not suppress_coercing_void_warning) and isinstance(signature.returntype, VoidType):
+                expr.warn("Coercing void")
             return signature.returntype
         elif expr.i("new"):
             ret = self.resolve_strict(expr[0], generic_type_context)

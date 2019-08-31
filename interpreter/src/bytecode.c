@@ -392,7 +392,7 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     uint32_t num_type_arguments = fr_getuint32(state);
     result->type_parameters = ts_create_generic_type_context(num_type_arguments, NULL);
     for(uint32_t i = 0; i < num_type_arguments; i++) {
-        ts_init_type_parameter(&result->type_parameters->arguments[i], fr_getstr(state));
+        ts_init_type_parameter(&result->type_parameters->arguments[i], fr_getstr(state), result->type_parameters);
     }
 
     result->returntype = ts_get_type(fr_getstr(state), result->type_parameters);

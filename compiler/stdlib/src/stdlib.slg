@@ -72,14 +72,14 @@ fn die(message: String) {
     print("Fatal error: ");
     print(message);
     print("\n");
-    let blah = stdlib.internal.traceback();
+    stdlib.internal.traceback();
     exit(1);
 }
 fn exit(code: int) {
     if(not rtlib_loaded) {
         load_rtlib();
     }
-    let _ = stdlib.internal.exit(code);
+    stdlib.internal.exit(code);
 }
 class String {
     chars: [int];
@@ -293,8 +293,7 @@ fn print(str: String) {
     if(not rtlib_loaded) {
         load_rtlib();
     }
-    // This is to work around a compiler bug that I haven't gotten around to fixing yet
-    let _ = stdlib.internal.print(str._getCleanBuffer());
+    stdlib.internal.print(str._getCleanBuffer());
 }
 fn println(str: String) {
     // I know, this is horribly inefficient
@@ -309,6 +308,18 @@ fn abs(num: int): int {
         return num * -1;
     }
     return num;
+}
+fn min(a: int, b: int): int {
+    if(a < b) {
+        return a;
+    }
+    return b;
+}
+fn max(a: int, b: int): int {
+    if(a > b) {
+        return a;
+    }
+    return b;
 }
 fn itos_base(input: int, base: int): String {
     // This is based on kprintn64 from the OpenBSD project
@@ -472,7 +483,7 @@ abstract class SeekableInputStream extends InputStream {
         die("SeekableInputStream is abstract.");
     }
     fn reset() {
-        let _ = this.seek(0);
+        this.seek(0);
     }
 }
 class ArrayInputStream extends SeekableInputStream {
@@ -587,4 +598,59 @@ class BufferedReader {
     fn readLine(): String {
         return this.readUntilDelimiter('\n');
     }
+}
+fn arrayCopy<T>(arr: [T]): [T] {
+    let result = [T: #arr];
+    for(let i = 0; i < #arr; i++) {
+        result[i] = arr[i];
+    }
+    return result;
+}
+fn arrayEquals<T>(arr1: [T], arr2: [T]): bool {
+    if(#arr1 != #arr2) {
+        return false;
+    }
+    for(let i = 0; i < #arr1; i++) {
+        if(arr1[i] != arr2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+fn arrayReverse<T>(arr: [T]): [T] {
+    for(let i = 0; i < #arr / 2; i++) {
+        let j = #arr - i - 1;
+        let tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
+    // For convenience
+    return arr;
+}
+fn arraySlice<T>(arr: [T], start: int, end: int): [T] {
+    if(start < 0) {
+        start += #arr;
+    }
+    if(end < 0) {
+        end += #arr;
+    }
+    if(start < 0 or end < 0 or start >= #arr or end >= #arr) {
+        die(strconcat_all(["Array slice indices out of range (start: ", itos(start), ", end: ", itos(end), ")"]));
+    }
+    if(end <= start) {
+        return [T: 0];
+    }
+    let length = end - start;
+    let result = [T: length];
+    for(let i = 0; i < length; i++) {
+        result[i] = arr[i + start];
+    }
+    return result;
+}
+fn arrayResize<T>(arr: [T], newSize: int): [T] {
+    let newArr = [T: newSize];
+    for(let i = 0; i < min(#arr, newSize); i++) {
+        newArr[i] = arr[i];
+    }
+    return newArr;
 }
