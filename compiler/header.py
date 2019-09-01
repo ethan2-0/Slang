@@ -32,24 +32,32 @@ class HeaderMethodArgumentRepresentation:
         return HeaderMethodArgumentRepresentation(input["name"], input["argtype"])
 
 class HeaderGenericParameterRepresentation:
-    def __init__(self, name: str):
+    def __init__(self, name: str, extends: Optional[str], implements: List[str]):
         self.name = name
+        self.extends = extends
+        self.implements = implements
 
     def serialize(self) -> JsonObject:
         return {
             "type": "typeparam",
-            "name": self.name
+            "name": self.name,
+            "extends": self.extends,
+            "implements": self.implements
         }
 
     @staticmethod
     def unserialize(input: JsonObject) -> "HeaderGenericParameterRepresentation":
         if input["type"] != "typeparam":
             raise ValueError()
-        return HeaderGenericParameterRepresentation(input["name"])
+        return HeaderGenericParameterRepresentation(input["name"], input["extends"], input["implements"])
 
     @staticmethod
     def from_generic_type_parameter(parameter: typesys.GenericTypeArgument) -> "HeaderGenericParameterRepresentation":
-        return HeaderGenericParameterRepresentation(parameter.name)
+        return HeaderGenericParameterRepresentation(
+            parameter.name,
+            parameter.extends.name if parameter.extends is not None else None,
+            [interface.name for interface in parameter.implements]
+        )
 
 class HeaderMethodRepresentation:
     def __init__(self, name: str, args: List[HeaderMethodArgumentRepresentation], returntype: str,

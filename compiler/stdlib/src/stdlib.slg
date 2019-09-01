@@ -280,10 +280,20 @@ class String {
         return true;
     }
 }
-class Object extends void {
+interface Hashable {
+    fn getHashCode(): int;
+}
+interface ToString {
+    fn toString(): String;
+}
+class Object extends void implements Hashable, ToString {
     ctor() {}
-    fn toString(): String {
+    override fn toString(): String {
         return "[Object]";
+    }
+    override fn getHashCode(): int {
+        // TODO
+        return 0;
     }
     fn equals(other: Object): bool {
         return other == this;

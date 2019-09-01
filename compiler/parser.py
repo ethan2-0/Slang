@@ -556,6 +556,35 @@ class Parser:
         else:
             self.throw(tok)
 
+    def parse_type_parameter(self) -> Node:
+        ret = Node("type_parameter", Node(self.expect("ident")))
+        if self.isn("extends"):
+            self.expect("extends")
+            ret.add(Node("extends", self.parse_type()))
+        if self.isn("implements"):
+            self.expect("implements")
+            implements_node = Node("implements")
+            while True:
+                implements_node.add(self.parse_type())
+                if not self.isn(","):
+                    break
+                self.expect(",")
+            ret.add(implements_node)
+        return ret
+
+    def parse_type_parameters(self) -> Node:
+        ret = Node("typeparams")
+        if self.isn("<"):
+            self.expect("<")
+            while True:
+                ret.add(self.parse_type_parameter())
+                if self.isn(","):
+                    self.expect(",")
+                else:
+                    self.expect(">")
+                    break
+        return ret
+
     def parse_fn(self, allow_body: bool = True) -> Node:
         modifiers = Node("modifiers")
         while self.peek().of(*Parser.method_modifiers):
@@ -565,16 +594,7 @@ class Parser:
             modifiers.add(modifier)
         self.expect("fn")
         name = self.parse_qualified_name()
-        type_parameters = Node("typeparams")
-        if self.isn("<"):
-            self.expect("<")
-            while True:
-                type_parameters.add(Node(self.expect("ident")))
-                if self.isn(","):
-                    self.expect(",")
-                else:
-                    self.expect(">")
-                    break
+        type_parameters = self.parse_type_parameters()
         params = self.parse_fn_params()
         type_annotation = self.parse_type_annotation() if self.isn(":") else Node("ident", data="void")
         if modifiers.has_child("abstract") or not allow_body:

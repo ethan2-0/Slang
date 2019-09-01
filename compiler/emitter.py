@@ -209,13 +209,14 @@ class MethodSignature:
             type_args_str = ""
         return "%sfn %s%s%s(%s): %s" % (modifiers, prefix, self.name, type_args_str, args_str, self.returntype.name)
 
-    def reify(self, arguments: List[typesys.AbstractType], program: "Program") -> "MethodSignature":
+    def reify(self, arguments: List[typesys.AbstractType], program: "Program", node: parser.Node) -> "MethodSignature":
         if self.generic_type_context is None:
             # TODO: Eventually every method should have a generic type context
             if len(arguments) > 0:
                 raise ValueError("Attempt to provide generic type arguments to a method that doesn't have a generic type context")
             return self
         params = typesys.GenericTypeParameters(util.nonnull(self.generic_type_context), arguments, program.types)
+        params.verify_valid_arguments(node)
         new_return_type = params.reify(self.returntype)
         argument_types = [params.reify(typ) for typ in self.args]
         return MethodSignature(
@@ -243,9 +244,9 @@ class MethodSignature:
             method.compile_error("Can't both be an override method and not have a containing class")
 
         if method.i("fn"):
-            generic_type_context = typesys.GenericTypeContext(parent=None)
+            generic_type_context = typesys.GenericTypeContext(program.types, parent=None)
             for type_arg in method["typeparams"]:
-                generic_type_context.add_type_argument(type_arg.data_strict)
+                generic_type_context.add_type_argument_from_node(type_arg)
             if (containing_class is not None or containing_interface is not None) and len(generic_type_context.arguments) > 0:
                 method.compile_error("Member methods cannot have type arguments")
             argtypes: "List[typesys.AbstractType]" = \
@@ -362,25 +363,14 @@ class MethodEmitter(SegmentEmitter):
             typ = self.types.decide_type(node[0], self.scope, self.generic_type_context)
             if not node[1].i("ident"):
                 raise ValueError("This is a compiler bug")
-            if isinstance(typ, typesys.ClazzType):
-                if typ.type_of_property_optional(node[1].data_strict) is not None:
-                    node.compile_error("Attempt to call a property")
-                    # Unreachable
-                    return None # type: ignore
-                elif typ.method_signature_optional(node[1].data_strict) is not None:
-                    reg = self.scope.allocate(typ)
-                    opcodes += self.emit_expr(node[0], reg)
-                    return typ.method_signature_strict(node[1].data_strict, node), reg
-                else:
-                    node.compile_error("Attempt to perform property access that doesn't make sense")
-                    # Unreachable
-                    return None # type: ignore
-            elif isinstance(typ, typesys.InterfaceType):
-                reg = self.scope.allocate(typ)
-                opcodes += self.emit_expr(node[0], reg)
-                return typ.method_signature_strict(node[1].data_strict, node), reg
-            else:
-                node.compile_error("Cannot perform access on something that isn't an instance of a class or an interface")
+            if not isinstance(typ, typesys.AbstractCallableType):
+                node.compile_error("Cannot call something that isn't callable")
+            if isinstance(typ, typesys.ClazzType) and typ.type_of_property_optional(node[1].data_strict) is not None:
+                node.compile_error("Attempt to call a property")
+            sig = typ.method_signature_strict(node[1].data_strict, node)
+            reg = self.scope.allocate(typ)
+            opcodes += self.emit_expr(node[0], reg)
+            return sig, reg
         else:
             node.compile_error("Attempt to call something that can't be called")
             # Unreachable
@@ -550,7 +540,7 @@ class MethodEmitter(SegmentEmitter):
             typeargs: Optional[List[typesys.AbstractType]] = None
             if len(node["typeargs"]) > 0:
                 typeargs = [self.types.resolve_strict(typearg, self.generic_type_context) for typearg in node["typeargs"]]
-                signature = signature.reify(typeargs, self.program)
+                signature = signature.reify(typeargs, self.program, node["typeargs"])
 
             param_registers = []
 
@@ -1075,9 +1065,7 @@ class ClazzSignature:
             if not signature.is_override:
                 if self.parent_signature is not None and self.parent_signature.get_method_signature_by_name(signature.name) is not None:
                     throw(signature)
-            else:
-                if self.parent_signature is None:
-                    throw(signature)
+            elif self.parent_signature is not None:
                 # `parent_sig` is a method signature (as opposed to a class signature)
                 parent_sig = util.nonnull(self.parent_signature).get_method_signature_by_name(signature.name)
                 if parent_sig is None:
@@ -1483,9 +1471,19 @@ class Program:
             self.interfaces.append(interface)
             self.types.accept_interface(interface)
         for method in headers.methods:
-            generic_type_context = typesys.GenericTypeContext(None)
+            generic_type_context = typesys.GenericTypeContext(self.types, None)
             for argument in method.type_params:
-                generic_type_context.add_type_argument(argument.name)
+                extends = self.types.resolve_strict(parser.parse_type(argument.extends), generic_type_context) if argument.extends is not None else None
+                assert extends is None or isinstance(extends, typesys.ClazzType)
+                implements: List[typesys.InterfaceType] = []
+                for implemented_interface in argument.implements:
+                    interface_type = self.types.resolve_strict(parser.parse_type(implemented_interface), generic_type_context)
+                    assert isinstance(interface_type, typesys.InterfaceType)
+                generic_type_context.add_type_argument(
+                    argument.name,
+                    extends,
+                    implements
+                )
             self.method_signatures.append(MethodSignature(
                 method.name,
                 [self.types.resolve_strict(parser.parse_type(arg.type), generic_type_context) for arg in method.args],

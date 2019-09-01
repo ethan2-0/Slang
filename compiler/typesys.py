@@ -101,17 +101,9 @@ class VoidType(AbstractType):
     def is_assignable_to(self, other: AbstractType) -> bool:
         return True
 
-class CallableTypeCategory(enum.IntEnum):
-    NOT_CALLABLE = enum.auto()
-    CLASS = enum.auto()
-    INTERFACE = enum.auto()
-
 class AbstractCallableType(AbstractType):
     def __init__(self, name: str) -> None:
         AbstractType.__init__(self, name)
-
-    def get_category(self) -> CallableTypeCategory:
-        raise NotImplementedError()
 
     def method_signature_optional(self, name: str) -> "Optional[emitter.MethodSignature]":
         raise NotImplementedError()
@@ -224,15 +216,46 @@ class ArrayType(AbstractType):
     def is_array(self) -> bool:
         return True
 
-class GenericTypeArgument(AbstractType):
-    def __init__(self, name: str):
+class GenericTypeArgument(AbstractCallableType):
+    def __init__(self, name: str, extends: Optional[ClazzType], implements: List[InterfaceType]):
         AbstractType.__init__(self, name)
+        self.extends = extends
+        self.implements = implements
+
+    def __str__(self) -> str:
+        return ":%s%s%s" % (
+            self.name,
+            " extends %s" % self.extends.name if self.extends is not None else "",
+            " implements %s" % ", ".join(interface.name for interface in self.implements) if len(self.implements) > 0 else ""
+        )
 
     def is_assignable_to(self, other: AbstractType) -> bool:
-        return other == self
+        return other == self \
+            or (self.extends.is_assignable_to(other) if self.extends is not None else False) \
+            or any(interface.is_assignable_to(other) for interface in self.implements)
+
+    def method_signature_optional(self, name: str) -> "Optional[emitter.MethodSignature]":
+        if self.extends is not None:
+            ret = self.extends.method_signature_optional(name)
+            if ret is not None:
+                return ret
+        for interface in self.implements:
+            ret = interface.method_signature_optional(name)
+            if ret is not None:
+                return ret
+        return None
+
+    def is_satisfied_by(self, typ: AbstractType) -> bool:
+        if self.extends is not None and not typ.is_assignable_to(self.extends):
+            return False
+        for interface in self.implements:
+            if not typ.is_assignable_to(interface):
+                return False
+        return True
 
 class GenericTypeContext:
-    def __init__(self, parent: "Optional[GenericTypeContext]") -> None:
+    def __init__(self, types: "TypeSystem", parent: "Optional[GenericTypeContext]") -> None:
+        self.types = types
         self.parent = parent
         # Note that order is significant for this array
         self.arguments: "List[GenericTypeArgument]" = []
@@ -252,8 +275,24 @@ class GenericTypeContext:
             return self.parent.resolve_optional(node, program)
         return None
 
-    def add_type_argument(self, name: str) -> None:
-        self.arguments.append(GenericTypeArgument(name))
+    def add_type_argument(self, name: str, extends: Optional[ClazzType], implements: List[InterfaceType]) -> None:
+        self.arguments.append(GenericTypeArgument(name, extends, implements))
+
+    def add_type_argument_from_node(self, node: parser.Node) -> None:
+        extends: Optional[ClazzType] = None
+        if node.has_child("extends"):
+            extends_uncasted = self.types.resolve_strict(node["extends"][0], self)
+            if not isinstance(extends_uncasted, ClazzType):
+                node["extends"].compile_error("Cannot add an extends constraint of something that isn't a class")
+            extends = extends_uncasted
+        implements: List[InterfaceType] = []
+        if node.has_child("implements"):
+            for interface in node["implements"]:
+                resolved_type = self.types.resolve_strict(interface, self)
+                if not isinstance(resolved_type, InterfaceType):
+                    interface.compile_error("Cannot add an implements constraint of something that isn't a class")
+                implements.append(resolved_type)
+        self.add_type_argument(node["ident"].data_strict, extends, implements)
 
     def __repr__(self) -> str:
         return "GenericTypeContext(parent=%s, arguments=[%s])" % (self.parent, ", ".join(str(arg) for arg in self.arguments))
@@ -272,6 +311,11 @@ class GenericTypeParameters:
         self.mapping: Dict[GenericTypeArgument, AbstractType] = dict()
         for i in range(self.num_params):
             self.mapping[context.arguments[i]] = parameters[i]
+
+    def verify_valid_arguments(self, node: parser.Node) -> None:
+        for i in range(self.num_params):
+            if not self.context.arguments[i].is_satisfied_by(self.parameters[i]):
+                node.compile_error("Could not reify generic method: '%s' does not satisfy '%s'" % (self.parameters[i], self.context.arguments[i]))
 
     def reify(self, parameter: AbstractType) -> AbstractType:
         if isinstance(parameter, ArrayType):
@@ -393,23 +437,9 @@ class TypeSystem:
             typ = self.decide_type(node[0], scope, generic_type_context)
             if not node[1].i("ident"):
                 raise ValueError("This is a compiler bug")
-            if isinstance(typ, ClazzType):
-                if typ.type_of_property_optional(node[1].data_strict) is not None:
-                    node.compile_error("Attempt to call a property")
-                    # Unreachable
-                    return None # type: ignore
-                elif typ.method_signature_optional(node[1].data_strict) is not None:
-                    return typ.method_signature_strict(node[1].data_strict, node)
-                else:
-                    node.compile_error("Attempt to perform property access that doesn't make sense (perhaps the property doesn't exist or is spelled wrong?)")
-                    # Unreachabe
-                    return None # type: ignore
-            elif isinstance(typ, InterfaceType):
-                return typ.method_signature_strict(node[1].data_strict, node)
-            else:
-                node.compile_error("Cannot perform access on something that isn't an instance of a class or an interface")
-                # Unreachable
-                return None # type: ignore
+            if not isinstance(typ, AbstractCallableType):
+                node.compile_error("Attempt to call a member of something that isn't callable")
+            return typ.method_signature_strict(node[1].data_strict, node)
         else:
             node.compile_error("Attempt to call something that can't be called")
             # Unreachable
@@ -534,7 +564,7 @@ class TypeSystem:
             )
             if len(expr["typeargs"]) != (len(signature.generic_type_context.arguments) if signature.generic_type_context is not None else 0):
                 expr.compile_error("Wrong number of type arguments (expected %s, got %s)" % (len(signature.generic_type_context.arguments) if signature.generic_type_context is not None else 0, len(expr["typeargs"])))
-            signature = signature.reify([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program)
+            signature = signature.reify([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program, expr["typeargs"])
             if signature is not None:
                 if (not suppress_coercing_void_warning) and isinstance(signature.returntype, VoidType):
                     expr.warn("Coercing void")
