@@ -109,6 +109,10 @@ char* fr_getstr(struct fr_STATE* state) {
 
 void* mm_malloc(size_t size) {
     void* buff = malloc(size);
+    if(buff == NULL) {
+        printf("Allocation size: %ld\n", size);
+        fatal("Memory allocation failed");
+    }
     memset(buff, 0, size);
     return buff;
 }

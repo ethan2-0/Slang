@@ -214,12 +214,15 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 fatal("Attempt to call method of null interface reference");
             }
             struct it_INTERFACE_IMPLEMENTATION* implementations = thiz.clazz_data->method_table->interface_implementations;
-            struct it_INTERFACE_IMPLEMENTATION* implementation;
+            struct it_INTERFACE_IMPLEMENTATION* implementation = NULL;
             for(int i = 0; i < thiz.clazz_data->method_table->ninterface_implementations; i++) {
                 if(implementations[i].interface_id == data->interface_id) {
                     implementation = &implementations[i];
                     break;
                 }
+            }
+            if(implementation == NULL) {
+                fatal("Could not find interface implementation in interfacecall.");
             }
             struct it_METHOD* callee = implementation->method_table->methods[data->method_index];
             load_method(stackptr, callee);

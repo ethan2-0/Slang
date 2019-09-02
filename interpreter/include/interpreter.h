@@ -14,7 +14,7 @@ uint32_t ts_allocate_type_id();
 bool ts_is_compatible(struct ts_TYPE* type1, struct ts_TYPE* type2);
 bool ts_instanceof(struct ts_TYPE* lhs, struct ts_TYPE* rhs);
 struct ts_GENERIC_TYPE_CONTEXT* ts_create_generic_type_context(uint32_t num_arguments, struct ts_GENERIC_TYPE_CONTEXT* parent);
-void ts_init_type_parameter(struct ts_TYPE* parameter, char* name, struct ts_GENERIC_TYPE_CONTEXT* context);
+void ts_init_type_parameter(struct ts_TYPE* parameter, char* name, struct ts_GENERIC_TYPE_CONTEXT* context, struct ts_TYPE* extends, int implementsc, struct ts_TYPE** implements);
 void ts_walk_and_reify_methods(struct it_PROGRAM* program);
 void ts_reify_generic_references(struct it_METHOD* method);
 
@@ -34,6 +34,7 @@ void it_replace_methods(struct it_PROGRAM* prog);
 
 void cl_arrange_method_tables(struct it_PROGRAM* program);
 int cl_get_field_index(struct ts_TYPE* clazz, char* name);
+int cl_get_method_index_optional(struct it_METHOD_TABLE* method_table, char* name);
 int cl_get_method_index(struct it_METHOD_TABLE* clazz, char* name);
 struct ts_TYPE* cl_get_or_create_interface(char* name, struct it_PROGRAM* program);
 bool cl_class_implements_interface(struct ts_TYPE* clazz, struct ts_TYPE* interface);

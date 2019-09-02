@@ -1,0 +1,8 @@
+using stdlib;
+
+fn doStuff<T extends String>(t: T) {
+    // Do nothing
+}
+entrypoint fn main() {
+    doStuff<Object>(new Object());
+}

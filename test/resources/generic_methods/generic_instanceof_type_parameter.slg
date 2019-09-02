@@ -1,0 +1,19 @@
+using stdlib;
+
+fn isinstance<T, R>(a: R): bool {
+    return a instanceof T;
+}
+entrypoint fn main() {
+    if(not isinstance<String, Object>("hi")) {
+        die("Failed 1");
+    }
+    if(isinstance<String, Object>(new Object())) {
+        die("Failed 2");
+    }
+    if(isinstance<String, int>(5)) {
+        die("Failed 3");
+    }
+    if(not isinstance<int, int>(5)) {
+        die("Failed 4");
+    }
+}

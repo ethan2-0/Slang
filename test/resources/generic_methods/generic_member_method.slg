@@ -1,0 +1,4 @@
+class Class {
+    ctor() {}
+    fn test<T>() {}
+}

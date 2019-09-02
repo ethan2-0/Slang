@@ -83,6 +83,16 @@ bool ts_is_from_context(struct ts_TYPE* type, struct ts_GENERIC_TYPE_CONTEXT* co
     }
     return true;
 }
+struct ts_TYPE* ts_get_type_by_id_optional(int id) {
+    struct ts_TYPE_REGISTRY* registry = global_registry;
+    while(registry != NULL) {
+        if(registry->type->id == id) {
+            return registry->type;
+        }
+        registry = registry->next;
+    }
+    return NULL;
+}
 struct ts_TYPE* ts_get_type_inner(char* name, struct ts_GENERIC_TYPE_CONTEXT* context) {
     #if DEBUG
     printf("Searching for type '%s'\n", name);
@@ -242,7 +252,7 @@ struct ts_GENERIC_TYPE_CONTEXT* ts_create_generic_type_context(uint32_t num_argu
     context->parent = NULL;
     return context;
 }
-void ts_init_type_parameter(struct ts_TYPE* parameter, char* name, struct ts_GENERIC_TYPE_CONTEXT* context) {
+void ts_init_type_parameter(struct ts_TYPE* parameter, char* name, struct ts_GENERIC_TYPE_CONTEXT* context, struct ts_TYPE* extends, int implementsc, struct ts_TYPE** implements) {
     parameter->category = ts_CATEGORY_TYPE_PARAMETER;
     parameter->heirarchy = mm_malloc(sizeof(struct ts_TYPE*));
     parameter->heirarchy[0] = parameter;
@@ -250,6 +260,10 @@ void ts_init_type_parameter(struct ts_TYPE* parameter, char* name, struct ts_GEN
     parameter->id = ts_allocate_type_id();
     parameter->name = name;
     parameter->data.type_parameter.context = context;
+    parameter->data.type_parameter.extends = extends;
+    parameter->data.type_parameter.implementsc = implementsc;
+    parameter->data.type_parameter.implements = mm_malloc(sizeof(struct ts_TYPE*) * implementsc);
+    memcpy(parameter->data.type_parameter.implements, implements, sizeof(struct ts_TYPE*) * implementsc);
 }
 bool ts_method_is_generic(struct it_METHOD* method) {
     return method->type_parameters->count > 0;

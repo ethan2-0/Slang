@@ -211,7 +211,6 @@ class MethodSignature:
 
     def reify(self, arguments: List[typesys.AbstractType], program: "Program", node: parser.Node) -> "MethodSignature":
         if self.generic_type_context is None:
-            # TODO: Eventually every method should have a generic type context
             if len(arguments) > 0:
                 raise ValueError("Attempt to provide generic type arguments to a method that doesn't have a generic type context")
             return self

@@ -180,15 +180,22 @@ int cl_get_field_index(struct ts_TYPE* clazz, char* name) {
     fatal("Unable to find field");
     return -1; // Unreachable
 }
-int cl_get_method_index(struct it_METHOD_TABLE* method_table, char* name) {
+int cl_get_method_index_optional(struct it_METHOD_TABLE* method_table, char* name) {
     for(int i = 0; i < method_table->nmethods; i++) {
         if(strcmp(method_table->methods[i]->name, name) == 0) {
             return i;
         }
     }
-    printf("Method: '%s'\n", name);
-    fatal("Unable to find member method");
-    return -1; // Unreachable
+    return -1;
+}
+int cl_get_method_index(struct it_METHOD_TABLE* method_table, char* name) {
+    int index = cl_get_method_index_optional(method_table, name);
+    if(index < 0) {
+        printf("Method: '%s'\n", name);
+        fatal("Unable to find member method");
+        return -1; // Unreachable
+    }
+    return index;
 }
 struct ts_TYPE* cl_get_or_create_interface(char* name, struct it_PROGRAM* program) {
     struct ts_TYPE* type = ts_get_type_optional(name, NULL);

@@ -1,0 +1,9 @@
+using stdlib;
+
+interface Interface {}
+fn doStuff<T implements Hashable, ToString, Interface>(t: T) {
+    // Do nothing
+}
+entrypoint fn main() {
+    doStuff<Object>(new Object());
+}

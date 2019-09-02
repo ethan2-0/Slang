@@ -1,0 +1,30 @@
+using stdlib;
+
+class Cls extends void {
+    ctor() {}
+    fn abc(): String {
+        return "abc";
+    }
+}
+
+class Cls2 extends Cls implements Hashable, ToString {
+    ctor() {}
+    override fn toString(): String {
+        return "hi";
+    }
+    override fn getHashCode(): int {
+        return 0;
+    }
+}
+
+fn test<T extends Cls implements Hashable, ToString>(t: T): String {
+    let s: Cls = t;
+    let h: Hashable = t;
+    return strconcat_all([t.abc(), t.toString(), itos(t.getHashCode())]);
+}
+
+entrypoint fn main() {
+    if(not test<Cls2>(new Cls2()).equals("abchi0")) {
+        die("Failed");
+    }
+}

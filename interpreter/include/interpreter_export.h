@@ -43,6 +43,9 @@ struct ts_TYPE_INTERFACE {
 };
 struct ts_TYPE_PARAMETER {
     struct ts_GENERIC_TYPE_CONTEXT* context;
+    struct ts_TYPE* extends;
+    int implementsc;
+    struct ts_TYPE** implements;
 };
 struct ts_GENERIC_TYPE_CONTEXT;
 struct ts_TYPE {

@@ -79,7 +79,7 @@ class TestClazzesBasic:
         util.interpret(path)
 
     def test_clazz_new_unknown_type(self):
-        util.assert_compile_fails("resources/classes_basic/class_new_unknown_type.slg")
+        util.assert_compile_fails("resources/classes_basic/class_new_unknown_type.slg", message="Could not resolve type")
 
     def test_clazz_new_primitive_type(self):
         util.assert_compile_fails("resources/classes_basic/class_new_primitive_type.slg", message="Type :bool is not a class")
@@ -487,3 +487,20 @@ class TestGenericMethods:
         path = util.assert_compile_succeeds("resources/generic_methods/reification_reuse.slg")
         # TODO: Figure out some way of calibrating this or do it based on memory use or something
         util.interpret(path, timeout=0.5)
+
+    def test_generic_instanceof_type_parameter(self):
+        path = util.assert_compile_succeeds("resources/generic_methods/generic_instanceof_type_parameter.slg")
+        util.interpret(path)
+
+    def test_generic_bounds(self):
+        path = util.assert_compile_succeeds("resources/generic_methods/generic_bounds.slg")
+        util.interpret(path)
+
+    def test_unsatisfied_extends_bound(self):
+        path = util.assert_compile_fails("resources/generic_methods/unsatisfied_extends_bound.slg", message="Could not reify generic method: ':stdlib.Object' does not satisfy ':T extends stdlib.String'")
+
+    def test_unsatisfied_implements_bound(self):
+        path = util.assert_compile_fails("resources/generic_methods/unsatisfied_implements_bound.slg", message="Could not reify generic method: ':stdlib.Object' does not satisfy ':T implements stdlib.Hashable, stdlib.ToString, Interface'")
+
+    def test_generic_member_method(self):
+        path = util.assert_compile_fails("resources/generic_methods/generic_member_method.slg", message="Member methods cannot have type arguments")

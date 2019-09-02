@@ -149,11 +149,20 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         struct it_OPCODE_DATA_CLASSCALL* data = &opcode->data.classcall;
         data->targetreg = fr_getuint32(state);
         struct ts_TYPE* clazzreg_type = method->register_types[data->targetreg];
-        if(clazzreg_type->category != ts_CATEGORY_CLAZZ) {
+        if(clazzreg_type->category != ts_CATEGORY_CLAZZ && clazzreg_type->category != ts_CATEGORY_TYPE_PARAMETER) {
             fatal("Attempt to call a method of something that isn't a class");
         }
         char* callee_name = fr_getstr(state);
-        data->callee_index = cl_get_method_index(clazzreg_type->data.clazz.method_table, callee_name);
+        struct it_METHOD_TABLE* method_table;
+        if(clazzreg_type->category == ts_CATEGORY_CLAZZ) {
+            method_table = clazzreg_type->data.clazz.method_table;
+        } else if(clazzreg_type->category == ts_CATEGORY_TYPE_PARAMETER) {
+            if(clazzreg_type->data.type_parameter.extends == NULL) {
+                fatal("Attempt to call a method of a type parameter that doesn't extend anything");
+            }
+            method_table = clazzreg_type->data.type_parameter.extends->data.clazz.method_table;
+        }
+        data->callee_index = cl_get_method_index(method_table, callee_name);
         free(callee_name);
         data->returnreg = fr_getuint32(state);
     } else if(opcode_num == OPCODE_ARRALLOC) {
@@ -224,11 +233,25 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         data->callee_register = fr_getuint32(state);
         char* method_name = fr_getstr(state);
         struct ts_TYPE* interface = method->register_types[data->callee_register];
-        if(interface->category != ts_CATEGORY_INTERFACE) {
-            fatal("Attempt to do interface call on something that isn't an interface");
+        if(interface->category == ts_CATEGORY_INTERFACE) {
+            data->interface_id = interface->id;
+            data->method_index = cl_get_method_index(interface->data.interface.methods, method_name);
+        } else if(interface->category == ts_CATEGORY_TYPE_PARAMETER) {
+            data->method_index = -1;
+            for(int i = 0; i < interface->data.type_parameter.implementsc; i++) {
+                data->method_index = cl_get_method_index_optional(interface->data.type_parameter.implements[i]->data.interface.methods, method_name);
+                if(data->method_index != -1) {
+                    data->interface_id = interface->data.type_parameter.implements[i]->id;
+                    break;
+                }
+            }
+            if(data->method_index == -1) {
+                printf("Method name: %s\n", method_name);
+                fatal("Could not find interface method for type parameter");
+            }
+        } else {
+            fatal("Attempt to do interface call on something that isn't an interface or type parameter");
         }
-        data->interface_id = interface->id;
-        data->method_index = cl_get_method_index(interface->data.interface.methods, method_name);
         data->destination_register = fr_getuint32(state);
     } else {
         printf("Opcode: %2x\n", opcode_num);
@@ -392,7 +415,21 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     uint32_t num_type_arguments = fr_getuint32(state);
     result->type_parameters = ts_create_generic_type_context(num_type_arguments, NULL);
     for(uint32_t i = 0; i < num_type_arguments; i++) {
-        ts_init_type_parameter(&result->type_parameters->arguments[i], fr_getstr(state), result->type_parameters);
+        char* type_parameter_name = fr_getstr(state);
+        char* extends_name = fr_getstr(state);
+        // Our generic type context isn't fully initialized yet, so don't pass
+        // it as an argument here.
+        struct ts_TYPE* extends = strlen(extends_name) > 0 ? ts_get_type(extends_name, NULL) : NULL;
+        free(extends_name);
+        int implementsc = fr_getuint32(state);
+        struct ts_TYPE* implements[implementsc];
+        for(int j = 0; j < implementsc; j++) {
+            char* implements_name = fr_getstr(state);
+            implements[j] = ts_get_type(implements_name, NULL);
+            free(implements_name);
+        }
+        // Passing in a stack-allocated array since ts_init_type_parameter(...) just memcpy's it.
+        ts_init_type_parameter(&result->type_parameters->arguments[i], type_parameter_name, result->type_parameters, extends, implementsc, (struct ts_TYPE**) &implements);
     }
 
     result->returntype = ts_get_type(fr_getstr(state), result->type_parameters);

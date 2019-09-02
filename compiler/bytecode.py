@@ -110,6 +110,10 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
             body_header += struct.pack("!I", len(segment.signature.generic_type_context.arguments))
             for argument in segment.signature.generic_type_context.arguments:
                 body_header += encode_str(argument.name)
+                body_header += encode_str(argument.extends.name if argument.extends is not None else "")
+                body_header += struct.pack("!I", len(argument.implements))
+                for interface in argument.implements:
+                    body_header += encode_str(interface.name)
         else:
             body_header += struct.pack("!I", 0)
         body_header += encode_str(segment.signature.returntype.name)
