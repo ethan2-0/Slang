@@ -358,7 +358,7 @@ class Parser:
         elif self.peek().of("true", "false", "null"):
             return Node(self.next())
         elif self.isn("new"):
-            return Node(self.next(), Node(self.expect("ident")), self.parse_fcall_params())
+            return Node(self.next(), Node(self.expect("ident")), self.parse_type_args() if self.isn("<") else Node("typeargs"), self.parse_fcall_params())
         elif self.isn("ident") or self.isn("(") or self.isn("super"):
             # Note that we'll end up parsing some `super` expressions that don't
             # make sense, like `super[0]` or `super.property`. We reject these
@@ -613,6 +613,7 @@ class Parser:
         while self.peek().of(*Parser.class_modifiers):
             modifiers.add(Node(self.next()))
         nod = Node(self.expect("class"), Node(self.expect("ident")))
+        nod.add(self.parse_type_parameters())
         if self.isn("extends"):
             nod.add(Node(self.expect("extends"), self.parse_type()))
         else:

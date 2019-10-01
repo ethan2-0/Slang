@@ -127,7 +127,11 @@ class ClazzType(AbstractCallableType):
         if not isinstance(other, ClazzType):
             return False
 
-        if other.name == self.name:
+        if other.signature is self.signature:
+            # Note that there can't be two equivalent class signatures that
+            # aren't the same class signature. This approximation won't work
+            # forever (in particular when you get into variance) but it's close
+            # enough.
             return True
 
         supertype = self.get_supertype()
@@ -182,6 +186,36 @@ class ClazzType(AbstractCallableType):
         if supertype is not None and supertype.implements(other):
             return True
         return False
+
+    def specialize(self, arguments: List[AbstractType], node: parser.Node) -> "ClazzType":
+        return self.typesys.get_clazz_type_by_signature(self.signature.specialize(arguments, self.typesys, node))
+
+    def resolves(self, node: parser.Node, program: "emitter.Program") -> bool:
+        if node.i("ident") or node.i("."):
+            return any([self.name == path + util.nonnull(util.get_flattened(node)) for path in program.search_paths])
+        if self.signature.generic_type_context is None:
+            return False
+        if not node.i("<>"):
+            return False
+        if not any([self.name == path + util.nonnull(util.get_flattened(node[0])) for path in program.search_paths]):
+            return False
+        for i in range(len(node) - 1):
+            if not self.signature.generic_type_context.arguments[i].resolves(node[i + 1], program):
+                return False
+        return True
+
+    def __str__(self) -> str:
+        ret = ":%s" % self.signature.name
+        if self.signature.is_specialization:
+            assert self.signature.type_arguments is not None
+            ret += "<"
+            prepend = ""
+            for parameter in self.signature.type_arguments.parameters:
+                ret += prepend
+                ret += str(parameter)[1:] # To remove the leading colon
+                prepend = ", "
+            ret += ">"
+        return ret
 
 class InterfaceType(AbstractCallableType):
     def __init__(self, interface: "emitter.Interface") -> None:
@@ -317,12 +351,35 @@ class GenericTypeParameters:
             if not self.context.arguments[i].is_satisfied_by(self.parameters[i]):
                 node.compile_error("Could not reify generic method: '%s' does not satisfy '%s'" % (self.parameters[i], self.context.arguments[i]))
 
-    def reify(self, parameter: AbstractType) -> AbstractType:
+    def is_equivalent(self, other: "GenericTypeParameters") -> bool:
+        if self.num_params != other.num_params:
+            return False
+        for param, other_param in zip(self.parameters, other.parameters):
+            if param != other_param:
+                return False
+        return True
+
+    def reify(self, parameter: AbstractType, node: parser.Node) -> AbstractType:
+        # At the moment, this method actually won't ever produce compile errors.
+        # But I still take a node as an argument for conceptual consistency.
         if isinstance(parameter, ArrayType):
-            return self.types.get_array_type(self.reify(parameter.parent_type))
-        if not isinstance(parameter, GenericTypeArgument):
+            return self.types.get_array_type(self.reify(parameter.parent_type, node))
+        elif isinstance(parameter, GenericTypeArgument):
+            if parameter in self.mapping:
+                return self.mapping[parameter]
+            else:
+                raise ValueError("Could not reify type. This is a compiler bug.")
+        elif isinstance(parameter, ClazzType):
+            arguments: Optional[GenericTypeContext] = parameter.signature.generic_type_context
+            if arguments is None:
+                return parameter
+            old_arguments_list = arguments.arguments
+            new_arguments_list: List[AbstractType] = []
+            for argument in old_arguments_list:
+                new_arguments_list.append(self.reify(argument, node))
+            return util.nonnull(self.types.get_clazz_type_by_signature_optional(parameter.signature.specialize(new_arguments_list, self.types, node)))
+        else:
             return parameter
-        return self.mapping[parameter]
 
 class TypeSystem:
     def __init__(self, program: "emitter.Program"):
@@ -334,7 +391,7 @@ class TypeSystem:
         self.array_types: List[ArrayType] = []
         self.clazz_signatures: "List[emitter.ClazzSignature]" = []
 
-    def resolve(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext],  fail_silent: bool=False) -> Optional[AbstractType]:
+    def resolve(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext], fail_silent: bool = False) -> Optional[AbstractType]:
         for typ in self.types:
             if typ.resolves(node, self.program):
                 return typ
@@ -346,6 +403,24 @@ class TypeSystem:
                     raise ValueError("This is a compiler bug")
                 return None
             return self.get_array_type(element_type)
+        elif node.i("<>"):
+            # We've got to create a new specialization of the class signature
+            # because evidently the required one doesn't exist.
+            generic_class_type = self.resolve(node[0], generic_type_context, fail_silent=fail_silent)
+            if generic_class_type is None:
+                # We know fail_silent == True
+                return None
+            if not isinstance(generic_class_type, ClazzType):
+                # Yes, I really mean isinstance, not .is_class()
+                node.compile_error("Cannot provide generic type arguments to a type that isn't a class")
+            type_arguments: List[AbstractType] = []
+            for type_argument_node in node.children[1:]:
+                argument = self.resolve(type_argument_node, generic_type_context, fail_silent=fail_silent)
+                if argument is None:
+                    # We know fail_silent == True
+                    return None
+                type_arguments.append(argument)
+            return generic_class_type.specialize(type_arguments, node)
         if generic_type_context is not None:
             ret = generic_type_context.resolve_optional(node, self.program)
             if ret is not None:
@@ -397,7 +472,7 @@ class TypeSystem:
         # TODO: This is n^2 in the number of classes
         found = False
         for i in range(len(self.clazz_signatures)):
-            if self.clazz_signatures[i].name == signature.name:
+            if self.clazz_signatures[i].name == signature.name and not self.clazz_signatures[i].is_specialization:
                 self.clazz_signatures[i] = signature
                 found = True
         if not found:
@@ -411,11 +486,17 @@ class TypeSystem:
         if not found:
             raise KeyError()
 
-    def get_clazz_type_by_signature(self, signature: "emitter.ClazzSignature") -> ClazzType:
+    def get_clazz_type_by_signature_optional(self, signature: "emitter.ClazzSignature") -> Optional[ClazzType]:
         for type in self.types:
             if isinstance(type, ClazzType) and type.signature == signature:
                 return type
-        raise KeyError()
+        return None
+
+    def get_clazz_type_by_signature(self, signature: "emitter.ClazzSignature") -> ClazzType:
+        ret = self.get_clazz_type_by_signature_optional(signature)
+        if ret is None:
+            raise KeyError()
+        return ret
 
     def get_array_type(self, parent_type: AbstractType) -> ArrayType:
         for typ in self.array_types:
@@ -564,7 +645,7 @@ class TypeSystem:
             )
             if len(expr["typeargs"]) != (len(signature.generic_type_context.arguments) if signature.generic_type_context is not None else 0):
                 expr.compile_error("Wrong number of type arguments (expected %s, got %s)" % (len(signature.generic_type_context.arguments) if signature.generic_type_context is not None else 0, len(expr["typeargs"])))
-            signature = signature.reify([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program, expr["typeargs"])
+            signature = signature.specialize([self.resolve_strict(typ, generic_type_context) for typ in expr["typeargs"]], self.program, expr["typeargs"])
             if signature is not None:
                 if (not suppress_coercing_void_warning) and isinstance(signature.returntype, VoidType):
                     expr.warn("Coercing void")
@@ -582,8 +663,13 @@ class TypeSystem:
             return signature.returntype
         elif expr.i("new"):
             ret = self.resolve_strict(expr[0], generic_type_context)
-            if not ret.is_clazz():
+            # Why not .is_class()? Because we can't instantiate generic type parameters.
+            if not isinstance(ret, ClazzType):
                 raise TypingError(expr[0], "Type %s is not a class" % ret)
+            type_arguments: List[AbstractType] = []
+            for argument in expr["typeargs"]:
+                type_arguments.append(self.resolve_strict(argument, generic_type_context))
+            ret = ret.specialize(type_arguments, expr)
             return ret
         elif expr.i("."):
             # Ternary operator to satisfy typechecker (if-else statement would effectively require phi node which is ugly)

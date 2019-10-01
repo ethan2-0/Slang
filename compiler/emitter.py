@@ -148,7 +148,8 @@ class MethodSignature:
                 is_override: bool,
                 is_entrypoint: bool,
                 is_abstract: bool,
-                generic_type_context: Optional[typesys.GenericTypeContext]) -> None:
+                generic_type_context: Optional[typesys.GenericTypeContext],
+                reified_from: "Optional[MethodSignature]" = None) -> None:
         self.name = name
         self.args = args
         self.argnames = argnames
@@ -161,6 +162,7 @@ class MethodSignature:
         self.is_entrypoint = is_entrypoint
         self.is_abstract = is_abstract
         self.generic_type_context = generic_type_context
+        self.reified_from = reified_from
         MethodSignature.sequential_id += 1
         if self.is_reference_call and self.is_generic_method:
             raise ValueError("Class methods cannot have generic type parameters")
@@ -209,15 +211,18 @@ class MethodSignature:
             type_args_str = ""
         return "%sfn %s%s%s(%s): %s" % (modifiers, prefix, self.name, type_args_str, args_str, self.returntype.name)
 
-    def reify(self, arguments: List[typesys.AbstractType], program: "Program", node: parser.Node) -> "MethodSignature":
+    def specialize(self, arguments: List[typesys.AbstractType], program: "Program", node: parser.Node) -> "MethodSignature":
         if self.generic_type_context is None:
             if len(arguments) > 0:
                 raise ValueError("Attempt to provide generic type arguments to a method that doesn't have a generic type context")
             return self
         params = typesys.GenericTypeParameters(util.nonnull(self.generic_type_context), arguments, program.types)
+        return self.specialize_with_parameters(params, node)
+
+    def specialize_with_parameters(self, params: typesys.GenericTypeParameters, node: parser.Node) -> "MethodSignature":
         params.verify_valid_arguments(node)
-        new_return_type = params.reify(self.returntype)
-        argument_types = [params.reify(typ) for typ in self.args]
+        new_return_type = params.reify(self.returntype, node)
+        argument_types = [params.reify(typ, node) for typ in self.args]
         return MethodSignature(
             name=self.name,
             args=argument_types,
@@ -229,7 +234,8 @@ class MethodSignature:
             is_override=self.is_override,
             is_entrypoint=self.is_entrypoint,
             is_abstract=self.is_abstract,
-            generic_type_context=None
+            generic_type_context=None,
+            reified_from=self
         )
 
     @staticmethod
@@ -238,12 +244,13 @@ class MethodSignature:
             program: "Program",
             this_type: "Optional[typesys.AbstractType]" = None,
             containing_class: "Optional[ClazzSignature]" = None,
-            containing_interface: "Optional[Interface]" = None) -> "MethodSignature":
+            containing_interface: "Optional[Interface]" = None,
+            generic_type_context: Optional[typesys.GenericTypeContext] = None) -> "MethodSignature":
         if containing_class is None and method["modifiers"].has_child("override"):
             method.compile_error("Can't both be an override method and not have a containing class")
 
         if method.i("fn"):
-            generic_type_context = typesys.GenericTypeContext(program.types, parent=None)
+            generic_type_context = typesys.GenericTypeContext(program.types, parent=generic_type_context)
             for type_arg in method["typeparams"]:
                 generic_type_context.add_type_argument_from_node(type_arg)
             if (containing_class is not None or containing_interface is not None) and len(generic_type_context.arguments) > 0:
@@ -282,7 +289,7 @@ class MethodSignature:
                 is_abstract=is_abstract
             )
         elif method.i("ctor"):
-            signature = cast(List[typesys.AbstractType], [this_type]) + [program.types.resolve_strict(arg[1], None) for arg in method[0]]
+            signature = cast(List[typesys.AbstractType], [this_type]) + [program.types.resolve_strict(arg[1], generic_type_context) for arg in method[0]]
             argnames = ["this"] + [arg[0].data_strict for arg in method[0]]
             assert containing_class is not None
             assert type(containing_class.name) is str
@@ -539,7 +546,7 @@ class MethodEmitter(SegmentEmitter):
             typeargs: Optional[List[typesys.AbstractType]] = None
             if len(node["typeargs"]) > 0:
                 typeargs = [self.types.resolve_strict(typearg, self.generic_type_context) for typearg in node["typeargs"]]
-                signature = signature.reify(typeargs, self.program, node["typeargs"])
+                signature = signature.specialize(typeargs, self.program, node["typeargs"])
 
             param_registers = []
 
@@ -563,7 +570,7 @@ class MethodEmitter(SegmentEmitter):
                 typeargs_typerefs = [self.type_references.add_type_reference(typ) for typ in typeargs] if typeargs is not None else []
                 opcodes.append(ops["call"].ins(signature, register, typeargs_typerefs, node=node))
         elif node.i("new"):
-            typ = self.types.resolve_strict(node[0], self.generic_type_context)
+            typ = self.types.decide_type(node, self.scope, self.generic_type_context)
             if not isinstance(typ, typesys.ClazzType):
                 node[0].compile_error("Attempt to instantiate a type that isn't a class")
             if typ.signature.is_abstract:
@@ -1018,6 +1025,10 @@ class ClazzField:
         self.name = name
         self.type = type
 
+    def reify(self, parameters: typesys.GenericTypeParameters, node: parser.Node) -> "ClazzField":
+        parameters.verify_valid_arguments(node)
+        return ClazzField(self.name, parameters.reify(self.type, node))
+
 class ClazzSignature:
     def __init__(
                 self,
@@ -1028,7 +1039,10 @@ class ClazzSignature:
                 parent_type: Optional[typesys.ClazzType],
                 is_abstract: bool,
                 implemented_interfaces: List[typesys.InterfaceType],
-                is_included: bool=False) -> None:
+                generic_type_context: Optional[typesys.GenericTypeContext],
+                type_arguments: Optional[typesys.GenericTypeParameters],
+                is_included: bool=False,
+                is_dummy: bool=False) -> None:
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
@@ -1037,10 +1051,22 @@ class ClazzSignature:
         self.is_included = is_included
         self.parent_type = parent_type
         self.implemented_interfaces = implemented_interfaces
+        self.generic_type_context = generic_type_context
+        self.specializations: "List[ClazzSignature]" = []
+        self.type_arguments = type_arguments
+        self.is_dummy = is_dummy
 
     @property
     def parent_signature(self) -> "Optional[ClazzSignature]":
         return self.parent_type.signature if self.parent_type is not None else None
+
+    @property
+    def is_raw_type(self) -> bool:
+        return self.generic_type_context is not None and len(self.generic_type_context.arguments) > 0
+
+    @property
+    def is_specialization(self) -> bool:
+        return self.type_arguments is not None
 
     def validate_overriding_rules(self) -> None:
         if self.is_included:
@@ -1138,12 +1164,32 @@ class ClazzSignature:
 
     def __str__(self) -> str:
         ret = ""
+        if self.is_raw_type:
+            ret += "raw "
         if self.is_included:
-            ret += ("included ")
+            ret += "included "
         if self.is_abstract:
-            ret += ("abstract ")
+            ret += "abstract "
         ret += "class "
         ret += self.name
+        if self.is_specialization:
+            # See implementation of ClazzSignature.is_specialization
+            assert self.type_arguments is not None
+            ret += "<"
+            prepend = ""
+            for parameter in self.type_arguments.parameters:
+                ret += prepend
+                ret += str(parameter)
+                prepend = ", "
+            ret += ">"
+        elif self.is_raw_type:
+            # See implementation of ClazzSignature.is_raw_type
+            ret += "<"
+            prepend = ""
+            for argument in (self.generic_type_context.arguments if self.generic_type_context is not None else []):
+                ret += prepend
+                ret += str(argument)
+                prepend = ", "
         if self.parent_signature is None:
             ret += " extends null"
         else:
@@ -1162,6 +1208,46 @@ class ClazzSignature:
     def looks_like_class_signature(self) -> None:
         pass
 
+    def specialize(self, arguments: List[typesys.AbstractType], types: typesys.TypeSystem, node: parser.Node) -> "ClazzSignature":
+        if self.generic_type_context is None or self.generic_type_context.num_arguments == len(arguments) == 0:
+            return self
+        parameters = typesys.GenericTypeParameters(util.nonnull(self.generic_type_context), arguments, types)
+        parameters.verify_valid_arguments(node)
+        return self.specialize_with_parameters(parameters, types, node)
+
+    def specialize_with_parameters(self, parameters: typesys.GenericTypeParameters, types: typesys.TypeSystem, node: parser.Node) -> "ClazzSignature":
+        for specialization in self.specializations:
+            # A specialization can't have null type arguments
+            if util.nonnull(specialization.type_arguments).is_equivalent(parameters):
+                return specialization
+        ret = ClazzSignature(
+            self.name,
+            [],
+            [],
+            [],
+            self.parent_type,
+            self.is_abstract,
+            self.implemented_interfaces,
+            None,
+            parameters,
+            self.is_included
+        )
+        self.specializations.append(ret)
+        types.accept_skeleton_clazz(ret)
+        parameters.verify_valid_arguments(node)
+        fields: List[ClazzField] = [field.reify(parameters, node) for field in self.fields]
+        ret.fields = fields
+        methods: List[MethodSignature] = [method.specialize_with_parameters(parameters, node) for method in self.method_signatures]
+        ret.method_signatures = methods
+        ctors: List[MethodSignature] = []
+        for ctor in self.ctor_signatures:
+            for method in methods:
+                if method.reified_from == ctor:
+                    ctors.append(method)
+                    break
+        ret.ctor_signatures = ctors
+        return ret
+
 class ClazzEmitter(SegmentEmitter):
     def __init__(self, top: parser.Node, program: "Program") -> None:
         self.top = top
@@ -1171,6 +1257,7 @@ class ClazzEmitter(SegmentEmitter):
         self.fields: List[ClazzField]
         self.method_signatures: List[MethodSignature]
         self.ctor_signatures: List[MethodSignature]
+        self.generic_type_context: Optional[typesys.GenericTypeContext] = None
 
     @property
     def unqualified_name(self) -> str:
@@ -1181,19 +1268,22 @@ class ClazzEmitter(SegmentEmitter):
         return ("%s." % self.program.namespace if self.program.namespace is not None else "") + self.unqualified_name
 
     def _emit_field(self, node: parser.Node) -> ClazzField:
-        return ClazzField(node[0].data_strict, self.program.types.resolve_strict(node[1], None))
+        return ClazzField(node[0].data_strict, self.program.types.resolve_strict(node[1], self.generic_type_context))
 
     def emit_signature_no_fields(self) -> ClazzSignature:
         self.is_signature_no_fields = True
-        self.signature = ClazzSignature(self.name, [], [], [], None, self.top["modifiers"].has_child("abstract"), [])
+        self.signature = ClazzSignature(self.name, [], [], [], None, self.top["modifiers"].has_child("abstract"), [], None, None)
         return self.signature
 
     def emit_signature(self) -> ClazzSignature:
         if self.signature is not None and not self.is_signature_no_fields:
             return self.signature
+        self.generic_type_context = typesys.GenericTypeContext(self.program.types, None)
         self.fields = []
         self.method_signatures = []
         self.ctor_signatures = []
+        for typeparam in self.top["typeparams"]:
+            self.generic_type_context.add_type_argument_from_node(typeparam)
         for field in self.top["classbody"]:
             if field.i("classprop"):
                 self.fields.append(self._emit_field(field))
@@ -1204,7 +1294,8 @@ class ClazzEmitter(SegmentEmitter):
                     this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # At this point in execution, `this.signature` is the blank
                     # signature from emit_signature_no_fields(...).
-                    containing_class=self.signature
+                    containing_class=self.signature,
+                    generic_type_context=self.generic_type_context
                 )
                 self.method_signatures.append(signature)
                 field.xattrs["signature"] = signature
@@ -1214,7 +1305,8 @@ class ClazzEmitter(SegmentEmitter):
                     self.program,
                     this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # Same comment as above
-                    containing_class=self.signature
+                    containing_class=self.signature,
+                    generic_type_context=self.generic_type_context
                 )
                 self.method_signatures.append(signature)
                 self.ctor_signatures.append(signature)
@@ -1226,7 +1318,9 @@ class ClazzEmitter(SegmentEmitter):
             self.ctor_signatures,
             None,
             self.top["modifiers"].has_child("abstract"),
-            []
+            [],
+            self.generic_type_context,
+            None
         )
         # We need to replace the containing_class with the new signature,
         # just so we don't have different signatures floating around.
@@ -1464,7 +1558,7 @@ class Program:
 
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
-            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, [], is_included=True))
+            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, [], None, None, is_included=True))
         for interface_header in headers.interfaces:
             interface = Interface(interface_header.name, None, included=True)
             self.interfaces.append(interface)
@@ -1523,6 +1617,8 @@ class Program:
                 util.nonnull(parent_type) if clazz.parent is not None else None,
                 clazz.is_abstract,
                 [cast(typesys.InterfaceType, self.types.resolve_strict(parser.parse_type(name), None)) for name in clazz.interfaces],
+                None,
+                None,
                 is_included=True
             )
             self.clazz_signatures.append(clazz_signature)
