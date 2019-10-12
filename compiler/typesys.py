@@ -337,6 +337,7 @@ class GenericTypeContext:
 class GenericTypeParameters:
     def __init__(self, context: GenericTypeContext, parameters: List[AbstractType], types: "TypeSystem") -> None:
         if len(parameters) != len(context.arguments):
+            # We should've caught this earlier
             raise ValueError("Wrong number of type parameters. This is a compiler bug.")
         self.context = context
         self.parameters = parameters
@@ -370,14 +371,9 @@ class GenericTypeParameters:
             else:
                 raise ValueError("Could not reify type. This is a compiler bug.")
         elif isinstance(parameter, ClazzType):
-            arguments: Optional[GenericTypeContext] = parameter.signature.generic_type_context
-            if arguments is None:
+            if not (parameter.signature.is_raw_type or parameter.signature.is_specialization):
                 return parameter
-            old_arguments_list = arguments.arguments
-            new_arguments_list: List[AbstractType] = []
-            for argument in old_arguments_list:
-                new_arguments_list.append(self.reify(argument, node))
-            return util.nonnull(self.types.get_clazz_type_by_signature_optional(parameter.signature.specialize(new_arguments_list, self.types, node)))
+            return self.types.get_clazz_type_by_signature(parameter.signature.specialize_with_parameters(self, self.types, node))
         else:
             return parameter
 
@@ -391,9 +387,11 @@ class TypeSystem:
         self.array_types: List[ArrayType] = []
         self.clazz_signatures: "List[emitter.ClazzSignature]" = []
 
-    def resolve(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext], fail_silent: bool = False) -> Optional[AbstractType]:
+    def resolve(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext], fail_silent: bool = False, allow_raw: bool = False) -> Optional[AbstractType]:
         for typ in self.types:
             if typ.resolves(node, self.program):
+                if not allow_raw and isinstance(typ, ClazzType) and typ.signature.is_raw_type:
+                    node.compile_error("Cannot use raw types directly")
                 return typ
         if node.i("["):
             element_type = self.resolve(node[0], generic_type_context, fail_silent=fail_silent)
@@ -406,7 +404,7 @@ class TypeSystem:
         elif node.i("<>"):
             # We've got to create a new specialization of the class signature
             # because evidently the required one doesn't exist.
-            generic_class_type = self.resolve(node[0], generic_type_context, fail_silent=fail_silent)
+            generic_class_type = self.resolve(node[0], generic_type_context, fail_silent=fail_silent, allow_raw=True)
             if generic_class_type is None:
                 # We know fail_silent == True
                 return None
@@ -457,8 +455,8 @@ class TypeSystem:
     def get_object_type(self) -> Optional[ClazzType]:
         return self.get_clazz_type_by_name("stdlib.Object")
 
-    def resolve_strict(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext]) -> AbstractType:
-        ret = self.resolve(node, generic_type_context, fail_silent=False)
+    def resolve_strict(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext], allow_raw: bool = False) -> AbstractType:
+        ret = self.resolve(node, generic_type_context, fail_silent=False, allow_raw=allow_raw)
         if ret is None:
             # TypeSystem.resolve will never return None if fail_silent == True
             raise ValueError("This is a compiler bug.")
@@ -662,7 +660,7 @@ class TypeSystem:
                 expr.warn("Coercing void")
             return signature.returntype
         elif expr.i("new"):
-            ret = self.resolve_strict(expr[0], generic_type_context)
+            ret = self.resolve_strict(expr[0], generic_type_context, allow_raw=True)
             # Why not .is_class()? Because we can't instantiate generic type parameters.
             if not isinstance(ret, ClazzType):
                 raise TypingError(expr[0], "Type %s is not a class" % ret)

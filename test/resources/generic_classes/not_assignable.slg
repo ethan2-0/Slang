@@ -1,0 +1,8 @@
+using stdlib;
+
+class Generic<T> {
+    ctor() {}
+}
+entrypoint fn main() {
+    let abc: Generic<Object> = new Generic<String>();
+}

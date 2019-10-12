@@ -1190,6 +1190,7 @@ class ClazzSignature:
                 ret += prepend
                 ret += str(argument)
                 prepend = ", "
+            ret += ">"
         if self.parent_signature is None:
             ret += " extends null"
         else:
@@ -1211,6 +1212,10 @@ class ClazzSignature:
     def specialize(self, arguments: List[typesys.AbstractType], types: typesys.TypeSystem, node: parser.Node) -> "ClazzSignature":
         if self.generic_type_context is None or self.generic_type_context.num_arguments == len(arguments) == 0:
             return self
+        if len(arguments) != len(util.nonnull(self.generic_type_context).arguments):
+            if len(arguments) == 0:
+                node.compile_error("Expected type arguments")
+            node.compile_error("Wrong number of type arguments: expected %s, got %s" % (len(util.nonnull(self.generic_type_context).arguments), len(arguments)))
         parameters = typesys.GenericTypeParameters(util.nonnull(self.generic_type_context), arguments, types)
         parameters.verify_valid_arguments(node)
         return self.specialize_with_parameters(parameters, types, node)
@@ -1225,16 +1230,23 @@ class ClazzSignature:
             [],
             [],
             [],
-            self.parent_type,
+            None,
             self.is_abstract,
             self.implemented_interfaces,
             None,
             parameters,
             self.is_included
         )
+        ret.specializations = self.specializations
         self.specializations.append(ret)
         types.accept_skeleton_clazz(ret)
         parameters.verify_valid_arguments(node)
+        if self.parent_type is not None:
+            parent_type_nonnull = util.nonnull(self.parent_type)
+            new_parent_type = parameters.reify(parent_type_nonnull, node)
+            if not isinstance(new_parent_type, typesys.ClazzType):
+                raise ValueError("This is a compiler bug.")
+            ret.parent_type = new_parent_type
         fields: List[ClazzField] = [field.reify(parameters, node) for field in self.fields]
         ret.fields = fields
         methods: List[MethodSignature] = [method.specialize_with_parameters(parameters, node) for method in self.method_signatures]
@@ -1341,7 +1353,7 @@ class ClazzEmitter(SegmentEmitter):
         else:
             # Since we have a reference to this class's signature, we can
             # just update it in-place.
-            parent_type = self.program.types.resolve(self.top["extends"][0], None)
+            parent_type = self.program.types.resolve(self.top["extends"][0], self.generic_type_context)
             if parent_type is None or not isinstance(parent_type, typesys.ClazzType):
                 self.top["extends"].compile_error("Tried to extend a nonexisting class")
             self.signature.parent_type = parent_type

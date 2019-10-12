@@ -1,0 +1,27 @@
+using stdlib;
+
+class Generic<T> {
+    t: T;
+    ctor(t: T) {
+        this.t = t;
+    }
+    fn getT(): T {
+        return this.t;
+    }
+}
+class Subclass<R> extends Generic<R> {
+    ctor(t: R) {
+        super(t);
+    }
+    fn setT(t: R) {
+        this.t = t;
+    }
+}
+entrypoint fn main() {
+    let subclass = new Subclass<int>(5);
+    subclass.setT(6);
+    let superclass: Generic<int> = subclass;
+    if(superclass.getT() != 6) {
+        die("Failed");
+    }
+}

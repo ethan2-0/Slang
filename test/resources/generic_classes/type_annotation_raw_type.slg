@@ -1,0 +1,6 @@
+class Generic<T> {
+    ctor() {}
+}
+entrypoint fn main() {
+    let var: Generic;
+}

@@ -504,3 +504,25 @@ class TestGenericMethods:
 
     def test_generic_member_method(self):
         path = util.assert_compile_fails("resources/generic_methods/generic_member_method.slg", message="Member methods cannot have type arguments")
+
+class TestGenericClasses:
+    def test_basic(self):
+        util.assert_compile_succeeds("resources/generic_classes/basic.slg")
+
+    def test_bounds(self):
+        util.assert_compile_succeeds("resources/generic_classes/bounds.slg")
+
+    def test_type_annotation_raw_type(self):
+        util.assert_compile_fails("resources/generic_classes/type_annotation_raw_type.slg", message="Cannot use raw types directly")
+
+    def test_instantiate_raw_type(self):
+        util.assert_compile_fails("resources/generic_classes/instantiate_raw_type.slg", message="Expected type arguments")
+
+    def test_not_assignable(self):
+        util.assert_compile_fails("resources/generic_classes/not_assignable.slg", message="is not assignable to")
+
+    def test_inherit_from_specialization(self):
+        util.assert_compile_succeeds("resources/generic_classes/inherit_from_specialization.slg")
+
+    def test_inherit_from_generic(self):
+        util.assert_compile_succeeds("resources/generic_classes/inherit_from_generic.slg")

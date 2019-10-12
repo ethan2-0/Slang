@@ -1,0 +1,15 @@
+using stdlib;
+
+class Hasher<T implements Hashable> {
+    t: T;
+    ctor(t: T) {
+        this.t = t;
+    }
+    fn hash(): int {
+        return this.t.getHashCode();
+    }
+}
+entrypoint fn main() {
+    let hasher = new Hasher<String>("abc");
+    hasher.hash();
+}

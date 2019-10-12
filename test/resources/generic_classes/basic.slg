@@ -1,0 +1,27 @@
+using stdlib;
+
+class Container<T> {
+    t: T;
+    ctor(t: T) {
+        this.t = t;
+    }
+    fn getT(): T {
+        return this.t;
+    }
+    fn setT(t: T) {
+        this.t = t;
+    }
+    fn asList(): [T] {
+        return [this.t];
+    }
+}
+entrypoint fn main() {
+    let container: Container<int> = new Container<int>(1);
+    let a: int = container.getT();
+    container.setT(2);
+    let b: int = container.getT();
+    let c: [int] = container.asList();
+    if(a != 1 or b != 2 or c[0] != 2) {
+        die("Failed");
+    }
+}
