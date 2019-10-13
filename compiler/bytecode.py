@@ -107,7 +107,7 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
         else:
             body_header += encode_str("")
         if segment.signature.generic_type_context is not None:
-            body_header += struct.pack("!I", len(segment.signature.generic_type_context.arguments))
+            body_header += struct.pack("!I", segment.signature.generic_type_context.num_arguments)
             for argument in segment.signature.generic_type_context.arguments:
                 body_header += encode_str(argument.name)
                 body_header += encode_str(argument.extends.name if argument.extends is not None else "")
@@ -152,6 +152,16 @@ class SegmentEmitterClazz(SegmentEmitter[emitter.ClazzSegment]):
         body += struct.pack("!I", len(segment.signature.implemented_interfaces))
         for interface in segment.signature.implemented_interfaces:
             body += encode_str(interface.name)
+        if segment.signature.generic_type_context is not None:
+            body += struct.pack("!I", segment.signature.generic_type_context.num_arguments)
+            for argument in segment.signature.generic_type_context.arguments:
+                body += encode_str(argument.name)
+                body += encode_str(argument.extends.name if argument.extends is not None else "")
+                body += struct.pack("!I", len(argument.implements))
+                for interface in argument.implements:
+                    body += encode_str(interface.name)
+        else:
+            body += struct.pack("!I", 0)
         body += struct.pack("!I", len(segment.fields))
         for field in segment.fields:
             body += encode_str(field.name)

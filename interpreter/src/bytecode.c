@@ -498,6 +498,15 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
             for(uint32_t i = 0; i < num_interfaces; i++) {
                 free(fr_getstr(state));
             }
+            uint32_t num_type_arguments = fr_getuint32(state);
+            for(uint32_t i = 0; i < num_type_arguments; i++) {
+                free(fr_getstr(state)); // name
+                free(fr_getstr(state)); // extends
+                uint32_t num_implemented_interfaces = fr_getuint32(state);
+                for(uint32_t i = 0; i < num_implemented_interfaces; i++) {
+                    free(fr_getstr(state)); // interface name
+                }
+            }
             #if DEBUG
             printf("Prescanning class '%s'\n", clazzname);
             #endif
@@ -572,6 +581,15 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
                 struct ts_TYPE* interface = cl_get_or_create_interface(name, program);
                 clazz->data.clazz.implemented_interfaces[i] = interface;
                 free(name);
+            }
+            uint32_t num_type_arguments = fr_getuint32(state);
+            for(uint32_t i = 0; i < num_type_arguments; i++) {
+                free(fr_getstr(state)); // name
+                free(fr_getstr(state)); // extends
+                uint32_t num_implemented_interfaces = fr_getuint32(state);
+                for(uint32_t i = 0; i < num_implemented_interfaces; i++) {
+                    free(fr_getstr(state)); // interface name
+                }
             }
             uint32_t numfields = fr_getuint32(state);
             clazz->data.clazz.nfields = numfields;
