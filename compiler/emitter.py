@@ -1041,8 +1041,7 @@ class ClazzSignature:
                 implemented_interfaces: List[typesys.InterfaceType],
                 generic_type_context: Optional[typesys.GenericTypeContext],
                 type_arguments: Optional[typesys.GenericTypeParameters],
-                is_included: bool=False,
-                is_dummy: bool=False) -> None:
+                is_included: bool=False) -> None:
         self.name = name
         self.fields = fields
         self.method_signatures = method_signatures
@@ -1054,7 +1053,6 @@ class ClazzSignature:
         self.generic_type_context = generic_type_context
         self.specializations: "List[ClazzSignature]" = []
         self.type_arguments = type_arguments
-        self.is_dummy = is_dummy
 
     @property
     def parent_signature(self) -> "Optional[ClazzSignature]":
@@ -1067,6 +1065,17 @@ class ClazzSignature:
     @property
     def is_specialization(self) -> bool:
         return self.type_arguments is not None
+
+    @property
+    def bytecode_name(self) -> str:
+        ret = self.name
+        if self.is_specialization:
+            ret += "<"
+            # We know self.type_arguments is not None because self.is_specialization
+            ret += ",".join([parameter.bytecode_name for parameter in util.nonnull(self.type_arguments).parameters])
+            ret += ">"
+        return ret
+
 
     def validate_overriding_rules(self) -> None:
         if self.is_included:
@@ -1239,7 +1248,7 @@ class ClazzSignature:
         )
         ret.specializations = self.specializations
         self.specializations.append(ret)
-        types.accept_skeleton_clazz(ret)
+        types.accept_class_signature(ret)
         parameters.verify_valid_arguments(node)
         if self.parent_type is not None:
             parent_type_nonnull = util.nonnull(self.parent_type)
@@ -1285,20 +1294,30 @@ class ClazzEmitter(SegmentEmitter):
     def emit_signature_no_fields(self) -> ClazzSignature:
         self.is_signature_no_fields = True
         self.signature = ClazzSignature(self.name, [], [], [], None, self.top["modifiers"].has_child("abstract"), [], None, None)
+        self.generic_type_context = self.signature.generic_type_context = typesys.GenericTypeContext(self.program.types, None)
+        for typeparam in self.top["typeparams"]:
+            self.generic_type_context.add_type_argument_from_node(typeparam)
         return self.signature
+
 
     def emit_signature(self) -> ClazzSignature:
         if self.signature is not None and not self.is_signature_no_fields:
             return self.signature
-        self.generic_type_context = typesys.GenericTypeContext(self.program.types, None)
         self.fields = []
         self.method_signatures = []
         self.ctor_signatures = []
-        for typeparam in self.top["typeparams"]:
-            self.generic_type_context.add_type_argument_from_node(typeparam)
+        # Note that we're assigning these by reference so anything added to
+        # self.fields will also be added to self.signature.fields for example
+        self.signature.fields = self.fields
+        self.signature.method_signatures = self.method_signatures
+        self.signature.ctor_signatures = self.ctor_signatures
         for field in self.top["classbody"]:
             if field.i("classprop"):
-                self.fields.append(self._emit_field(field))
+                class_field = self._emit_field(field)
+                self.fields.append(class_field)
+                for specialization in self.signature.specializations:
+                    reification = class_field.reify(util.nonnull(specialization.type_arguments), field)
+                    specialization.fields.append(reification)
             elif field.i("fn"):
                 signature = MethodSignature.from_node(
                     field,
@@ -1311,6 +1330,9 @@ class ClazzEmitter(SegmentEmitter):
                 )
                 self.method_signatures.append(signature)
                 field.xattrs["signature"] = signature
+                for specialization in self.signature.specializations:
+                    reification = signature.specialize_with_parameters(util.nonnull(specialization.type_arguments), field)
+                    specialization.method_signatures.append(reification)
             elif field.i("ctor"):
                 signature = MethodSignature.from_node(
                     field,
@@ -1323,21 +1345,14 @@ class ClazzEmitter(SegmentEmitter):
                 self.method_signatures.append(signature)
                 self.ctor_signatures.append(signature)
                 field.xattrs["signature"] = signature
-        self.signature = ClazzSignature(
-            self.name,
-            self.fields,
-            self.method_signatures,
-            self.ctor_signatures,
-            None,
-            self.top["modifiers"].has_child("abstract"),
-            [],
-            self.generic_type_context,
-            None
-        )
-        # We need to replace the containing_class with the new signature,
-        # just so we don't have different signatures floating around.
-        for signature in self.method_signatures:
-            signature.containing_class = self.signature
+                for specialization in self.signature.specializations:
+                    reification = signature.specialize_with_parameters(util.nonnull(specialization.type_arguments), field)
+                    specialization.method_signatures.append(reification)
+                    specialization.ctor_signatures.append(reification)
+
+        self.signature.name = self.name
+        self.signature.is_abstract = self.top["modifiers"].has_child("abstract")
+
         self.is_signature_no_fields = False
         return self.signature
 
@@ -1351,13 +1366,10 @@ class ClazzEmitter(SegmentEmitter):
         elif self.top["extends"][0].i("ident") and self.top["extends"][0].data_strict == "void":
             self.signature.parent_type = None
         else:
-            # Since we have a reference to this class's signature, we can
-            # just update it in-place.
             parent_type = self.program.types.resolve(self.top["extends"][0], self.generic_type_context)
             if parent_type is None or not isinstance(parent_type, typesys.ClazzType):
                 self.top["extends"].compile_error("Tried to extend a nonexisting class")
             self.signature.parent_type = parent_type
-        # Otherwise, the superclass remains as `None`.
 
     def add_interfaces_to_signature(self) -> None:
         for interface in self.top["implements"]:
@@ -1414,7 +1426,7 @@ class ClazzSegment(Segment):
         for method in self.method_signatures:
             print("    %s" % method)
         for field in self.fields:
-            print("    %s: %s" % (field.name, field.type.name))
+            print("    %s: %s" % (field.name, field.type.bytecode_name))
 
     def evaluate(self, program: "Program") -> None:
         Segment.evaluate(self, program)
@@ -1543,18 +1555,12 @@ class Program:
                 clazz_emitters.append(ClazzEmitter(toplevel, self))
             elif toplevel.i("interface"):
                 self.interfaces.append(Interface.create_from_node(toplevel, self))
-        # This is the indices in self.clazz_signatures of the class signature
-        # associated with its respective emitter
-        indices = dict()
         for emitter in clazz_emitters:
             signature = emitter.emit_signature_no_fields()
-            indices[id(emitter)] = len(self.clazz_signatures)
             self.clazz_signatures.append(signature)
-            self.types.accept_skeleton_clazz(signature)
+            self.types.accept_class_signature(signature)
         for emitter in clazz_emitters:
             signature = emitter.emit_signature()
-            self.types.update_signature(signature)
-            self.clazz_signatures[indices[id(emitter)]] = signature
         for interface in self.interfaces:
             interface.add_to_typesys(self.types)
         for emitter in clazz_emitters:
@@ -1570,7 +1576,7 @@ class Program:
 
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
-            self.types.accept_skeleton_clazz(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, [], None, None, is_included=True))
+            self.types.accept_class_signature(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, [], None, None, is_included=True))
         for interface_header in headers.interfaces:
             interface = Interface(interface_header.name, None, included=True)
             self.interfaces.append(interface)
@@ -1620,23 +1626,19 @@ class Program:
                 fields.append(ClazzField(field.name, self.types.resolve_strict(parser.parse_type(field.type), None)))
             parent_type = self.types.resolve_strict(parser.parse_type(clazz.parent), None) if clazz.parent is not None else None
             assert isinstance(parent_type, typesys.ClazzType) or parent_type is None
-            # util.nonnull is correct here because of the previous two lines
-            clazz_signature = ClazzSignature(
-                clazz.name,
-                fields,
-                methods,
-                ctors,
-                util.nonnull(parent_type) if clazz.parent is not None else None,
-                clazz.is_abstract,
-                [cast(typesys.InterfaceType, self.types.resolve_strict(parser.parse_type(name), None)) for name in clazz.interfaces],
-                None,
-                None,
-                is_included=True
-            )
-            self.clazz_signatures.append(clazz_signature)
-            self.types.update_signature(clazz_signature)
-            for method_signature in methods + ctors:
-                method_signature.containing_class = clazz_signature
+            # TODO: Is there a cleaner way of getting `sig`?
+            sig_type = self.types.resolve_strict(parser.parse_type(clazz.name), None)
+            if not isinstance(sig_type, typesys.ClazzType):
+                raise ValueError("This is a compiler bug.")
+            sig = sig_type.signature
+            sig.name = clazz.name
+            sig.fields = fields
+            sig.method_signatures = methods
+            sig.ctor_signatures = ctors
+            sig.parent_type = parent_type
+            sig.is_abstract = clazz.is_abstract
+            sig.implemented_interfaces = [cast(typesys.InterfaceType, self.types.resolve_strict(parser.parse_type(name), None)) for name in clazz.interfaces]
+            self.clazz_signatures.append(sig)
         for staticvar in headers.static_variables:
             self.static_variables.add_variable(
                 StaticVariable(

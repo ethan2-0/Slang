@@ -43,7 +43,7 @@ class MethodBytecodeEmitter:
                 params += encode_str(param.name)
             elif paramtype == "class":
                 assert isinstance(param, emitter.ClazzSignature)
-                params += encode_str(param.name)
+                params += encode_str(param.bytecode_name)
             elif paramtype == "type":
                 assert isinstance(param, int)
                 params += struct.pack("!I", param)
@@ -116,12 +116,12 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
                     body_header += encode_str(interface.name)
         else:
             body_header += struct.pack("!I", 0)
-        body_header += encode_str(segment.signature.returntype.name)
+        body_header += encode_str(segment.signature.returntype.bytecode_name)
         for register in segment.scope.registers:
-            body_header += encode_str(register.type.name)
+            body_header += encode_str(register.type.bytecode_name)
         body_header += struct.pack("!I", len(segment.emitter.type_references))
         for typ in segment.emitter.type_references:
-            body_header += encode_str(typ.name)
+            body_header += encode_str(typ.bytecode_name)
         body = body_header + MethodBytecodeEmitter(segment.opcodes).emit()
         length = struct.pack("!I", len(header + body))
         return ret + length + header + body
@@ -148,24 +148,25 @@ class SegmentEmitterClazz(SegmentEmitter[emitter.ClazzSegment]):
     def emit(self, segment: emitter.ClazzSegment) -> bytes:
         ret = SegmentEmitter.emit(self, segment)
         body = encode_str(segment.name)
-        body += encode_str(segment.signature.parent_signature.name if segment.signature.parent_signature is not None else "")
+        # elw TODO: Make this use .get_bytecode_name()
+        body += encode_str(segment.signature.parent_signature.bytecode_name if segment.signature.parent_signature is not None else "")
         body += struct.pack("!I", len(segment.signature.implemented_interfaces))
         for interface in segment.signature.implemented_interfaces:
-            body += encode_str(interface.name)
+            body += encode_str(interface.bytecode_name)
         if segment.signature.generic_type_context is not None:
             body += struct.pack("!I", segment.signature.generic_type_context.num_arguments)
             for argument in segment.signature.generic_type_context.arguments:
-                body += encode_str(argument.name)
-                body += encode_str(argument.extends.name if argument.extends is not None else "")
+                body += encode_str(argument.bytecode_name)
+                body += encode_str(argument.extends.bytecode_name if argument.extends is not None else "")
                 body += struct.pack("!I", len(argument.implements))
                 for interface in argument.implements:
-                    body += encode_str(interface.name)
+                    body += encode_str(interface.bytecode_name)
         else:
             body += struct.pack("!I", 0)
         body += struct.pack("!I", len(segment.fields))
         for field in segment.fields:
             body += encode_str(field.name)
-            body += encode_str(field.type.name)
+            body += encode_str(field.type.bytecode_name)
         return ret + struct.pack("!I", len(body)) + body
 
 class SegmentEmitterStaticVariables(SegmentEmitter[emitter.StaticVariableSegment]):
@@ -196,7 +197,7 @@ class SegmentEmitterStaticVariables(SegmentEmitter[emitter.StaticVariableSegment
             if variable.included:
                 continue
             variables_counted += 1
-            serialized_variables += encode_str(variable.name) + encode_str(variable.type.name) + self.emit_interpreter_value(variable.initializer)
+            serialized_variables += encode_str(variable.name) + encode_str(variable.type.bytecode_name) + self.emit_interpreter_value(variable.initializer)
         body = struct.pack("!I", variables_counted) + serialized_variables
         return ret + struct.pack("!I", len(body)) + body
 

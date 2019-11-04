@@ -21,8 +21,8 @@ class HeaderMethodArgumentRepresentation:
         }
 
     @staticmethod
-    def from_argument(argname: str, type: str) -> "HeaderMethodArgumentRepresentation":
-        return HeaderMethodArgumentRepresentation(argname, type)
+    def from_argument(argname: str, typ: typesys.AbstractType) -> "HeaderMethodArgumentRepresentation":
+        return HeaderMethodArgumentRepresentation(argname, typ.bytecode_name)
 
     @staticmethod
     def unserialize(input: JsonObject) -> "HeaderMethodArgumentRepresentation":
@@ -55,8 +55,8 @@ class HeaderGenericParameterRepresentation:
     def from_generic_type_parameter(parameter: typesys.GenericTypeArgument) -> "HeaderGenericParameterRepresentation":
         return HeaderGenericParameterRepresentation(
             parameter.name,
-            parameter.extends.name if parameter.extends is not None else None,
-            [interface.name for interface in parameter.implements]
+            parameter.extends.bytecode_name if parameter.extends is not None else None,
+            [interface.bytecode_name for interface in parameter.implements]
         )
 
 class HeaderMethodRepresentation:
@@ -98,8 +98,8 @@ class HeaderMethodRepresentation:
     def from_method(method: "emitter.MethodSegment", program: "emitter.Program") -> "HeaderMethodRepresentation":
         entrypoint_id = util.nonnull(program.get_entrypoint()).id if program.has_entrypoint() else None
         return HeaderMethodRepresentation(method.signature.name,
-            [HeaderMethodArgumentRepresentation.from_argument(arg, argtype.name) for arg, argtype in zip(method.signature.argnames, method.signature.args)],
-            method.signature.returntype.name,
+            [HeaderMethodArgumentRepresentation.from_argument(arg, argtype) for arg, argtype in zip(method.signature.argnames, method.signature.args)],
+            method.signature.returntype.bytecode_name,
             method.signature.containing_class.name if method.signature.containing_class is not None else None,
             method.signature.containing_interface.name if method.signature.containing_interface is not None else None,
             is_ctor=method.signature.is_ctor,
@@ -141,7 +141,7 @@ class HeaderClazzFieldRepresentation:
 
     @staticmethod
     def from_field(field: "emitter.ClazzField") -> "HeaderClazzFieldRepresentation":
-        return HeaderClazzFieldRepresentation(field.name, field.type.name)
+        return HeaderClazzFieldRepresentation(field.name, field.type.bytecode_name)
 
     @staticmethod
     def unserialize(input: JsonObject) -> "HeaderClazzFieldRepresentation":
@@ -196,8 +196,8 @@ class HeaderClazzRepresentation:
             [HeaderClazzFieldRepresentation.from_field(field) for field in signature.fields],
             [HeaderMemberMethodRepresentation(methodsignature.name) for methodsignature in signature.method_signatures],
             [HeaderMemberMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures],
-            signature.parent_signature.name if signature.parent_signature is not None else None,
-            [interface.name for interface in signature.implemented_interfaces],
+            signature.parent_signature.bytecode_name if signature.parent_signature is not None else None,
+            [interface.bytecode_name for interface in signature.implemented_interfaces],
             signature.is_abstract
         )
 
@@ -229,7 +229,7 @@ class HeaderStaticVariableRepresentation:
 
     @staticmethod
     def from_static_variable(variable: "emitter.StaticVariable") -> "HeaderStaticVariableRepresentation":
-        return HeaderStaticVariableRepresentation(variable.name, variable.type.name)
+        return HeaderStaticVariableRepresentation(variable.name, variable.type.bytecode_name)
 
     @staticmethod
     def unserialize(input: JsonObject) -> "HeaderStaticVariableRepresentation":
@@ -285,7 +285,7 @@ class HeaderRepresentation:
             [HeaderMethodRepresentation.from_method(method, program) for method in program.methods],
             [HeaderClazzRepresentation.from_clazz_signature(clazz) for clazz in program.clazz_signatures if not clazz.is_included],
             [HeaderStaticVariableRepresentation.from_static_variable(var) for var in program.static_variables.variables.values() if not var.included],
-            [HeaderInterfaceRepresentation.from_interface(interface) for interface in program.interfaces]
+            [HeaderInterfaceRepresentation.from_interface(interface) for interface in program.interfaces if not interface.included]
         )
 
     @staticmethod

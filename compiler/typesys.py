@@ -14,6 +14,11 @@ class AbstractType:
     def __init__(self, name: str) -> None:
         self.name = name
 
+    @property
+    def bytecode_name(self) -> str:
+        # TODO: This isn't very conceptually clean.
+        return self.name
+
     def is_assignable_to(self, other: "AbstractType") -> bool:
         # RuntimeException isAssignableTo Exception
         raise NotImplementedError
@@ -121,6 +126,10 @@ class ClazzType(AbstractCallableType):
         self.typesys = typesys
         self.signature = signature
 
+    @property
+    def bytecode_name(self) -> str:
+        return self.signature.bytecode_name
+
     def is_assignable_to(self, other: AbstractType) -> bool:
         if isinstance(other, InterfaceType):
             return self.implements(other)
@@ -146,22 +155,15 @@ class ClazzType(AbstractCallableType):
         return None
 
     def type_of_property(self, name: str, node: parser.Node) -> AbstractType:
-        ret = self.type_of_property_optional(name, node)
+        ret = self.type_of_property_optional(name)
         if ret is None:
             node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
         return ret
 
-    def type_of_property_optional(self, name: str, node: parser.Node=None) -> Optional[AbstractType]:
-        for field in self.signature.fields:
-            if field.name == name:
-                return field.type
-        supertype = self.get_supertype()
-        if supertype is not None:
-            ret = supertype.type_of_property_optional(name)
-            if ret is not None:
-                return ret
-        if node is not None:
-            node.compile_error("Invalid property name '%s' for type '%s'" % (name, self.name))
+    def type_of_property_optional(self, name: str) -> Optional[AbstractType]:
+        field = self.signature.get_field_by_name(name)
+        if field is not None:
+            return field.type
         return None
 
     def method_signature_optional(self, name: str) -> "Optional[emitter.MethodSignature]":
@@ -188,7 +190,8 @@ class ClazzType(AbstractCallableType):
         return False
 
     def specialize(self, arguments: List[AbstractType], node: parser.Node) -> "ClazzType":
-        return self.typesys.get_clazz_type_by_signature(self.signature.specialize(arguments, self.typesys, node))
+        ret = self.signature.specialize(arguments, self.typesys, node)
+        return self.typesys.get_clazz_type_by_signature(ret)
 
     def resolves(self, node: parser.Node, program: "emitter.Program") -> bool:
         if node.i("ident") or node.i("."):
@@ -462,27 +465,9 @@ class TypeSystem:
             raise ValueError("This is a compiler bug.")
         return ret
 
-    def accept_skeleton_clazz(self, signature: "emitter.ClazzSignature") -> None:
+    def accept_class_signature(self, signature: "emitter.ClazzSignature") -> None:
         self.clazz_signatures.append(signature)
         self.types.append(ClazzType(signature, self))
-
-    def update_signature(self, signature: "emitter.ClazzSignature") -> None:
-        # TODO: This is n^2 in the number of classes
-        found = False
-        for i in range(len(self.clazz_signatures)):
-            if self.clazz_signatures[i].name == signature.name and not self.clazz_signatures[i].is_specialization:
-                self.clazz_signatures[i] = signature
-                found = True
-        if not found:
-            raise KeyError()
-
-        found = False
-        for type in self.types:
-            if isinstance(type, ClazzType) and type.name == signature.name:
-                type.signature = signature
-                found = True
-        if not found:
-            raise KeyError()
 
     def get_clazz_type_by_signature_optional(self, signature: "emitter.ClazzSignature") -> Optional[ClazzType]:
         for type in self.types:
