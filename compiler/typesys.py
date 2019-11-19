@@ -350,6 +350,15 @@ class GenericTypeParameters:
         for i in range(self.num_params):
             self.mapping[context.arguments[i]] = parameters[i]
 
+    def compose(self, other: "GenericTypeParameters") -> "GenericTypeParameters":
+        # If self.context is not other.context, that's fine. It's the mapping that matters.
+        result_parameters = self.parameters.copy()
+        for i in range(self.num_params):
+            # TODO: In here and other places, I pass in a blank node to GenericTypeParameters.reify.
+            #       That's not the right way to do it.
+            result_parameters[i] = other.reify(result_parameters[i], parser.Node(""))
+        return GenericTypeParameters(self.context, result_parameters, self.types)
+
     def verify_valid_arguments(self, node: parser.Node) -> None:
         for i in range(self.num_params):
             if not self.context.arguments[i].is_satisfied_by(self.parameters[i]):
@@ -445,7 +454,7 @@ class TypeSystem:
         return typ
 
     def get_clazz_type_by_name(self, name: str) -> Optional[ClazzType]:
-        typ = self.resolve(parser.parse_type(name), None, fail_silent=True)
+        typ = self.resolve(parser.parse_type(name), None, fail_silent=True, allow_raw=True)
         if typ is None:
             return typ
         if not isinstance(typ, ClazzType):
@@ -463,6 +472,18 @@ class TypeSystem:
         if ret is None:
             # TypeSystem.resolve will never return None if fail_silent == True
             raise ValueError("This is a compiler bug.")
+        return ret
+
+    def resolve_class_strict(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext], allow_raw: bool = False) -> ClazzType:
+        ret = self.resolve_strict(node, generic_type_context, allow_raw=allow_raw)
+        if not isinstance(ret, ClazzType):
+            node.compile_error("Type resolves to %s where a class was expected" % ret)
+        return ret
+
+    def resolve_interface_strict(self, node: parser.Node, generic_type_context: Optional[GenericTypeContext], allow_raw: bool = False) -> InterfaceType:
+        ret = self.resolve_strict(node, generic_type_context, allow_raw=allow_raw)
+        if not isinstance(ret, InterfaceType):
+            node.compile_error("Type resolves to %s where an interface was expected" % ret)
         return ret
 
     def accept_class_signature(self, signature: "emitter.ClazzSignature") -> None:

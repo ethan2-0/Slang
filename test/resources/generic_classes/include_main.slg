@@ -1,0 +1,13 @@
+using stdlib;
+
+entrypoint fn main() {
+    let abc = new OtherClass<String>("abc");
+    let abcProp: String = abc.getR();
+    if(not abcProp.equals("abc")) {
+        die("Failed 1");
+    }
+    abc.other_prop = new OtherClass<int>(5);
+    if(not abc.other_prop.getR() == 5) {
+        die("Failed 2");
+    }
+}

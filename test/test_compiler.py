@@ -526,3 +526,7 @@ class TestGenericClasses:
 
     def test_inherit_from_generic(self):
         util.assert_compile_succeeds("resources/generic_classes/inherit_from_generic.slg")
+
+    def test_include(self):
+        lib = util.assert_compile_succeeds("resources/generic_classes/include_lib.slg")
+        util.assert_compile_succeeds("resources/generic_classes/include_main.slg", include=[lib])

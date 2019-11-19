@@ -1,4 +1,4 @@
-from typing import Optional, TypeVar
+from typing import Optional, TypeVar, Dict
 import parser
 
 def get_flattened(nod: parser.Node) -> Optional[str]:

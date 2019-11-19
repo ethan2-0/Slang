@@ -729,7 +729,7 @@ class MethodEmitter(SegmentEmitter):
             if len(node.children) > 0:
                 stated_return_type = self.types.decide_type(node[0], self.scope, self.generic_type_context)
                 if not self.return_type.is_assignable_from(stated_return_type):
-                    raise typesys.TypingError(node, "Return type mismatch")
+                    raise typesys.TypingError(node, "Return type mismatch: %s is not assignable to %s" % (stated_return_type, self.return_type))
                 reg = self.scope.allocate(stated_return_type)
                 opcodes += self.emit_expr(node[0], reg)
             else:
@@ -1041,6 +1041,7 @@ class ClazzSignature:
                 implemented_interfaces: List[typesys.InterfaceType],
                 generic_type_context: Optional[typesys.GenericTypeContext],
                 type_arguments: Optional[typesys.GenericTypeParameters],
+                raw_signature: "Optional[ClazzSignature]" = None,
                 is_included: bool=False) -> None:
         self.name = name
         self.fields = fields
@@ -1053,6 +1054,7 @@ class ClazzSignature:
         self.generic_type_context = generic_type_context
         self.specializations: "List[ClazzSignature]" = []
         self.type_arguments = type_arguments
+        self.raw_signature = self if raw_signature is None else raw_signature
 
     @property
     def parent_signature(self) -> "Optional[ClazzSignature]":
@@ -1230,6 +1232,10 @@ class ClazzSignature:
         return self.specialize_with_parameters(parameters, types, node)
 
     def specialize_with_parameters(self, parameters: typesys.GenericTypeParameters, types: typesys.TypeSystem, node: parser.Node) -> "ClazzSignature":
+        if self.type_arguments is not None:
+            parameters = self.type_arguments.compose(parameters)
+        if self.raw_signature is not self:
+            return self.raw_signature.specialize_with_parameters(parameters, types, node)
         for specialization in self.specializations:
             # A specialization can't have null type arguments
             if util.nonnull(specialization.type_arguments).is_equivalent(parameters):
@@ -1244,6 +1250,7 @@ class ClazzSignature:
             self.implemented_interfaces,
             None,
             parameters,
+            self.raw_signature,
             self.is_included
         )
         ret.specializations = self.specializations
@@ -1331,8 +1338,8 @@ class ClazzEmitter(SegmentEmitter):
                 self.method_signatures.append(signature)
                 field.xattrs["signature"] = signature
                 for specialization in self.signature.specializations:
-                    reification = signature.specialize_with_parameters(util.nonnull(specialization.type_arguments), field)
-                    specialization.method_signatures.append(reification)
+                    method_reification = signature.specialize_with_parameters(util.nonnull(specialization.type_arguments), field)
+                    specialization.method_signatures.append(method_reification)
             elif field.i("ctor"):
                 signature = MethodSignature.from_node(
                     field,
@@ -1346,9 +1353,9 @@ class ClazzEmitter(SegmentEmitter):
                 self.ctor_signatures.append(signature)
                 field.xattrs["signature"] = signature
                 for specialization in self.signature.specializations:
-                    reification = signature.specialize_with_parameters(util.nonnull(specialization.type_arguments), field)
-                    specialization.method_signatures.append(reification)
-                    specialization.ctor_signatures.append(reification)
+                    ctor_reification = signature.specialize_with_parameters(util.nonnull(specialization.type_arguments), field)
+                    specialization.method_signatures.append(ctor_reification)
+                    specialization.ctor_signatures.append(ctor_reification)
 
         self.signature.name = self.name
         self.signature.is_abstract = self.top["modifiers"].has_child("abstract")
@@ -1576,37 +1583,60 @@ class Program:
 
     def add_include(self, headers: header.HeaderRepresentation) -> None:
         for clazz in headers.clazzes:
-            self.types.accept_class_signature(ClazzSignature(clazz.name, [], [], [], None, clazz.is_abstract, [], None, None, is_included=True))
+            generic_type_context = typesys.GenericTypeContext(self.types, None)
+            for generic_parameter in clazz.type_params:
+                generic_type_context.add_type_argument(
+                    generic_parameter.name,
+                    self.types.resolve_class_strict(parser.parse_type(generic_parameter.extends), generic_type_context) if generic_parameter.extends is not None else None,
+                    [self.types.resolve_interface_strict(parser.parse_type(interface), generic_type_context) for interface in generic_parameter.implements]
+                )
+            self.types.accept_class_signature(ClazzSignature(
+                name=clazz.name,
+                fields=[],
+                method_signatures=[],
+                ctor_signatures=[],
+                parent_type=None,
+                is_abstract=clazz.is_abstract,
+                implemented_interfaces=[],
+                generic_type_context=generic_type_context,
+                type_arguments=None,
+                is_included=True
+            ))
         for interface_header in headers.interfaces:
             interface = Interface(interface_header.name, None, included=True)
             self.interfaces.append(interface)
             self.types.accept_interface(interface)
         for method in headers.methods:
-            generic_type_context = typesys.GenericTypeContext(self.types, None)
-            for argument in method.type_params:
-                extends = self.types.resolve_strict(parser.parse_type(argument.extends), generic_type_context) if argument.extends is not None else None
-                assert extends is None or isinstance(extends, typesys.ClazzType)
-                implements: List[typesys.InterfaceType] = []
-                for implemented_interface in argument.implements:
-                    interface_type = self.types.resolve_strict(parser.parse_type(implemented_interface), generic_type_context)
-                    assert isinstance(interface_type, typesys.InterfaceType)
-                generic_type_context.add_type_argument(
-                    argument.name,
-                    extends,
-                    implements
-                )
+            method_generic_type_context = None
+            containing_class = util.nonnull(self.types.get_clazz_type_by_name(method.containing_clazz)).signature if method.containing_clazz is not None else None
+            if containing_class is not None:
+                method_generic_type_context = containing_class.generic_type_context
+            else:
+                method_generic_type_context = typesys.GenericTypeContext(self.types, None)
+                for argument in method.type_params:
+                    extends = self.types.resolve_strict(parser.parse_type(argument.extends), method_generic_type_context) if argument.extends is not None else None
+                    assert extends is None or isinstance(extends, typesys.ClazzType)
+                    implements: List[typesys.InterfaceType] = []
+                    for implemented_interface in argument.implements:
+                        interface_type = self.types.resolve_strict(parser.parse_type(implemented_interface), method_generic_type_context)
+                        assert isinstance(interface_type, typesys.InterfaceType)
+                    method_generic_type_context.add_type_argument(
+                        argument.name,
+                        extends,
+                        implements
+                    )
             self.method_signatures.append(MethodSignature(
                 method.name,
-                [self.types.resolve_strict(parser.parse_type(arg.type), generic_type_context) for arg in method.args],
+                [self.types.resolve_strict(parser.parse_type(arg.type), method_generic_type_context, allow_raw = index == 0) for arg, index in zip(method.args, itertools.count())],
                 [arg.name for arg in method.args],
-                self.types.resolve_strict(parser.parse_type(method.returntype), generic_type_context),
-                containing_class=util.nonnull(self.types.get_clazz_type_by_name(method.containing_clazz)).signature if method.containing_clazz is not None else None,
+                self.types.resolve_strict(parser.parse_type(method.returntype), method_generic_type_context),
+                containing_class=containing_class,
                 containing_interface=util.nonnull(self.types.get_interface_type_by_name(method.containing_interface)).interface if method.containing_interface is not None else None,
                 is_abstract=method.is_abstract,
                 is_override=method.is_override,
                 is_ctor=method.is_ctor,
                 is_entrypoint=False,
-                generic_type_context=generic_type_context
+                generic_type_context=method_generic_type_context if containing_class is None else None
             ))
         for interface_header in headers.interfaces:
             interface = util.nonnull(self.types.get_interface_type_by_name(interface_header.name)).interface
@@ -1615,29 +1645,35 @@ class Program:
                 if method_signature.containing_interface == interface and method_signature.name in method_names:
                     interface.add_signature(method_signature)
         for clazz in headers.clazzes:
-            methods = []
-            for clazz_method in clazz.methods:
-                methods.append(self.get_method_signature(clazz_method.name))
-            ctors = []
-            for ctor in clazz.ctors:
-                ctors.append(self.get_method_signature(ctor.name))
-            fields = []
-            for field in clazz.fields:
-                fields.append(ClazzField(field.name, self.types.resolve_strict(parser.parse_type(field.type), None)))
-            parent_type = self.types.resolve_strict(parser.parse_type(clazz.parent), None) if clazz.parent is not None else None
-            assert isinstance(parent_type, typesys.ClazzType) or parent_type is None
             # TODO: Is there a cleaner way of getting `sig`?
-            sig_type = self.types.resolve_strict(parser.parse_type(clazz.name), None)
+            sig_type = self.types.resolve_strict(parser.parse_type(clazz.name), None, allow_raw=True)
             if not isinstance(sig_type, typesys.ClazzType):
                 raise ValueError("This is a compiler bug.")
             sig = sig_type.signature
+            for clazz_method in clazz.methods:
+                clazz_method_signature = self.get_method_signature(clazz_method.name)
+                sig.method_signatures.append(clazz_method_signature)
+                for specialization in sig.specializations:
+                    assert specialization.type_arguments is not None
+                    specialization.method_signatures.append(clazz_method_signature.specialize_with_parameters(specialization.type_arguments, parser.Node("")))
+            for ctor in clazz.ctors:
+                clazz_ctor_signature = self.get_method_signature(ctor.name)
+                sig.ctor_signatures.append(clazz_ctor_signature)
+                for specialization in sig.specializations:
+                    assert specialization.type_arguments is not None
+                    specialization.ctor_signatures.append(clazz_ctor_signature.specialize_with_parameters(specialization.type_arguments, parser.Node("")))
+            for field in clazz.fields:
+                class_field = ClazzField(field.name, self.types.resolve_strict(parser.parse_type(field.type), sig.generic_type_context))
+                sig.fields.append(class_field)
+                for specialization in sig.specializations:
+                    assert specialization.type_arguments is not None
+                    specialization.fields.append(class_field.reify(specialization.type_arguments, parser.Node("")))
+            parent_type = self.types.resolve_strict(parser.parse_type(clazz.parent), sig.generic_type_context) if clazz.parent is not None else None
+            assert isinstance(parent_type, typesys.ClazzType) or parent_type is None
             sig.name = clazz.name
-            sig.fields = fields
-            sig.method_signatures = methods
-            sig.ctor_signatures = ctors
             sig.parent_type = parent_type
             sig.is_abstract = clazz.is_abstract
-            sig.implemented_interfaces = [cast(typesys.InterfaceType, self.types.resolve_strict(parser.parse_type(name), None)) for name in clazz.interfaces]
+            sig.implemented_interfaces = [cast(typesys.InterfaceType, self.types.resolve_strict(parser.parse_type(name), sig.generic_type_context)) for name in clazz.interfaces]
             self.clazz_signatures.append(sig)
         for staticvar in headers.static_variables:
             self.static_variables.add_variable(

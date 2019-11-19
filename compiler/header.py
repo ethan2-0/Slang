@@ -167,8 +167,16 @@ class HeaderMemberMethodRepresentation:
         return HeaderMemberMethodRepresentation(input["name"])
 
 class HeaderClazzRepresentation:
-    def __init__(self, name: str, fields: List[HeaderClazzFieldRepresentation], methods: List[HeaderMemberMethodRepresentation],
-                ctors: List[HeaderMemberMethodRepresentation], parent: Optional[str], interfaces: List[str], is_abstract: bool):
+    def __init__(
+            self,
+            name: str,
+            fields: List[HeaderClazzFieldRepresentation],
+            methods: List[HeaderMemberMethodRepresentation],
+            ctors: List[HeaderMemberMethodRepresentation],
+            parent: Optional[str],
+            interfaces: List[str],
+            is_abstract: bool,
+            type_params: List[HeaderGenericParameterRepresentation]):
         self.name = name
         self.fields = fields
         self.methods = methods
@@ -176,6 +184,7 @@ class HeaderClazzRepresentation:
         self.parent = parent
         self.interfaces = interfaces
         self.is_abstract = is_abstract
+        self.type_params = type_params
 
     def serialize(self) -> JsonObject:
         return {
@@ -186,7 +195,8 @@ class HeaderClazzRepresentation:
             "ctors": [method.serialize() for method in self.ctors],
             "interfaces": self.interfaces,
             "parent": self.parent,
-            "abstract": self.is_abstract
+            "abstract": self.is_abstract,
+            "type_params": [param.serialize() for param in self.type_params]
         }
 
     @staticmethod
@@ -198,7 +208,8 @@ class HeaderClazzRepresentation:
             [HeaderMemberMethodRepresentation(methodsignature.name) for methodsignature in signature.ctor_signatures],
             signature.parent_signature.bytecode_name if signature.parent_signature is not None else None,
             [interface.bytecode_name for interface in signature.implemented_interfaces],
-            signature.is_abstract
+            signature.is_abstract,
+            [HeaderGenericParameterRepresentation.from_generic_type_parameter(param) for param in signature.generic_type_context.arguments] if signature.generic_type_context is not None else []
         )
 
     @staticmethod
@@ -212,7 +223,8 @@ class HeaderClazzRepresentation:
             [HeaderMemberMethodRepresentation.unserialize(method) for method in input["ctors"]],
             input["parent"],
             input["interfaces"],
-            input["abstract"]
+            input["abstract"],
+            [HeaderGenericParameterRepresentation.unserialize(param) for param in input["type_params"]]
         )
 
 class HeaderStaticVariableRepresentation:

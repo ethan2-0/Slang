@@ -1,0 +1,10 @@
+class OtherClass<R> {
+    prop: R;
+    other_prop: OtherClass<int>;
+    ctor(prop: R) {
+        this.prop = prop;
+    }
+    fn getR(): R {
+        return this.prop;
+    }
+}
