@@ -356,6 +356,11 @@ class GenericTypeParameters:
         for i in range(self.num_params):
             # TODO: In here and other places, I pass in a blank node to GenericTypeParameters.reify.
             #       That's not the right way to do it.
+            # The observant might notice that a key in other.mapping might not
+            # also be in self.mapping. In that case, however, since keys are
+            # always type arguments, every key in other.mapping either can't
+            # exist at all in arguments to self.reify, or is a key in
+            # self.mapping.
             result_parameters[i] = other.reify(result_parameters[i], parser.Node(""))
         return GenericTypeParameters(self.context, result_parameters, self.types)
 
@@ -388,6 +393,11 @@ class GenericTypeParameters:
             return self.types.get_clazz_type_by_signature(parameter.signature.specialize_with_parameters(self, self.types, node))
         else:
             return parameter
+
+    @staticmethod
+    def get_identity(context: GenericTypeContext, types: "TypeSystem") -> "GenericTypeParameters":
+        # The list comprehension is because List is invariant in mypy
+        return GenericTypeParameters(context, [a for a in context.arguments], types)
 
 class TypeSystem:
     def __init__(self, program: "emitter.Program"):

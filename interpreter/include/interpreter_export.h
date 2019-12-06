@@ -24,6 +24,7 @@ struct ts_CLAZZ_FIELD {
     struct ts_TYPE* type;
 };
 struct it_METHOD_TABLE;
+struct ts_TYPE_ARGUMENTS;
 struct ts_TYPE_CLAZZ {
     struct ts_TYPE* immediate_supertype;
     int nfields;
@@ -33,6 +34,12 @@ struct ts_TYPE_CLAZZ {
     int implemented_interfacesc;
     // This is a pointer to an array of pointers
     struct ts_TYPE** implemented_interfaces;
+    struct ts_GENERIC_TYPE_CONTEXT* type_parameters;
+    struct ts_TYPE* specialized_from;
+    struct ts_TYPE_ARGUMENTS* type_arguments;
+    struct ts_TYPE** specializations;
+    int specializationsc;
+    int specializations_size;
 };
 struct ts_TYPE_ARRAY {
     struct ts_TYPE* parent_type;
@@ -65,7 +72,14 @@ struct ts_TYPE {
 struct ts_GENERIC_TYPE_CONTEXT {
     struct ts_GENERIC_TYPE_CONTEXT* parent;
     uint32_t count;
-    struct ts_TYPE arguments[];
+    struct ts_TYPE* arguments[];
+};
+struct ts_TYPE_ARGUMENTS {
+    struct ts_GENERIC_TYPE_CONTEXT* context;
+    struct {
+        struct ts_TYPE* key;
+        struct ts_TYPE* value;
+    } mapping[];
 };
 
 struct it_CLAZZ_DATA;
@@ -152,7 +166,8 @@ struct it_METHOD {
     struct it_METHOD** reifications;
     int reificationsc;
     int reifications_size;
-    struct ts_TYPE** typeargs;
+    struct ts_TYPE_ARGUMENTS* typeargs;
+    struct it_METHOD* reified_from;
     // This is set to true in ts_reify_generic_references(..)
     bool has_had_references_reified;
 };

@@ -414,41 +414,50 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
 
     uint32_t num_type_arguments = fr_getuint32(state);
     result->type_parameters = ts_create_generic_type_context(num_type_arguments, NULL);
-    for(uint32_t i = 0; i < num_type_arguments; i++) {
-        char* type_parameter_name = fr_getstr(state);
-        char* extends_name = fr_getstr(state);
-        // Our generic type context isn't fully initialized yet, so don't pass
-        // it as an argument here.
-        struct ts_TYPE* extends = strlen(extends_name) > 0 ? ts_get_type(extends_name, NULL) : NULL;
-        free(extends_name);
-        int implementsc = fr_getuint32(state);
-        struct ts_TYPE* implements[implementsc];
-        for(int j = 0; j < implementsc; j++) {
-            char* implements_name = fr_getstr(state);
-            implements[j] = ts_get_type(implements_name, NULL);
-            free(implements_name);
+    struct ts_GENERIC_TYPE_CONTEXT* type_parameters;
+    if(result->containing_clazz != NULL) {
+        // Can't possibly be a generic method since classes can't contain generic methods
+        type_parameters = result->containing_clazz->data.clazz.type_parameters;
+    } else {
+        type_parameters = result->type_parameters;
+        for(uint32_t i = 0; i < num_type_arguments; i++) {
+            char* type_parameter_name = fr_getstr(state);
+            char* extends_name = fr_getstr(state);
+            // Our generic type context isn't fully initialized yet, so don't pass
+            // it as an argument here.
+            struct ts_TYPE* extends = strlen(extends_name) > 0 ? ts_get_type(extends_name, NULL) : NULL;
+            free(extends_name);
+            int implementsc = fr_getuint32(state);
+            struct ts_TYPE* implements[implementsc];
+            for(int j = 0; j < implementsc; j++) {
+                char* implements_name = fr_getstr(state);
+                implements[j] = ts_get_type(implements_name, NULL);
+                free(implements_name);
+            }
+            // Passing in a stack-allocated array since ts_init_type_parameter(...) just memcpy's it.
+            result->type_parameters->arguments[i] = ts_allocate_type_parameter(type_parameter_name, result->type_parameters, extends, implementsc, (struct ts_TYPE**) &implements);
         }
-        // Passing in a stack-allocated array since ts_init_type_parameter(...) just memcpy's it.
-        ts_init_type_parameter(&result->type_parameters->arguments[i], type_parameter_name, result->type_parameters, extends, implementsc, (struct ts_TYPE**) &implements);
     }
 
-    result->returntype = ts_get_type(fr_getstr(state), result->type_parameters);
-    result->register_types = mm_malloc(sizeof(struct ts_TYPE*) * registerc);
+    result->returntype = ts_get_type(fr_getstr(state), type_parameters);
+    struct ts_TYPE** register_types = mm_malloc(sizeof(struct ts_TYPE*) * registerc);
     for(int i = 0; i < registerc; i++) {
         char* typename = fr_getstr(state);
         #if DEBUG
         printf("Got register type '%s'\n", typename);
         #endif
-        result->register_types[i] = ts_get_type(typename, result->type_parameters);
+        register_types[i] = ts_get_type(typename, type_parameters);
     }
+    result->register_types = register_types;
 
     result->typereferencec = fr_getuint32(state);
-    result->typereferences = mm_malloc(sizeof(struct ts_TYPE*) * result->typereferencec);
+    struct ts_TYPE** typereferences = mm_malloc(sizeof(struct ts_TYPE*) * result->typereferencec);
     for(uint32_t i = 0; i < result->typereferencec; i++) {
         char* typename = fr_getstr(state);
-        result->typereferences[i] = ts_get_type(typename, result->type_parameters);
+        typereferences[i] = ts_get_type(typename, type_parameters);
         free(typename);
     }
+    result->typereferences = typereferences;
 
     for(int i = 0; i < opcodec; i++) {
         bc_parse_opcode(state, program, result, &opcode_buff[i]);
@@ -516,6 +525,11 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
                 free(fr_getstr(state));
             }
             struct ts_TYPE* clazz = mm_malloc(sizeof(struct ts_TYPE));
+            clazz->data.clazz.specialized_from = clazz;
+            clazz->data.clazz.type_arguments = NULL;
+            clazz->data.clazz.specializations = NULL;
+            clazz->data.clazz.specializations_size = 0;
+            clazz->data.clazz.specializationsc = 0;
             clazz->category = ts_CATEGORY_CLAZZ;
             clazz->id = ts_allocate_type_id();
             clazz->name = strdup(clazzname);
@@ -582,21 +596,33 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
                 clazz->data.clazz.implemented_interfaces[i] = interface;
                 free(name);
             }
+
             uint32_t num_type_arguments = fr_getuint32(state);
+            struct ts_GENERIC_TYPE_CONTEXT* type_parameters = ts_create_generic_type_context(num_type_arguments, NULL);
             for(uint32_t i = 0; i < num_type_arguments; i++) {
-                free(fr_getstr(state)); // name
-                free(fr_getstr(state)); // extends
-                uint32_t num_implemented_interfaces = fr_getuint32(state);
-                for(uint32_t i = 0; i < num_implemented_interfaces; i++) {
-                    free(fr_getstr(state)); // interface name
+                char* type_parameter_name = fr_getstr(state);
+                char* extends_name = fr_getstr(state);
+                // Our generic type context isn't fully initialized yet, so don't pass
+                // it as an argument here.
+                struct ts_TYPE* extends = strlen(extends_name) > 0 ? ts_get_type(extends_name, type_parameters) : NULL;
+                free(extends_name);
+                int implementsc = fr_getuint32(state);
+                struct ts_TYPE* implements[implementsc];
+                for(int j = 0; j < implementsc; j++) {
+                    char* implements_name = fr_getstr(state);
+                    implements[j] = ts_get_type(implements_name, type_parameters);
+                    free(implements_name);
                 }
+                // Passing in a stack-allocated array since ts_init_type_parameter(...) just memcpy's it.
+                type_parameters->arguments[i] = ts_allocate_type_parameter(type_parameter_name, type_parameters, extends, implementsc, (struct ts_TYPE**) &implements);
             }
+            clazz->data.clazz.type_parameters = type_parameters;
             uint32_t numfields = fr_getuint32(state);
             clazz->data.clazz.nfields = numfields;
             clazz->data.clazz.fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * numfields);
             for(uint32_t i = 0; i < numfields; i++) {
                 clazz->data.clazz.fields[i].name = fr_getstr(state);
-                clazz->data.clazz.fields[i].type = ts_get_type(fr_getstr(state), NULL);
+                clazz->data.clazz.fields[i].type = ts_get_type(fr_getstr(state), clazz->data.clazz.type_parameters);
             }
             #if DEBUG
             printf("Scanning class '%s'\n", clazzname);
@@ -642,6 +668,9 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             method->reifications_size = 0;
             method->has_had_references_reified = false;
             method->typeargs = NULL;
+            method->reified_from = method;
+            method->opcodes = NULL;
+            method->type_parameters = NULL;
             if(strlen(containing_clazz_name) > 0) {
                 struct ts_TYPE* containing_type = ts_get_type(containing_clazz_name, NULL);
                 if(containing_type->category == ts_CATEGORY_CLAZZ) {
@@ -809,6 +838,8 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
         fr_destroy(state[i]);
         bc_prescan_destroy(prescan[i]);
     }
+
+    cl_update_class_specializations(result);
 
     return result;
 }

@@ -13,6 +13,7 @@ int cl_get_index(struct it_PROGRAM* program, struct ts_TYPE* type) {
     }
     return -1;
 }
+void cl_update_specialization(struct ts_TYPE* specialization);
 void cl_arrange_method_tables_inner(struct it_PROGRAM* program, bool* visited, struct ts_TYPE* type) {
     #if DEBUG
     printf("Arranging phi tables for class %d\n", type->id);
@@ -84,6 +85,10 @@ void cl_arrange_method_tables_inner(struct it_PROGRAM* program, bool* visited, s
         type->data.clazz.implemented_interfaces = realloc(type->data.clazz.implemented_interfaces, sizeof(struct it_INTERFACE_IMPLEMENTATION) * new_num_interfaces);
         memcpy(type->data.clazz.implemented_interfaces + type->data.clazz.implemented_interfacesc, type->data.clazz.immediate_supertype->data.clazz.implemented_interfaces, sizeof(struct it_INTERFACE_IMPLEMENTATION) * type->data.clazz.immediate_supertype->data.clazz.implemented_interfacesc);
         type->data.clazz.implemented_interfacesc = new_num_interfaces;
+    }
+
+    for(int i = 0; i < type->data.clazz.specializationsc; i++) {
+        cl_update_specialization(type->data.clazz.specializations[i]);
     }
 
     int index = cl_get_index(program, type);
@@ -226,4 +231,96 @@ bool cl_class_implements_interface(struct ts_TYPE* clazz, struct ts_TYPE* interf
         }
     }
     return false;
+}
+void cl_add_specialization_to_class(struct ts_TYPE* class, struct ts_TYPE* specialization) {
+    if(ts_class_is_specialization(class)) {
+        cl_add_specialization_to_class(class->data.clazz.specialized_from, specialization);
+        return;
+    }
+    class->data.clazz.specializationsc++;
+    if(class->data.clazz.specializationsc > class->data.clazz.specializations_size) {
+        int newsize = class->data.clazz.specializations_size * 2;
+        if(newsize < 1) {
+            newsize = 1;
+        }
+        class->data.clazz.specializations = realloc(class->data.clazz.specializations, (newsize) * sizeof(struct ts_TYPE*));
+        class->data.clazz.specializations_size = newsize;
+    }
+    if(class->data.clazz.specializations_size < class->data.clazz.specializationsc) {
+        fatal("cl_add_specialization_to_class: Illegal state");
+    }
+    class->data.clazz.specializations[class->data.clazz.specializationsc - 1] = specialization;
+}
+void cl_update_specialization(struct ts_TYPE* specialization) {
+    // elw TODO
+    static int recursion_depth = 0;
+    recursion_depth++;
+    if(recursion_depth > 4) {
+        fatal("Recursion depth exceeded");
+    }
+    struct ts_TYPE* root = specialization->data.clazz.specialized_from;
+    while(root != root->data.clazz.specialized_from) {
+        root = root->data.clazz.specialized_from;
+    }
+    // We don't need to specialize interface implementations
+    if(root->data.clazz.method_table != NULL && specialization->data.clazz.method_table == NULL) {
+        size_t method_table_size = sizeof(struct it_METHOD_TABLE) + sizeof(struct it_METHOD*) * root->data.clazz.method_table->nmethods;
+        specialization->data.clazz.method_table = mm_malloc(method_table_size);
+        memcpy(specialization->data.clazz.method_table, root->data.clazz.method_table, method_table_size);
+        for(int i = 0; i < specialization->data.clazz.method_table->nmethods; i++) {
+            specialization->data.clazz.method_table->methods[i] = ts_get_method_reification(specialization->data.clazz.method_table->methods[i], specialization->data.clazz.type_arguments);
+        }
+    } else if(specialization->data.clazz.method_table != NULL) {
+        for(int i = 0; i < specialization->data.clazz.method_table->nmethods; i++) {
+            ts_update_method_reification(specialization->data.clazz.method_table->methods[i]);
+        }
+    }
+    if(root->data.clazz.fields != NULL && specialization->data.clazz.fields == NULL) {
+        specialization->data.clazz.fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * specialization->data.clazz.nfields);
+        memcpy(specialization->data.clazz.fields, root->data.clazz.fields, sizeof(struct ts_CLAZZ_FIELD) * specialization->data.clazz.nfields);
+        for(int i = 0; i < specialization->data.clazz.nfields; i++) {
+            if(specialization->data.clazz.fields[i].type == NULL) {
+                continue;
+            }
+            specialization->data.clazz.fields[i].type = ts_reify_type(specialization->data.clazz.fields[i].type, specialization->data.clazz.type_arguments);
+        }
+    }
+    recursion_depth--;
+}
+struct ts_TYPE* cl_specialize_class(struct ts_TYPE* class, struct ts_TYPE_ARGUMENTS* type_arguments) {
+    // elw TODO: cl_specialize_class clearly isn't checking for duplicates correctly
+    if(!ts_class_is_generic(class)) {
+        return class;
+    }
+    if(ts_class_is_specialization(class)) {
+        return cl_specialize_class(class->data.clazz.specialized_from, ts_compose_type_arguments(class->data.clazz.type_arguments, type_arguments));
+    }
+    for(int i = 0; i < class->data.clazz.specializationsc; i++) {
+        if(ts_type_arguments_are_equivalent(class->data.clazz.specializations[i]->data.clazz.type_arguments, type_arguments)) {
+            return class->data.clazz.specializations[i];
+        }
+    }
+    struct ts_TYPE* specialization = mm_malloc(sizeof(struct ts_TYPE));
+    memcpy(specialization, class, sizeof(struct ts_TYPE));
+    struct ts_TYPE_CLAZZ* specialization_data = &specialization->data.clazz; // to save typing
+    specialization->id = ts_allocate_type_id();
+    // We know class->data.clazz.type_arguments == NULL
+    specialization_data->type_arguments = type_arguments;
+    specialization_data->specialized_from = class;
+    specialization_data->specializations = NULL;
+    specialization_data->specializations_size = -1;
+    specialization_data->specializationsc = -1;
+    specialization_data->method_table = NULL;
+    specialization_data->fields = NULL;
+    cl_add_specialization_to_class(class, specialization);
+    cl_update_specialization(specialization);
+    return specialization;
+}
+void cl_update_class_specializations(struct it_PROGRAM* program) {
+    // TODO: Should this actually be i < program->clazz_index?
+    for(int i = 0; i < program->clazzesc; i++) {
+        for(int j = 0; j < program->clazzes[i]->data.clazz.specializationsc; j++) {
+            cl_update_specialization(program->clazzes[i]->data.clazz.specializations[j]);
+        }
+    }
 }

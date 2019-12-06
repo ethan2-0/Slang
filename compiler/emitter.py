@@ -1078,6 +1078,11 @@ class ClazzSignature:
             ret += ">"
         return ret
 
+    def get_this_type(self, types: typesys.TypeSystem) -> typesys.ClazzType:
+        typ = types.get_clazz_type_by_signature(self)
+        if not self.is_raw_type:
+            return typ
+        return types.get_clazz_type_by_signature(typ.signature.specialize_with_parameters(typesys.GenericTypeParameters.get_identity(util.nonnull(self.generic_type_context), types), types, parser.Node("a")))
 
     def validate_overriding_rules(self) -> None:
         if self.is_included:
@@ -1329,7 +1334,8 @@ class ClazzEmitter(SegmentEmitter):
                 signature = MethodSignature.from_node(
                     field,
                     self.program,
-                    this_type=self.program.types.get_clazz_type_by_signature(self.signature),
+                    this_type=self.signature.get_this_type(self.program.types),
+                    # this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # At this point in execution, `this.signature` is the blank
                     # signature from emit_signature_no_fields(...).
                     containing_class=self.signature,
@@ -1344,7 +1350,7 @@ class ClazzEmitter(SegmentEmitter):
                 signature = MethodSignature.from_node(
                     field,
                     self.program,
-                    this_type=self.program.types.get_clazz_type_by_signature(self.signature),
+                    this_type=self.signature.get_this_type(self.program.types),
                     # Same comment as above
                     containing_class=self.signature,
                     generic_type_context=self.generic_type_context
@@ -1377,6 +1383,11 @@ class ClazzEmitter(SegmentEmitter):
             if parent_type is None or not isinstance(parent_type, typesys.ClazzType):
                 self.top["extends"].compile_error("Tried to extend a nonexisting class")
             self.signature.parent_type = parent_type
+        for specialization in self.signature.specializations:
+            if not specialization.is_specialization:
+                raise ValueError("This is a compiler bug")
+            assert specialization.type_arguments is not None
+            specialization.parent_type = cast(typesys.ClazzType, specialization.type_arguments.reify(self.signature.parent_type, parser.Node(""))) if self.signature.parent_type is not None else None
 
     def add_interfaces_to_signature(self) -> None:
         for interface in self.top["implements"]:
