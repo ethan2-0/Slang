@@ -11,5 +11,8 @@ class Hasher<T implements Hashable> {
 }
 entrypoint fn main() {
     let hasher = new Hasher<String>("abc");
-    hasher.hash();
+    let expectedHash = ("abc").getHashCode();
+    if(expectedHash != hasher.hash()) {
+        die("Failed");
+    }
 }

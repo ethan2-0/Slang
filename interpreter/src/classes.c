@@ -15,13 +15,23 @@ int cl_get_index(struct it_PROGRAM* program, struct ts_TYPE* type) {
 }
 void cl_update_specialization(struct ts_TYPE* specialization);
 void cl_arrange_method_tables_inner(struct it_PROGRAM* program, bool* visited, struct ts_TYPE* type) {
+    if(ts_class_is_specialization(type)) {
+        fatal("Argument to cl_arrange_method_tables_inner is specialization");
+    }
     #if DEBUG
     printf("Arranging phi tables for class %d\n", type->id);
     #endif
     int total_methods = 0;
     if(type->data.clazz.immediate_supertype != NULL) {
-        if(!visited[cl_get_index(program, type->data.clazz.immediate_supertype)]) {
-            cl_arrange_method_tables_inner(program, visited, type->data.clazz.immediate_supertype);
+        if(ts_class_is_specialization(type->data.clazz.immediate_supertype)) {
+            if(!visited[cl_get_index(program, type->data.clazz.immediate_supertype->data.clazz.specialized_from)]) {
+                cl_arrange_method_tables_inner(program, visited, type->data.clazz.immediate_supertype->data.clazz.specialized_from);
+            }
+            cl_update_specialization(type->data.clazz.immediate_supertype);
+        } else {
+            if(!visited[cl_get_index(program, type->data.clazz.immediate_supertype)]) {
+                cl_arrange_method_tables_inner(program, visited, type->data.clazz.immediate_supertype);
+            }
         }
         total_methods += type->data.clazz.immediate_supertype->data.clazz.method_table->nmethods;
     }
@@ -92,6 +102,9 @@ void cl_arrange_method_tables_inner(struct it_PROGRAM* program, bool* visited, s
     }
 
     int index = cl_get_index(program, type);
+    if(index < 0) {
+        fatal("Could not find class index in cl_arrange_method_tables_inner");
+    }
     visited[index] = true;
     #if DEBUG
     printf("Finished arranging phi tables for class %d\n", type->id);

@@ -54,6 +54,10 @@ void ts_init_global_registry() {
 uint32_t ts_allocate_type_id() {
     return type_id++;
 }
+uint32_t ts_get_largest_type_id() {
+    // This is only used (at least as of yet) in cl_arrange_method_tables_inner.
+    return type_id;
+}
 void ts_register_type(struct ts_TYPE* type, char* name) {
     // CONTRACT: name must be immutable
     if(global_registry == NULL) {
@@ -192,9 +196,13 @@ struct ts_TYPE* ts_parse_and_get_type(char* name, struct ts_GENERIC_TYPE_CONTEXT
             // So that the recursive call to ts_parse_and_get_type sees that the string ends at *index
             name[*index] = '\0';
             struct ts_TYPE* raw_type = ts_parse_and_get_type(name, context, &raw_type_start_index);
+            if(raw_type == NULL) {
+                return NULL;
+            }
             if(raw_type->category != ts_CATEGORY_CLAZZ) {
                 fatal("Attempt to specialize something that isn't a class");
             }
+            // elw This is a parser bug
             name[*index] = '<';
             (*index)++;
             int type_arguments_index = 0;
@@ -202,6 +210,9 @@ struct ts_TYPE* ts_parse_and_get_type(char* name, struct ts_GENERIC_TYPE_CONTEXT
             struct ts_TYPE** type_arguments = mm_malloc(sizeof(struct ts_TYPE*) * type_arguments_size);
             while(true) {
                 struct ts_TYPE* argument_type = ts_parse_and_get_type(name, context, index);
+                if(argument_type == NULL) {
+                    return NULL;
+                }
                 if(type_arguments_index >= type_arguments_size) {
                     type_arguments_size *= 2;
                     type_arguments = realloc(type_arguments, sizeof(struct ts_TYPE*) * type_arguments_size);
@@ -217,7 +228,9 @@ struct ts_TYPE* ts_parse_and_get_type(char* name, struct ts_GENERIC_TYPE_CONTEXT
                     if(raw_type->data.clazz.type_parameters->count == 0) {
                         fatal("Parameterizing non-generic type");
                     }
-                    return cl_specialize_class(raw_type, ts_create_type_arguments(raw_type->data.clazz.type_parameters, type_arguments_index, type_arguments));
+                    struct ts_TYPE* ret = cl_specialize_class(raw_type, ts_create_type_arguments(raw_type->data.clazz.type_parameters, type_arguments_index, type_arguments));
+                    free(type_arguments);
+                    return ret;
                 } else {
                     printf("Index: %d, character: '%c'\n", *index, name[*index]);
                     fatal("Expected ',' or '>'");
@@ -240,6 +253,15 @@ struct ts_TYPE* ts_parse_and_get_type(char* name, struct ts_GENERIC_TYPE_CONTEXT
     memset(type_name, 0, *index - identifier_start_index + 1);
     free(type_name);
     return ret;
+}
+struct ts_GENERIC_TYPE_CONTEXT* ts_get_method_type_context(struct it_METHOD* method) {
+    if(method->containing_clazz != NULL) {
+        if(ts_method_is_generic(method)) {
+            fatal("Generic method is a class member");
+        }
+        return method->containing_clazz->data.clazz.type_parameters;
+    }
+    return method->type_parameters;
 }
 struct ts_TYPE* ts_get_type_optional(char* name, struct ts_GENERIC_TYPE_CONTEXT* context) {
     if(global_registry == NULL) {

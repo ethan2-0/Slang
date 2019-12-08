@@ -26,6 +26,8 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, st
 struct ts_TYPE* ts_reify_type(struct ts_TYPE* type, struct ts_TYPE_ARGUMENTS* type_arguments);
 struct ts_TYPE_ARGUMENTS* ts_create_type_arguments(struct ts_GENERIC_TYPE_CONTEXT* context, int typeargsc, struct ts_TYPE** typeargs);
 void ts_update_method_reification(struct it_METHOD* method);
+struct ts_GENERIC_TYPE_CONTEXT* ts_get_method_type_context(struct it_METHOD* method);
+bool ts_method_is_generic(struct it_METHOD* method);
 
 void sv_add_static_var(struct it_PROGRAM* program, struct ts_TYPE* type, char* name, union itval value);
 struct sv_STATIC_VAR* sv_get_var_by_name(struct it_PROGRAM* program, char* name);

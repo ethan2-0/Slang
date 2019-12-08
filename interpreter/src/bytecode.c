@@ -122,7 +122,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         data->target = fr_getuint32(state);
     } else if(opcode_num == OPCODE_NEW) {
         struct it_OPCODE_DATA_NEW* data = &opcode->data.new;
-        data->clazz = ts_get_type(fr_getstr(state), method->type_parameters);
+        data->clazz = ts_get_type(fr_getstr(state), ts_get_method_type_context(method));
         if(data->clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to instantiate something that isn't a class");
         }
@@ -219,7 +219,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         char* methodname = fr_getstr(state);
         data->destination_register = fr_getuint32(state);
         data->callee_register = fr_getuint32(state);
-        struct ts_TYPE* clazz = ts_get_type(classname, method->type_parameters);
+        struct ts_TYPE* clazz = ts_get_type(classname, ts_get_method_type_context(method));
         // This is safe since every member of union ts_TYPE has offsetof(category) the same
         if(clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("First argument to CLASSCALLSPECIAL isn't a class");
@@ -263,6 +263,7 @@ struct bc_PRESCAN_RESULTS {
     uint32_t entrypoint_id;
     int num_clazzes;
     int num_static_variables;
+    int num_interfaces;
 };
 struct bc_PRESCAN_RESULTS* bc_prescan(struct fr_STATE* state) {
     #if DEBUG
@@ -272,6 +273,7 @@ struct bc_PRESCAN_RESULTS* bc_prescan(struct fr_STATE* state) {
     results->num_methods = 0;
     results->num_clazzes = 0;
     results->num_static_variables = 0;
+    results->num_interfaces = 0;
 
     if(fr_getuint32(state) != 0xcf702b56) {
         fatal("Incorrect bytecode file magic number");
@@ -299,6 +301,7 @@ struct bc_PRESCAN_RESULTS* bc_prescan(struct fr_STATE* state) {
             results->num_static_variables = fr_getuint32(state);
             fr_advance(state, (int) length - 4);
         } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+            results->num_interfaces++;
             free(fr_getstr(state));
         } else {
             fatal("Unrecognized segment type");
@@ -489,6 +492,27 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     printf("Done parsing method\n");
     #endif
 }
+void bc_scan_types_zerothpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
+    while(!fr_iseof(state)) {
+        uint8_t segment_type = fr_getuint8(state);
+        if(segment_type == SEGMENT_TYPE_METHOD) {
+            fr_advance(state, fr_getuint32(state));
+        } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {
+            fr_advance(state, fr_getuint32(state));
+        } else if(segment_type == SEGMENT_TYPE_METADATA) {
+            free(fr_getstr(state));
+            free(fr_getstr(state));
+        } else if(segment_type == SEGMENT_TYPE_CLASS) {
+            fr_advance(state, fr_getuint32(state));
+        } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
+            char* name = fr_getstr(state);
+            cl_get_or_create_interface(name, program);
+            free(name);
+        } else {
+            fatal("Unrecognized segment type");
+        }
+    }
+}
 void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
     while(!fr_iseof(state)) {
         uint8_t segment_type = fr_getuint8(state);
@@ -500,6 +524,7 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
             free(fr_getstr(state));
             free(fr_getstr(state));
         } else if(segment_type == SEGMENT_TYPE_CLASS) {
+            struct ts_TYPE* clazz = mm_malloc(sizeof(struct ts_TYPE));
             fr_getuint32(state); // length
             char* clazzname = fr_getstr(state);
             char* parentname = fr_getstr(state);
@@ -508,14 +533,25 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
                 free(fr_getstr(state));
             }
             uint32_t num_type_arguments = fr_getuint32(state);
+            struct ts_GENERIC_TYPE_CONTEXT* type_parameters = ts_create_generic_type_context(num_type_arguments, NULL);
             for(uint32_t i = 0; i < num_type_arguments; i++) {
-                free(fr_getstr(state)); // name
-                free(fr_getstr(state)); // extends
-                uint32_t num_implemented_interfaces = fr_getuint32(state);
-                for(uint32_t i = 0; i < num_implemented_interfaces; i++) {
-                    free(fr_getstr(state)); // interface name
+                char* type_parameter_name = fr_getstr(state);
+                char* extends_name = fr_getstr(state);
+                // Our generic type context isn't fully initialized yet, so don't pass
+                // it as an argument here.
+                struct ts_TYPE* extends = strlen(extends_name) > 0 ? ts_get_type(extends_name, NULL) : NULL;
+                free(extends_name);
+                int implementsc = fr_getuint32(state);
+                struct ts_TYPE* implements[implementsc];
+                for(int j = 0; j < implementsc; j++) {
+                    char* implements_name = fr_getstr(state);
+                    implements[j] = ts_get_type(implements_name, NULL);
+                    free(implements_name);
                 }
+                // Passing in a stack-allocated array since ts_init_type_parameter(...) just memcpy's it.
+                type_parameters->arguments[i] = ts_allocate_type_parameter(type_parameter_name, type_parameters, extends, implementsc, (struct ts_TYPE**) &implements);
             }
+            clazz->data.clazz.type_parameters = type_parameters;
             #if DEBUG
             printf("Prescanning class '%s'\n", clazzname);
             #endif
@@ -524,7 +560,6 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
                 free(fr_getstr(state));
                 free(fr_getstr(state));
             }
-            struct ts_TYPE* clazz = mm_malloc(sizeof(struct ts_TYPE));
             clazz->data.clazz.specialized_from = clazz;
             clazz->data.clazz.type_arguments = NULL;
             clazz->data.clazz.specializations = NULL;
@@ -553,12 +588,10 @@ void bc_scan_types_firstpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESUL
             free(parentname);
         } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
             free(fr_getstr(state));
-            program->interfacesc++;
         } else {
             fatal("Unrecognized segment type");
         }
     }
-    program->interfaces = mm_malloc(sizeof(struct ts_TYPE*) * program->interfacesc);
 }
 void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESULTS* prescan, struct fr_STATE* state) {
     while(!fr_iseof(state)) {
@@ -578,8 +611,25 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             if(clazz->category != ts_CATEGORY_CLAZZ) {
                 fatal("Tried to extend something that isn't a class");
             }
+            uint32_t num_interfaces = fr_getuint32(state);
+            char* interface_names[num_interfaces];
+            for(uint32_t i = 0; i < num_interfaces; i++) {
+                char* name = fr_getstr(state);
+                interface_names[i] = name;
+            }
+
+            uint32_t num_type_arguments = fr_getuint32(state);
+            for(uint32_t i = 0; i < num_type_arguments; i++) {
+                free(fr_getstr(state)); // name
+                free(fr_getstr(state)); // extends
+                uint32_t num_implemented_interfaces = fr_getuint32(state);
+                for(uint32_t i = 0; i < num_implemented_interfaces; i++) {
+                    free(fr_getstr(state)); // interface name
+                }
+            }
+
             if(strlen(supertype_name) > 0) {
-                clazz->data.clazz.immediate_supertype = ts_get_type(supertype_name, NULL);
+                clazz->data.clazz.immediate_supertype = ts_get_type(supertype_name, clazz->data.clazz.type_parameters);
                 if(clazz->data.clazz.immediate_supertype == NULL) {
                     fatal("Couldn't find superclass");
                 }
@@ -589,34 +639,13 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             } else {
                 clazz->data.clazz.immediate_supertype = NULL;
             }
-            uint32_t num_interfaces = fr_getuint32(state);
             for(uint32_t i = 0; i < num_interfaces; i++) {
-                char* name = fr_getstr(state);
+                char* name = interface_names[i];
                 struct ts_TYPE* interface = cl_get_or_create_interface(name, program);
                 clazz->data.clazz.implemented_interfaces[i] = interface;
                 free(name);
             }
 
-            uint32_t num_type_arguments = fr_getuint32(state);
-            struct ts_GENERIC_TYPE_CONTEXT* type_parameters = ts_create_generic_type_context(num_type_arguments, NULL);
-            for(uint32_t i = 0; i < num_type_arguments; i++) {
-                char* type_parameter_name = fr_getstr(state);
-                char* extends_name = fr_getstr(state);
-                // Our generic type context isn't fully initialized yet, so don't pass
-                // it as an argument here.
-                struct ts_TYPE* extends = strlen(extends_name) > 0 ? ts_get_type(extends_name, type_parameters) : NULL;
-                free(extends_name);
-                int implementsc = fr_getuint32(state);
-                struct ts_TYPE* implements[implementsc];
-                for(int j = 0; j < implementsc; j++) {
-                    char* implements_name = fr_getstr(state);
-                    implements[j] = ts_get_type(implements_name, type_parameters);
-                    free(implements_name);
-                }
-                // Passing in a stack-allocated array since ts_init_type_parameter(...) just memcpy's it.
-                type_parameters->arguments[i] = ts_allocate_type_parameter(type_parameter_name, type_parameters, extends, implementsc, (struct ts_TYPE**) &implements);
-            }
-            clazz->data.clazz.type_parameters = type_parameters;
             uint32_t numfields = fr_getuint32(state);
             clazz->data.clazz.nfields = numfields;
             clazz->data.clazz.fields = mm_malloc(sizeof(struct ts_CLAZZ_FIELD) * numfields);
@@ -630,9 +659,7 @@ void bc_scan_types_secondpass(struct it_PROGRAM* program, struct bc_PRESCAN_RESU
             free(supertype_name);
             free(clazzname);
         } else if(segment_type == SEGMENT_TYPE_INTERFACE) {
-            char* name = fr_getstr(state);
-            cl_get_or_create_interface(name, program);
-            free(name);
+            free(fr_getstr(state));
         } else {
             fatal("Unrecognized segment type");
         }
@@ -744,6 +771,7 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
     result->static_varsc = 0;
     result->interfacesc = 0;
     result->interface_index = 0;
+    result->clazzesc = 0;
     for(int i = 0; i < num_files; i++) {
         prescan[i] = bc_prescan(state[i]);
         fr_rewind(state[i]);
@@ -751,17 +779,19 @@ struct it_PROGRAM* bc_parse_from_files(int fpc, FILE* fp[], struct it_OPTIONS* o
         fr_getuint32(state[i]);
         result->methodc += prescan[i]->num_methods;
         result->static_varsc += prescan[i]->num_static_variables;
-    }
-    result->clazzesc = 0;
-    for(int i = 0; i < num_files; i++) {
+        result->interfacesc += prescan[i]->num_interfaces;
         result->clazzesc += prescan[i]->num_clazzes;
     }
     result->static_vars = mm_malloc(sizeof(struct sv_STATIC_VAR) * result->static_varsc);
-    #if DEBUG
-    printf("%d methods\n", result->methodc);
-    #endif
+    result->interfaces = mm_malloc(sizeof(struct ts_TYPE*) * result->interfacesc);
     result->methods = mm_malloc(sizeof(struct it_METHOD) * result->methodc);
     result->clazzes = mm_malloc(sizeof(struct ts_TYPE*) * result->clazzesc);
+    for(int i = 0; i < num_files; i++) {
+        bc_scan_types_zerothpass(result, prescan[i], state[i]);
+        fr_rewind(state[i]);
+        // Ignore the magic number
+        fr_getuint32(state[i]);
+    }
     for(int i = 0; i < num_files; i++) {
         bc_scan_types_firstpass(result, prescan[i], state[i]);
         fr_rewind(state[i]);

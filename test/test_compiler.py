@@ -507,10 +507,12 @@ class TestGenericMethods:
 
 class TestGenericClasses:
     def test_basic(self):
-        util.assert_compile_succeeds("resources/generic_classes/basic.slg")
+        path = util.assert_compile_succeeds("resources/generic_classes/basic.slg")
+        util.interpret(path)
 
     def test_bounds(self):
-        util.assert_compile_succeeds("resources/generic_classes/bounds.slg")
+        path = util.assert_compile_succeeds("resources/generic_classes/bounds.slg")
+        util.interpret(path)
 
     def test_type_annotation_raw_type(self):
         util.assert_compile_fails("resources/generic_classes/type_annotation_raw_type.slg", message="Cannot use raw types directly")
@@ -522,11 +524,15 @@ class TestGenericClasses:
         util.assert_compile_fails("resources/generic_classes/not_assignable.slg", message="is not assignable to")
 
     def test_inherit_from_specialization(self):
-        util.assert_compile_succeeds("resources/generic_classes/inherit_from_specialization.slg")
+        path = util.assert_compile_succeeds("resources/generic_classes/inherit_from_specialization.slg")
+        util.interpret(path)
 
     def test_inherit_from_generic(self):
-        util.assert_compile_succeeds("resources/generic_classes/inherit_from_generic.slg")
+        path = util.assert_compile_succeeds("resources/generic_classes/inherit_from_generic.slg")
+        util.interpret(path)
 
     def test_include(self):
         lib = util.assert_compile_succeeds("resources/generic_classes/include_lib.slg")
-        util.assert_compile_succeeds("resources/generic_classes/include_main.slg", include=[lib])
+        main = util.assert_compile_succeeds("resources/generic_classes/include_main.slg", include=[lib])
+        util.interpret(lib, main)
+        util.interpret(main, lib)
