@@ -49,6 +49,12 @@ class TestIntegrationInclude:
         main = util.assert_compile_succeeds("resources/integration_include/main.slg", include=[lib])
         assert "0x00000003" in util.interpret(lib, main, "--print-return-value")
 
+    def test_include_class_method_and_global_method_with_same_name(self):
+        lib = util.assert_compile_succeeds("resources/integration_include/include_class_method_and_global_method_with_same_name_lib.slg", no_stdlib=True)
+        main = util.assert_compile_succeeds("resources/integration_include/include_class_method_and_global_method_with_same_name_main.slg", no_stdlib=True, include=[lib])
+        assert "0x00000003" in util.interpret(lib, main, "--print-return-value")
+        assert "0x00000003" in util.interpret(main, lib, "--print-return-value")
+
 class TestIntegrationKitchenSink:
     def test_kitchensink(self):
         path = util.assert_compile_succeeds("resources/integration_kitchensink/kitchensink.slg")

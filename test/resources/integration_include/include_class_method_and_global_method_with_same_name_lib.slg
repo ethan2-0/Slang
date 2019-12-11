@@ -1,0 +1,9 @@
+class Class extends void {
+    ctor() {}
+    fn func(x: int): int {
+        return x + 2;
+    }
+}
+fn func(x: bool): bool {
+    return not x;
+}

@@ -202,7 +202,6 @@ struct ts_TYPE* ts_parse_and_get_type(char* name, struct ts_GENERIC_TYPE_CONTEXT
             if(raw_type->category != ts_CATEGORY_CLAZZ) {
                 fatal("Attempt to specialize something that isn't a class");
             }
-            // elw This is a parser bug
             name[*index] = '<';
             (*index)++;
             int type_arguments_index = 0;

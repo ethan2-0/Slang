@@ -289,6 +289,7 @@ class MethodSignature:
                 is_abstract=is_abstract
             )
         elif method.i("ctor"):
+            generic_type_context = typesys.GenericTypeContext(program.types, parent=generic_type_context)
             signature = cast(List[typesys.AbstractType], [this_type]) + [program.types.resolve_strict(arg[1], generic_type_context) for arg in method[0]]
             argnames = ["this"] + [arg[0].data_strict for arg in method[0]]
             assert containing_class is not None
@@ -304,7 +305,7 @@ class MethodSignature:
                 is_entrypoint=False,
                 is_abstract=False,
                 containing_interface=None,
-                generic_type_context=None
+                generic_type_context=generic_type_context
             )
         else:
             raise ValueError("This is a compiler bug.")
@@ -350,6 +351,7 @@ class MethodEmitter(SegmentEmitter):
         self.program = program
         self.types = program.types
         self.signature = signature
+        # elw I could fix this just by changing this to self.signature.generic_type_context if self.signature.containing_clazz is None else self.signature.containing_clazz.type_parameters
         self.generic_type_context = self.signature.generic_type_context
         self.type_references = TypeReferenceSet()
         # This is assigned to later. Technically this is uninitialized leaving
@@ -1335,7 +1337,6 @@ class ClazzEmitter(SegmentEmitter):
                     field,
                     self.program,
                     this_type=self.signature.get_this_type(self.program.types),
-                    # this_type=self.program.types.get_clazz_type_by_signature(self.signature),
                     # At this point in execution, `this.signature` is the blank
                     # signature from emit_signature_no_fields(...).
                     containing_class=self.signature,
@@ -1499,7 +1500,6 @@ class Program:
             if signature.name in ["%s%s" % (path, name) if path != "" else name for path in search_paths]:
                 return signature
         return None
-        # return get_method_signature_optional(name, self.top, is_real_top=True)
 
     def has_entrypoint(self) -> bool:
         return self.get_entrypoint() is not None
@@ -1662,7 +1662,12 @@ class Program:
                 raise ValueError("This is a compiler bug.")
             sig = sig_type.signature
             for clazz_method in clazz.methods:
-                clazz_method_signature = self.get_method_signature(clazz_method.name)
+                clazz_method_signature: Optional[MethodSignature] = None
+                for clazz_method_candidate in self.method_signatures:
+                    if clazz_method.name in ["%s%s" % (path, clazz_method_candidate.name) for path in self.search_paths] and clazz_method_candidate.containing_class == sig:
+                        clazz_method_signature = clazz_method_candidate
+                if clazz_method_signature is None:
+                    raise ValueError("This is a compiler bug")
                 sig.method_signatures.append(clazz_method_signature)
                 for specialization in sig.specializations:
                     assert specialization.type_arguments is not None

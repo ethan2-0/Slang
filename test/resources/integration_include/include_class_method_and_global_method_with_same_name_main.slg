@@ -1,0 +1,3 @@
+entrypoint fn main(): int {
+    return (new Class()).func(1);
+}
