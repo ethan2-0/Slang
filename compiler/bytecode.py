@@ -148,7 +148,6 @@ class SegmentEmitterClazz(SegmentEmitter[emitter.ClazzSegment]):
     def emit(self, segment: emitter.ClazzSegment) -> bytes:
         ret = SegmentEmitter.emit(self, segment)
         body = encode_str(segment.name)
-        # elw TODO: Make this use .get_bytecode_name()
         body += encode_str(segment.signature.parent_signature.bytecode_name if segment.signature.parent_signature is not None else "")
         body += struct.pack("!I", len(segment.signature.implemented_interfaces))
         for interface in segment.signature.implemented_interfaces:

@@ -265,7 +265,6 @@ void cl_add_specialization_to_class(struct ts_TYPE* class, struct ts_TYPE* speci
     class->data.clazz.specializations[class->data.clazz.specializationsc - 1] = specialization;
 }
 void cl_update_specialization(struct ts_TYPE* specialization) {
-    // elw TODO
     static int recursion_depth = 0;
     recursion_depth++;
     if(recursion_depth > 4) {
@@ -301,7 +300,6 @@ void cl_update_specialization(struct ts_TYPE* specialization) {
     recursion_depth--;
 }
 struct ts_TYPE* cl_specialize_class(struct ts_TYPE* class, struct ts_TYPE_ARGUMENTS* type_arguments) {
-    // elw TODO: cl_specialize_class clearly isn't checking for duplicates correctly
     if(!ts_class_is_generic(class)) {
         return class;
     }

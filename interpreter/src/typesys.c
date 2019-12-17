@@ -13,7 +13,6 @@ struct ts_TYPE_REGISTRY {
 static struct ts_TYPE_REGISTRY* global_registry = NULL;
 static uint32_t type_id = 3;
 void ts_init_global_registry() {
-    // elw TODO: This is very broken
     // Create and initialize an int type
     global_registry = mm_malloc(sizeof(struct ts_TYPE_REGISTRY));
     global_registry->name = strdup("int");
@@ -433,8 +432,6 @@ struct ts_TYPE* ts_reify_type(struct ts_TYPE* type, struct ts_TYPE_ARGUMENTS* ty
         if(ts_clazz_is_raw(type)) {
             fatal("Cannot reify a raw type directly");
         }
-        // elw type->data.clazz.type_arguments == NULL, which makes sense, since
-        // `type` is a raw type. Why are we trying to reify a raw type?
         struct ts_TYPE_ARGUMENTS* new_arguments = ts_compose_type_arguments(type->data.clazz.type_arguments, type_arguments);
         struct ts_TYPE* result = cl_specialize_class(type, new_arguments);
         free(new_arguments);

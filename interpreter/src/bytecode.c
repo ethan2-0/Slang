@@ -7,7 +7,7 @@
 #include "interpreter.h"
 #include "slbstdlib.h"
 
-uint32_t bc_resolve_name(struct it_PROGRAM* program, char* callee_name);
+uint32_t bc_resolve_global_method(struct it_PROGRAM* program, char* callee_name);
 uint32_t bc_assign_method_id(struct it_PROGRAM* program);
 
 void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct it_METHOD* method, struct it_OPCODE* opcode) {
@@ -44,7 +44,7 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
     } else if(opcode_num == OPCODE_CALL) {
         struct it_OPCODE_DATA_CALL* data = &opcode->data.call;
         char* callee_name = fr_getstr(state);
-        data->callee = &program->methods[bc_resolve_name(program, callee_name)];
+        data->callee = &program->methods[bc_resolve_global_method(program, callee_name)];
         free(callee_name);
         data->returnval = fr_getuint32(state);
         memset(data->type_params, 0, sizeof(data->type_params));
@@ -381,9 +381,9 @@ uint32_t bc_assign_method_id(struct it_PROGRAM* program) {
 void bc_prescan_destroy(struct bc_PRESCAN_RESULTS* prescan) {
     free(prescan);
 }
-uint32_t bc_resolve_name(struct it_PROGRAM* program, char* name) {
+uint32_t bc_resolve_global_method(struct it_PROGRAM* program, char* name) {
     for(int i = 0; i < program->methodc; i++) {
-        if(strcmp(name, program->methods[i].name) == 0) {
+        if(program->methods[i].containing_clazz == NULL && strcmp(name, program->methods[i].name) == 0) {
             #if DEBUG
             printf("Resolved %s to %d\n", name, program->methods[i].id);
             #endif
@@ -404,14 +404,7 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     uint32_t registerc = fr_getuint32(state);
     uint32_t nargs = fr_getuint32(state);
     uint32_t opcodec = fr_getuint32(state);
-    char* name = fr_getstr(state);
-    uint32_t id = bc_resolve_name(program, name);
-
-    #if DEBUG
-    printf("Register count %d\n", registerc);
-    printf("Id %d\n", id);
-    printf("Nargs %d\n", nargs);
-    #endif
+    free(fr_getstr(state));
 
     free(fr_getstr(state)); // Containing class/interface
 
@@ -470,7 +463,6 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     }
 
     result->registerc = registerc;
-    result->id = id;
     result->nargs = nargs;
     result->opcodec = opcodec;
 
@@ -732,7 +724,7 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             char* name = fr_getstr(state);
             // A zero-length entrypoint name means no entrypoint
             if(strlen(name) > 0) {
-                program->entrypoint = bc_resolve_name(program, name);
+                program->entrypoint = bc_resolve_global_method(program, name);
             }
             free(fr_getstr(state));
         } else if(segment_type == SEGMENT_TYPE_STATIC_VARIABLES) {

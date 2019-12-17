@@ -1,7 +1,10 @@
 class Class extends void {
     ctor() {}
     fn func(x: int): int {
-        return x + 2;
+        return x + 4;
+    }
+    fn func2(a: bool, b: int): bool {
+        return b > 0 and a;
     }
 }
 fn func(x: bool): bool {

@@ -70,16 +70,16 @@ class Toker:
         return ch
 
     def next(self) -> Token:
+        if not self.is_eof() and self.ch(2) == "//":
+            # NOTE: If / does anything other than division and /=, then we need
+            #       to make sure // always means a comment.
+            while self.ch() != "\n" and not self.is_eof():
+                self.adv()
+
         if self.is_eof():
             return Token("EOF")
 
-        if self.ch(2) == "//":
-            # NOTE: If / does anything other than division and /=, then we need
-            #       to make sure // always means a comment.
-            while self.ch() != "\n":
-                self.adv()
-            return self.next()
-        elif self.ch() in Toker.ident_start_chars:
+        if self.ch() in Toker.ident_start_chars:
             s = ""
             while self.ch() in Toker.ident_chars and not self.is_eof():
                 s += self.adv()

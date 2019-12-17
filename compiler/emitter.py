@@ -351,7 +351,6 @@ class MethodEmitter(SegmentEmitter):
         self.program = program
         self.types = program.types
         self.signature = signature
-        # elw I could fix this just by changing this to self.signature.generic_type_context if self.signature.containing_clazz is None else self.signature.containing_clazz.type_parameters
         self.generic_type_context = self.signature.generic_type_context
         self.type_references = TypeReferenceSet()
         # This is assigned to later. Technically this is uninitialized leaving
@@ -1497,7 +1496,8 @@ class Program:
     def get_method_signature_optional(self, name: str) -> Optional[MethodSignature]:
         search_paths = self.search_paths
         for signature in self.method_signatures:
-            if signature.name in ["%s%s" % (path, name) if path != "" else name for path in search_paths]:
+            # This method is only for global methods
+            if signature.name in ["%s%s" % (path, name) if path != "" else name for path in search_paths] and signature.containing_class is None:
                 return signature
         return None
 
@@ -1673,7 +1673,11 @@ class Program:
                     assert specialization.type_arguments is not None
                     specialization.method_signatures.append(clazz_method_signature.specialize_with_parameters(specialization.type_arguments, parser.Node("")))
             for ctor in clazz.ctors:
-                clazz_ctor_signature = self.get_method_signature(ctor.name)
+                clazz_ctor_signature: Optional[MethodSignature] = None
+                for clazz_ctor_candidate in self.method_signatures:
+                    if ctor.name in ["%s%s" % (path, clazz_ctor_candidate.name) for path in self.search_paths] and clazz_ctor_candidate.containing_class == sig:
+                        clazz_ctor_signature = clazz_ctor_candidate
+                assert clazz_ctor_signature is not None
                 sig.ctor_signatures.append(clazz_ctor_signature)
                 for specialization in sig.specializations:
                     assert specialization.type_arguments is not None
