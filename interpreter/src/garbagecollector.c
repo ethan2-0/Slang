@@ -187,6 +187,11 @@ void gc_collect(struct it_PROGRAM* program, struct it_STACKFRAME* stack, struct 
                 }
             }
         } else if(entry->category == ts_CATEGORY_CLAZZ) {
+            #if ASSERTIONS
+            if(ts_clazz_is_raw(entry->object.clazz_data->method_table->type)) {
+                fatal("Garbage collector got a raw type");
+            }
+            #endif
             struct ts_TYPE* clazz_properties = entry->object.clazz_data->method_table->type;
             for(int i = 0; i < clazz_properties->data.clazz.nfields; i++) {
                 if(entry->object.clazz_data->itval[i].array_data == NULL) {

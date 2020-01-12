@@ -870,7 +870,7 @@ class MethodEmitter(SegmentEmitter):
             for i in range(len(param_registers)):
                 emitted_opcodes.append(ops["param"].ins(param_registers[i], i, node=node))
             # TODO: scope.resolve("this") is ugly
-            emitted_opcodes.append(ops["classcallspecial"].ins(clazz_signature, ctor_signature, self.scope.allocate(self.types.bool_type), self.scope.resolve("this", node), node=node))
+            emitted_opcodes.append(ops["classcall"].ins(self.scope.resolve("this", node), ctor_signature, self.scope.allocate(self.types.bool_type), node=node))
             opcodes += annotate(emitted_opcodes, "super cosntructor call")
         else:
             node.compile_error("Unexpected (this is a compiler bug)")

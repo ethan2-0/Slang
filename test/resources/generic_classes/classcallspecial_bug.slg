@@ -1,0 +1,21 @@
+using stdlib;
+
+class Superclass<T> {
+    array: [T];
+    ctor() {
+    }
+    fn doSomething() {
+        this.array = [T: 0];
+    }
+}
+class Subclass<R> extends Superclass<R> {
+    ctor() {
+        super.doSomething();
+    }
+}
+entrypoint fn main() {
+    let cls = new Subclass<int>();
+    if(not cls.array instanceof [int]) {
+        die("Failed");
+    }
+}

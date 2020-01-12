@@ -542,3 +542,7 @@ class TestGenericClasses:
         main = util.assert_compile_succeeds("resources/generic_classes/include_main.slg", include=[lib])
         util.interpret(lib, main)
         util.interpret(main, lib)
+
+    def test_classcallspecial_bug(self):
+        path = util.assert_compile_succeeds("resources/generic_classes/classcallspecial_bug.slg", no_warnings=False)
+        util.interpret(path)

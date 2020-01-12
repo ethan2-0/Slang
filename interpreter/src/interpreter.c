@@ -69,6 +69,18 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
     union itval params[256];
     memset(params, 0, sizeof(union itval) * 256);
 
+    #if CATEGORY_GUARDS
+    for(int i = 0; i < stackptr->method->registerc; i++) {
+        if(registers[i].number == 0) {
+            continue;
+        }
+        enum ts_CATEGORY stated_category = stackptr->method->register_types[i]->category;
+        if(stated_category == ts_CATEGORY_TYPE_PARAMETER) {
+            fatal("Register of category type parameter");
+        }
+    }
+    #endif
+
     // TODO: Do something smarter for dispatch here
     while(1) {
         #if DEBUG
@@ -153,6 +165,18 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             for(uint32_t i = 0; i < callee->nargs - (oldstack->iptr->type == OPCODE_CLASSCALLSPECIAL ? 1 : 0); i++) {
                 registers[i + (oldstack->iptr->type == OPCODE_CALL ? 0 : 1)] = params[i];
             }
+
+            #if CATEGORY_GUARDS
+            for(int i = 0; i < stackptr->method->registerc; i++) {
+                if(registers[i].number == 0) {
+                    continue;
+                }
+                enum ts_CATEGORY stated_category = stackptr->method->register_types[i]->category;
+                if(stated_category == ts_CATEGORY_TYPE_PARAMETER) {
+                    fatal("Register of category type parameter");
+                }
+            }
+            #endif
             continue;
         }
         case OPCODE_CLASSCALL: {
@@ -176,6 +200,9 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
                 fatal("Attempt to call method of null");
             }
             struct it_METHOD* classcall_callee = thiz.clazz_data->method_table->methods[classcall_callee_index];
+            if(!classcall_callee->has_had_references_reified) {
+                ts_reify_generic_references(classcall_callee);
+            }
 
             #if DEBUG
             printf("Class-calling %s\n", classcall_callee->name);
@@ -195,6 +222,17 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             for(uint32_t i = 0; i < classcall_callee->nargs - 1; i++) {
                 registers[i + 1] = params[i];
             }
+            #if CATEGORY_GUARDS
+            for(int i = 0; i < stackptr->method->registerc; i++) {
+                if(registers[i].number == 0) {
+                    continue;
+                }
+                enum ts_CATEGORY stated_category = stackptr->method->register_types[i]->category;
+                if(stated_category == ts_CATEGORY_TYPE_PARAMETER) {
+                    fatal("Register of category type parameter");
+                }
+            }
+            #endif
             continue;
         }
         case OPCODE_INTERFACECALL: {
@@ -369,6 +407,17 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
         }
         case OPCODE_MOV: {
             registers[iptr->data.mov.target] = registers[iptr->data.mov.source];
+            #if CATEGORY_GUARDS
+            enum ts_CATEGORY category = stackptr->method->register_types[iptr->data.mov.target]->category;
+            if(category == ts_CATEGORY_TYPE_PARAMETER) {
+                fatal("Register has type parameter type");
+            } else if(category != ts_CATEGORY_PRIMITIVE && registers[iptr->data.mov.target].array_data != NULL) {
+                enum ts_CATEGORY target_category = registers[iptr->data.mov.target].array_data->category;
+                if(!(category == ts_CATEGORY_INTERFACE || category == ts_CATEGORY_CLAZZ || target_category == ts_CATEGORY_INTERFACE || target_category == ts_CATEGORY_CLAZZ) && category != target_category) {
+                    fatal("Category guard didn't match");
+                }
+            }
+            #endif
             iptr++;
             continue;
         }
@@ -398,6 +447,9 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             struct it_OPCODE_DATA_NEW* opcode_new_data = &iptr->data.new;
             size_t new_allocation_size = sizeof(struct it_CLAZZ_DATA) + sizeof(union itval) * opcode_new_data->clazz->data.clazz.nfields;
             registers[opcode_new_data->dest].clazz_data = mm_malloc(new_allocation_size);
+            #if CATEGORY_GUARDS
+            registers[opcode_new_data->dest].clazz_data->category = ts_CATEGORY_CLAZZ;
+            #endif
             struct gc_OBJECT_REGISTRY* new_register = gc_register_object(registers[opcode_new_data->dest], new_allocation_size, ts_CATEGORY_CLAZZ);
             registers[opcode_new_data->dest].clazz_data->gc_registry_entry = new_register;
             memset(registers[opcode_new_data->dest].clazz_data->itval, 0, sizeof(union itval) * opcode_new_data->clazz->data.clazz.nfields);
@@ -433,7 +485,11 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             struct it_OPCODE_DATA_ARRALLOC* data = &iptr->data.arralloc;
             uint64_t length = registers[data->lengthreg].number;
             size_t arralloc_allocation_size = sizeof(struct it_ARRAY_DATA) + sizeof(union itval) * (length <= 0 ? 1 : length - 1);
-            registers[data->arrreg].array_data = (struct it_ARRAY_DATA*) mm_malloc(arralloc_allocation_size);
+            struct it_ARRAY_DATA* array_data = mm_malloc(arralloc_allocation_size);
+            #if CATEGORY_GUARDS
+            array_data->category = ts_CATEGORY_ARRAY;
+            #endif
+            registers[data->arrreg].array_data = array_data;
             registers[data->arrreg].array_data->length = length;
             memset(&registers[data->arrreg].array_data->elements, 0, length * sizeof(union itval));
             registers[data->arrreg].array_data->type = stackptr->method->register_types[data->arrreg];

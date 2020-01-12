@@ -126,6 +126,9 @@ void bc_parse_opcode(struct fr_STATE* state, struct it_PROGRAM* program, struct 
         if(data->clazz->category != ts_CATEGORY_CLAZZ) {
             fatal("Attempt to instantiate something that isn't a class");
         }
+        if(ts_clazz_is_raw(data->clazz)) {
+            fatal("Attempt to instantiate raw class");
+        }
         data->dest = fr_getuint32(state);
     } else if(opcode_num == OPCODE_ACCESS) {
         struct it_OPCODE_DATA_ACCESS* data = &opcode->data.access;
@@ -323,6 +326,9 @@ union itval bc_create_staticvar_value(struct it_PROGRAM* program, struct fr_STAT
         uint64_t length = fr_getuint64(state);
         size_t allocation_size = sizeof(struct it_ARRAY_DATA) + (length == 0 ? 0 : (length - 1) * sizeof(union itval));
         struct it_ARRAY_DATA* array_data = mm_malloc(allocation_size);
+        #if CATEGORY_GUARDS
+        array_data->category = ts_CATEGORY_ARRAY;
+        #endif
         array_data->length = length;
         array_data->type = type;
         for(uint64_t i = 0; i < length; i++) {

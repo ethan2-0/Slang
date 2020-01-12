@@ -6,6 +6,7 @@
 #define INTERPRETER_EXPORT_H
 
 #define TS_MAX_TYPE_ARGS 16
+#define CATEGORY_GUARDS 1
 
 #include "opcodes.h"
 
@@ -103,6 +104,9 @@ struct gc_OBJECT_REGISTRY {
 };
 
 struct it_ARRAY_DATA {
+    #if CATEGORY_GUARDS
+    enum ts_CATEGORY category;
+    #endif
     uint64_t length;
     struct gc_OBJECT_REGISTRY* gc_registry_entry;
     struct ts_TYPE* type;
@@ -124,6 +128,9 @@ struct it_METHOD_TABLE {
 };
 
 struct it_CLAZZ_DATA {
+    #if CATEGORY_GUARDS
+    enum ts_CATEGORY category;
+    #endif
     struct it_METHOD_TABLE* method_table;
     struct gc_OBJECT_REGISTRY* gc_registry_entry;
     union itval itval[0];

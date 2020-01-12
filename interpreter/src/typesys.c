@@ -156,7 +156,7 @@ struct ts_TYPE* ts_search_generic_type_context_optional(char* name, struct ts_GE
         return NULL;
     }
     for(int i = 0; i < context->count; i++) {
-        if(strcmp(context->arguments[i]->name, name) == 0) {
+        if(strcmp(context->arguments[i]->name, name) == 0 && ts_is_from_context(context->arguments[i], context)) {
             return context->arguments[i];
         }
     }
@@ -386,25 +386,32 @@ struct ts_TYPE_ARGUMENTS* ts_create_type_arguments(struct ts_GENERIC_TYPE_CONTEX
 }
 struct ts_TYPE_ARGUMENTS* ts_compose_type_arguments(struct ts_TYPE_ARGUMENTS* first, struct ts_TYPE_ARGUMENTS* second) {
     if(first == NULL) {
-        return NULL;
+        return second;
     }
     if(second == NULL) {
-        return NULL;
+        return first;
+    }
+    if(first->context->parent != NULL || second->context->parent != NULL) {
+        fatal("Composing type arguments whose contexts have parents isn't supported");
     }
     // Some explanation for this in GenericTypeParameters.compose in typesys.py.
-    struct ts_TYPE_ARGUMENTS* result = mm_malloc(sizeof(struct ts_TYPE_ARGUMENTS) + sizeof(result->mapping[0]) * first->context->count);
-    result->context = first->context;
+    uint32_t new_count = first->context->count + second->context->count;
+    struct ts_GENERIC_TYPE_CONTEXT* new_context = mm_malloc(sizeof(struct ts_GENERIC_TYPE_CONTEXT) + sizeof(struct ts_TYPE*) * new_count);
+    new_context->parent = NULL;
+    new_context->count = new_count;
+    memcpy(new_context->arguments, first->context->arguments, sizeof(struct ts_TYPE*) * first->context->count);
+    memcpy(new_context->arguments + first->context->count, second->context->arguments, sizeof(struct ts_TYPE*) * second->context->count);
+    struct ts_TYPE_ARGUMENTS* result = mm_malloc(sizeof(struct ts_TYPE_ARGUMENTS) + sizeof(result->mapping[0]) * new_count);
+    result->context = new_context;
     for(int i = 0; i < first->context->count; i++) {
         result->mapping[i].key = first[i].mapping[i].key;
         result->mapping[i].value = ts_reify_type(first->mapping[i].value, second);
     }
+    memcpy(result->mapping + first->context->count, second->mapping, sizeof(result->mapping[0]) * second->context->count);
     return result;
 }
 bool ts_type_arguments_are_equivalent(struct ts_TYPE_ARGUMENTS* first, struct ts_TYPE_ARGUMENTS* second) {
     // TODO: This is n^2
-    if(first->context->count != second->context->count) {
-        return false;
-    }
     for(int i = 0; i < first->context->count; i++) {
         bool foundIt = false;
         for(int j = 0; j < second->context->count; j++) {
@@ -455,11 +462,16 @@ void ts_update_method_reification(struct it_METHOD* specialization) {
     struct ts_TYPE_ARGUMENTS* arguments = specialization->typeargs;
     struct it_METHOD* generic_method = specialization->reified_from;
 
+    if(strcmp(specialization->name, "test") == 0) {
+        printf("Hi\n");
+    }
+
     // TODO: Switch to using indirect method references like we do with type
     // references (so we can use the same opcodes for every instance of a
     // method)? Or is it necessary?
     if(generic_method->opcodes != NULL && specialization->opcodes == NULL) {
         specialization->opcodes = mm_malloc(sizeof(struct it_OPCODE) * generic_method->opcodec);
+        specialization->opcodec = generic_method->opcodec;
         memcpy(specialization->opcodes, generic_method->opcodes, sizeof(struct it_OPCODE) * generic_method->opcodec);
     }
 
@@ -557,6 +569,12 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, st
 
     return ret;
 }
+struct it_METHOD* ts_get_unreified_method_from_reification(struct it_METHOD* reification) {
+    while(reification->reified_from != reification) {
+        reification = reification->reified_from;
+    }
+    return reification;
+}
 void ts_reify_generic_references(struct it_METHOD* method) {
     if(ts_method_is_generic(method)) {
         // We shouldn't need this check but it won't hurt
@@ -564,21 +582,27 @@ void ts_reify_generic_references(struct it_METHOD* method) {
     }
     for(int i = 0; i < method->opcodec; i++) {
         struct it_OPCODE* opcode = &method->opcodes[i];
-        if(opcode->type != OPCODE_CALL) {
-            continue;
+        if(opcode->type == OPCODE_CALL) {
+            if(!ts_method_is_generic(opcode->data.call.callee)) {
+                if(method->typeargs != NULL) {
+                    opcode->data.call.callee = ts_get_method_reification(ts_get_unreified_method_from_reification(opcode->data.call.callee), method->typeargs);
+                }
+                continue;
+            }
+            // I could use a VLA here but it's not necessary
+            struct ts_TYPE* type_arguments[TS_MAX_TYPE_ARGS];
+            for(int i = 0; i < opcode->data.call.type_paramsc; i++) {
+                type_arguments[i] = method->typereferences[opcode->data.call.type_params[i]];
+            }
+            struct ts_TYPE_ARGUMENTS* type_arguments_struct = ts_create_type_arguments(opcode->data.call.callee->type_parameters, opcode->data.call.type_paramsc, &type_arguments[0]);
+            struct it_METHOD* reification = ts_get_method_reification(opcode->data.call.callee, type_arguments_struct);
+            free(type_arguments_struct);
+            opcode->data.call.callee = reification;
+        } else if(opcode->type == OPCODE_CLASSCALLSPECIAL) {
+            if(method->typeargs != NULL) {
+                opcode->data.call.callee = ts_get_method_reification(ts_get_unreified_method_from_reification(opcode->data.call.callee), method->typeargs);
+            }
         }
-        if(!ts_method_is_generic(opcode->data.call.callee)) {
-            continue;
-        }
-        // I could use a VLA here but it's not necessary
-        struct ts_TYPE* type_arguments[TS_MAX_TYPE_ARGS];
-        for(int i = 0; i < opcode->data.call.type_paramsc; i++) {
-            type_arguments[i] = method->typereferences[opcode->data.call.type_params[i]];
-        }
-        struct ts_TYPE_ARGUMENTS* type_arguments_struct = ts_create_type_arguments(opcode->data.call.callee->type_parameters, opcode->data.call.type_paramsc, &type_arguments[0]);
-        struct it_METHOD* reification = ts_get_method_reification(opcode->data.call.callee, type_arguments_struct);
-        free(type_arguments_struct);
-        opcode->data.call.callee = reification;
     }
     method->has_had_references_reified = true;
 }

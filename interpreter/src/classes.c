@@ -279,6 +279,7 @@ void cl_update_specialization(struct ts_TYPE* specialization) {
         size_t method_table_size = sizeof(struct it_METHOD_TABLE) + sizeof(struct it_METHOD*) * root->data.clazz.method_table->nmethods;
         specialization->data.clazz.method_table = mm_malloc(method_table_size);
         memcpy(specialization->data.clazz.method_table, root->data.clazz.method_table, method_table_size);
+        specialization->data.clazz.method_table->type = specialization;
         for(int i = 0; i < specialization->data.clazz.method_table->nmethods; i++) {
             specialization->data.clazz.method_table->methods[i] = ts_get_method_reification(specialization->data.clazz.method_table->methods[i], specialization->data.clazz.type_arguments);
         }
@@ -304,6 +305,8 @@ struct ts_TYPE* cl_specialize_class(struct ts_TYPE* class, struct ts_TYPE_ARGUME
         return class;
     }
     if(ts_class_is_specialization(class)) {
+        // TODO: Memory leak from ts_compose_type_arguments - free it after
+        //       this line and then copy it below if we need it
         return cl_specialize_class(class->data.clazz.specialized_from, ts_compose_type_arguments(class->data.clazz.type_arguments, type_arguments));
     }
     for(int i = 0; i < class->data.clazz.specializationsc; i++) {
