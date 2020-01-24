@@ -31,6 +31,52 @@ fn test_basic() {
         }
     }
 }
+fn test_index_functions() {
+    let list = new ArrayList<int>();
+    for(let i = 0; i < 100; i += 2) {
+        list.add(i);
+    }
+    for(let i = 0; i < 100; i += 2) {
+        list.insert(i + 1, list.indexOf(i) + 1);
+    }
+    for(let i = 0; i < 100; i++) {
+        if(list.get(i) != i) {
+            println(strconcat_all([itos(i), " -> ", itos(list.get(i))]));
+            die("Failed 1");
+        }
+    }
+    for(let i = 0; i < 100; i += 3) {
+        list.removeElement(i);
+    }
+    for(let i = 0; i < list.size(); i++) {
+        if(list.get(i) % 3 == 0) {
+            die("Failed 2");
+        }
+    }
+    let list2 = new ArrayList<int>();
+    for(let i = 0; i < 10; i++) {
+        for(let j = 0; j < 10; j++) {
+            list2.add(j);
+        }
+    }
+    for(let i = 0; i < 10; i++) {
+        if(list2.indexOf(i) != i) {
+            die("Failed 3");
+        }
+        if(list2.nextIndexOf(i, 0) != i) {
+            die("Failed 4");
+        }
+        if(list2.nextIndexOf(i, i + 9) != i + 10) {
+            die("Failed 5");
+        }
+    }
+    if(list2.contains(10)) {
+        die("Failed 6");
+    }
+    if(not list2.contains(0)) {
+        die("Failed 7");
+    }
+}
 fn test_gc() {
     let list = new ArrayList<ArrayList<int>>();
     let outer = 8;
@@ -51,5 +97,6 @@ fn test_gc() {
 }
 entrypoint fn main() {
     test_basic();
+    test_index_functions();
     test_gc();
 }

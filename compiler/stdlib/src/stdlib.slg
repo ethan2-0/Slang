@@ -692,7 +692,7 @@ class ArrayList<T> {
         this.elements[this.length] = t;
         this.length++;
     }
-    fn addAt(t: T, index: int) {
+    fn insert(t: T, index: int) {
         this._ensureCapacity(this.length + 1);
         for(let i = this.length; i > index; i--) {
             this.elements[i] = this.elements[i - 1];
@@ -727,7 +727,7 @@ class ArrayList<T> {
         return true;
     }
     fn nextIndexOf(element: T, startIndex: int): int {
-        if(startIndex >= this.length) {
+        if(startIndex >= this.length or startIndex < 0) {
             die(strconcat_all(["ArrayList index out of bounds: ", itos(startIndex)]));
         }
         for(let i = startIndex; i < this.length; i++) {
