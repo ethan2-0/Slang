@@ -410,6 +410,7 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     uint32_t registerc = fr_getuint32(state);
     uint32_t nargs = fr_getuint32(state);
     uint32_t opcodec = fr_getuint32(state);
+    fr_getuint32(state); // typereferencec
     free(fr_getstr(state));
 
     free(fr_getstr(state)); // Containing class/interface
@@ -452,7 +453,6 @@ void bc_parse_method(struct fr_STATE* state, struct it_OPCODE* opcode_buff, stru
     }
     result->register_types = register_types;
 
-    result->typereferencec = fr_getuint32(state);
     struct ts_TYPE** typereferences = mm_malloc(sizeof(struct ts_TYPE*) * result->typereferencec);
     for(uint32_t i = 0; i < result->typereferencec; i++) {
         char* typename = fr_getstr(state);
@@ -681,12 +681,12 @@ void bc_scan_methods(struct it_PROGRAM* program, struct fr_STATE* state, int off
             method->registerc = fr_getuint32(state); // num_registers
             method->id = bc_assign_method_id(program); // id
             method->nargs = fr_getuint32(state); // nargs
-            fr_getuint32(state);
+            fr_getuint32(state); // opcodec
+            method->typereferencec = fr_getuint32(state);
             method->name = fr_getstr(state); // name
             char* containing_clazz_name = fr_getstr(state);
             method->containing_clazz = NULL;
             method->containing_interface = NULL;
-            method->typereferencec = 0;
             method->typereferences = NULL;
             method->reificationsc = 0;
             method->reifications = NULL;

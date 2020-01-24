@@ -198,8 +198,14 @@ class String {
     fn strip(): String {
         let whitespace = " \t\n\r\v\f";
         let leftIndex = 0;
+        if(leftIndex >= this.length) {
+            return "";
+        }
         while(whitespace.containsChar(this.charAt(leftIndex))) {
             leftIndex++;
+            if(leftIndex >= this.length) {
+                return "";
+            }
         }
         let rightIndex = this.length - 1;
         while(whitespace.containsChar(this.charAt(rightIndex))) {
@@ -663,4 +669,90 @@ fn arrayResize<T>(arr: [T], newSize: int): [T] {
         newArr[i] = arr[i];
     }
     return newArr;
+}
+class ArrayList<T> {
+    elements: [T];
+    length: int;
+    ctor() {
+        this.elements = [T: 2];
+        this.length = 0;
+    }
+    fn _ensureCapacity(capacity: int) {
+        if(capacity <= #this.elements) {
+            return;
+        }
+        let newSize = #this.elements * 2;
+        if(newSize <= 0 or newSize <= capacity) {
+            newSize = max(2, capacity);
+        }
+        this.elements = arrayResize<T>(this.elements, newSize);
+    }
+    fn add(t: T) {
+        this._ensureCapacity(this.length + 1);
+        this.elements[this.length] = t;
+        this.length++;
+    }
+    fn addAt(t: T, index: int) {
+        this._ensureCapacity(this.length + 1);
+        for(let i = this.length; i > index; i--) {
+            this.elements[i] = this.elements[i - 1];
+        }
+        this.elements[index] = t;
+        this.length++;
+    }
+    fn get(index: int): T {
+        if(index >= this.length) {
+            die(strconcat_all(["ArrayList index out of bounds: ", itos(index)]));
+        }
+        return this.elements[index];
+    }
+    fn set(index: int, value: T) {
+        if(index >= this.length) {
+            die(strconcat_all(["ArrayList index out of bounds: ", itos(index)]));
+        }
+        this.elements[index] = value;
+    }
+    fn remove(index: int) {
+        for(let i = index; i < this.length - 1; i++) {
+            this.elements[i] = this.elements[i + 1];
+        }
+        this.length--;
+    }
+    fn removeElement(element: T): bool {
+        let index = this.indexOf(element);
+        if(index < 0) {
+            return false;
+        }
+        this.remove(index);
+        return true;
+    }
+    fn nextIndexOf(element: T, startIndex: int): int {
+        if(startIndex >= this.length) {
+            die(strconcat_all(["ArrayList index out of bounds: ", itos(startIndex)]));
+        }
+        for(let i = startIndex; i < this.length; i++) {
+            if(this.elements[i] == element) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    fn indexOf(element: T): int {
+        return this.nextIndexOf(element, 0);
+    }
+    fn contains(element: T): bool {
+        return this.indexOf(element) >= 0;
+    }
+    fn size(): int {
+        return this.length;
+    }
+    fn toArray(start: int, end: int): [T] {
+        return arraySlice<T>(this.elements, start, end);
+    }
+}
+fn ArrayList.fromArray<R>(list: [R]): ArrayList<R> {
+    let ret = new ArrayList<R>();
+    ret.elements = arrayCopy<R>(list);
+    ret.length = #list;
+    return ret;
 }

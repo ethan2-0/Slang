@@ -90,6 +90,22 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
         printf("\n");
         printf("Type %02x, iptr %d\n", iptr->type, iptr - instruction_start);
         #endif
+        #if CATEGORY_GUARDS_EVERY_ITERATION
+        for(int i = 0; i < stackptr->method->registerc; i++) {
+            if(registers[i].array_data == NULL) {
+                continue;
+            }
+            if(stackptr->method->register_types[i]->category == ts_CATEGORY_ARRAY) {
+                if(registers[i].array_data->category != ts_CATEGORY_ARRAY) {
+                    fatal("Category guard failed: array");
+                }
+            } else if(stackptr->method->register_types[i]->category == ts_CATEGORY_CLAZZ) {
+                if(registers[i].clazz_data->category != ts_CATEGORY_CLAZZ) {
+                    fatal("Category guard failed: class");
+                }
+            }
+        }
+        #endif
         switch(iptr->type) {
         case OPCODE_PARAM:
             params[iptr->data.param.target] = registers[iptr->data.param.source];
@@ -441,7 +457,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             continue;
         }
         case OPCODE_NEW: {
-            if(gc_needs_collection) {
+            if(gc_needs_collection && !options->no_gc) {
                 gc_collect(prog, stack, stackptr, options);
             }
             struct it_OPCODE_DATA_NEW* opcode_new_data = &iptr->data.new;
@@ -479,7 +495,7 @@ void it_execute(struct it_PROGRAM* prog, struct it_OPTIONS* options) {
             continue;
         }
         case OPCODE_ARRALLOC: {
-            if(gc_needs_collection) {
+            if(gc_needs_collection && !options->no_gc) {
                 gc_collect(prog, stack, stackptr, options);
             }
             struct it_OPCODE_DATA_ARRALLOC* data = &iptr->data.arralloc;

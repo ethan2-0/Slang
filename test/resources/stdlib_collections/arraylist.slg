@@ -1,0 +1,55 @@
+using stdlib;
+
+fn test_basic() {
+    let list = new ArrayList<String>();
+    for(let i = 0; i < 100; i++) {
+        list.add(itos(i));
+    }
+    if(list.size() != 100) {
+        die("Failed 1");
+    }
+    for(let i = 0; i < 100; i++) {
+        if(not list.get(i).equals(itos(i))) {
+            die("Failed 2");
+        }
+    }
+    for(let i = 0; i < 100; i++) {
+        list.set(i, itos_base(i, 2));
+    }
+    for(let i = 0; i < 100; i++) {
+        if(not list.get(i).equals(itos_base(i, 2))) {
+            die("Failed 3");
+        }
+    }
+    // This loop works, trust me, it's just kind of strangely phrased
+    for(let i = 0; i < 50; i++) {
+        list.remove(i);
+    }
+    for(let i = 0; i < list.size(); i++) {
+        if(not list.get(i).equals(itos_base(i * 2 + 1, 2))) {
+            die("Failed 4");
+        }
+    }
+}
+fn test_gc() {
+    let list = new ArrayList<ArrayList<int>>();
+    let outer = 8;
+    let inner = 1024 * 256;
+    for(let i = 0; i < outer; i++) {
+        list.add(new ArrayList<int>());
+        for(let j = 0; j < inner; j++) {
+            list.get(list.size() - 1).add(i * outer + j);
+        }
+    }
+    for(let i = 0; i < outer; i++) {
+        for(let j = 0; j < inner; j++) {
+            if(list.get(i).get(j) != i * outer + j) {
+                die("Failed 5");
+            }
+        }
+    }
+}
+entrypoint fn main() {
+    test_basic();
+    test_gc();
+}

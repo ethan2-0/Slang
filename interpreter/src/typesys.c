@@ -462,10 +462,6 @@ void ts_update_method_reification(struct it_METHOD* specialization) {
     struct ts_TYPE_ARGUMENTS* arguments = specialization->typeargs;
     struct it_METHOD* generic_method = specialization->reified_from;
 
-    if(strcmp(specialization->name, "test") == 0) {
-        printf("Hi\n");
-    }
-
     // TODO: Switch to using indirect method references like we do with type
     // references (so we can use the same opcodes for every instance of a
     // method)? Or is it necessary?
@@ -566,6 +562,7 @@ struct it_METHOD* ts_get_method_reification(struct it_METHOD* generic_method, st
     ts_update_method_reification(ret);
 
     generic_method->reifications[generic_method->reificationsc++] = ret;
+    ret->typereferencec = generic_method->typereferencec;
 
     return ret;
 }

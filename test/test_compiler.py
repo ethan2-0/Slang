@@ -349,6 +349,11 @@ class TestStdlib:
         path = util.assert_compile_succeeds("resources/stdlib/array_methods.slg")
         util.interpret(path)
 
+class TestStdlibCollections:
+    def test_arraylist(self):
+        path = util.assert_compile_succeeds("resources/stdlib_collections/arraylist.slg")
+        util.interpret(path)
+
 class TestReplacedMethods:
     def test_print(self):
         path = util.assert_compile_succeeds("resources/replaced_methods/print.slg")

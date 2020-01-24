@@ -74,7 +74,7 @@ struct gc_OBJECT_REGISTRY* gc_register_object(union itval object, size_t allocat
 void gc_free_internal(struct gc_OBJECT_REGISTRY* registry_entry) {
     gc_heap_size -= registry_entry->allocation_size;
     // We're saying `.array_data` here, because the type information is lost in
-    // the implicit conversion to void*.
+    // the implicit conversion to void* anyway.
     // Memset to notice use-after-free
     memset(registry_entry->object.array_data, 0x3e, registry_entry->allocation_size);
     free(registry_entry->object.array_data);

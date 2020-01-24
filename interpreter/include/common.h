@@ -6,7 +6,7 @@
 #define COMMON_H
 
 #define DEBUG 0
-#define ASSERTIONS 1
+#define ASSERTIONS 0
 
 void fatal(char* description);
 void fatal_with_errcode(char* description, int errcode);

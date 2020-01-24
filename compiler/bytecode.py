@@ -96,7 +96,7 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
 
     def emit(self, segment: emitter.MethodSegment) -> bytes:
         ret = SegmentEmitter.emit(self, segment)
-        header = struct.pack("!III", segment.num_registers, segment.signature.nargs, len(segment.opcodes)) + encode_str(segment.signature.name)
+        header = struct.pack("!IIII", segment.num_registers, segment.signature.nargs, len(segment.opcodes), len(segment.emitter.type_references)) + encode_str(segment.signature.name)
         body_header = b""
         if segment.signature.is_class_method:
             assert segment.signature.containing_class is not None
@@ -119,7 +119,6 @@ class SegmentEmitterMethod(SegmentEmitter[emitter.MethodSegment]):
         body_header += encode_str(segment.signature.returntype.bytecode_name)
         for register in segment.scope.registers:
             body_header += encode_str(register.type.bytecode_name)
-        body_header += struct.pack("!I", len(segment.emitter.type_references))
         for typ in segment.emitter.type_references:
             body_header += encode_str(typ.bytecode_name)
         body = body_header + MethodBytecodeEmitter(segment.opcodes).emit()

@@ -6,7 +6,8 @@
 #define INTERPRETER_EXPORT_H
 
 #define TS_MAX_TYPE_ARGS 16
-#define CATEGORY_GUARDS 1
+#define CATEGORY_GUARDS 0
+#define CATEGORY_GUARDS_EVERY_ITERATION 0
 
 #include "opcodes.h"
 

@@ -14,6 +14,7 @@ int main(int argc, char* argv[]) {
     struct it_OPTIONS options;
     options.print_return_value = false;
     options.gc_verbose = false;
+    options.no_gc = false;
     FILE* fp[argc - 1];
     int num_infiles = 0;
     for(int i = 1; i < argc; i++) {
@@ -22,6 +23,8 @@ int main(int argc, char* argv[]) {
                 options.print_return_value = true;
             } else if(strcmp(argv[i], "--gc-verbose") == 0) {
                 options.gc_verbose = true;
+            } else if(strcmp(argv[i], "--no-gc") == 0) {
+                options.no_gc = true;
             } else {
                 printf("Argument: %s\n", argv[i]);
                 fatal("Invalid command line argument");

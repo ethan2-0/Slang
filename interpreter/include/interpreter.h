@@ -37,6 +37,7 @@ uint32_t sv_get_static_var_index_by_name(struct it_PROGRAM* program, char* name)
 struct it_OPTIONS {
     bool print_return_value;
     bool gc_verbose;
+    bool no_gc;
 };
 
 void it_run(struct it_PROGRAM* prog, struct it_OPTIONS* options);
