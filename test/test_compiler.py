@@ -349,6 +349,10 @@ class TestStdlib:
         path = util.assert_compile_succeeds("resources/stdlib/array_methods.slg")
         util.interpret(path)
 
+    def test_string_hash(self):
+        path = util.assert_compile_succeeds("resources/stdlib/string_hash.slg")
+        util.interpret(path)
+
 class TestStdlibCollections:
     def test_arraylist(self):
         path = util.assert_compile_succeeds("resources/stdlib_collections/arraylist.slg")

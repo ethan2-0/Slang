@@ -1,0 +1,11 @@
+using stdlib;
+
+entrypoint fn main() {
+    if(("").getHashCode() != 5318) {
+        die("Failed 1");
+    }
+    // Notice 3658584957865746630 = (5318 * 33**16) % 2**64
+    if((new String([int: 16], 0, 16)).getHashCode() != 3658584957865746630) {
+        die("Failed 2");
+    }
+}

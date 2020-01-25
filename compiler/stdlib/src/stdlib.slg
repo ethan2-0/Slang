@@ -285,6 +285,14 @@ class String {
         }
         return true;
     }
+    override fn getHashCode(): int {
+        // This is the djb2 hash function, by Daniel J Bernstein
+        let hash = 5318;
+        for(let i = this.startIndex; i < this.startIndex + this.length; i++) {
+            hash = hash * 33 + this.chars[i];
+        }
+        return hash;
+    }
 }
 interface Hashable {
     fn getHashCode(): int;
@@ -670,12 +678,29 @@ fn arrayResize<T>(arr: [T], newSize: int): [T] {
     }
     return newArr;
 }
+abstract class EqualityComparator<S> {
+    abstract fn areEqual(first: S, second: S): bool;
+}
+class DoubleEqualsComparator<R> extends EqualityComparator<R> {
+    ctor() {}
+    override fn areEqual(first: R, second: R): bool {
+        return first == second;
+    }
+}
+class EqualsMethodComparator<R extends Object> extends EqualityComparator<R> {
+    ctor() {}
+    override fn areEqual(first: R, second: R): bool {
+        return first.equals(second);
+    }
+}
 class ArrayList<T> {
     elements: [T];
     length: int;
+    equalityComparator: EqualityComparator<T>;
     ctor() {
         this.elements = [T: 2];
         this.length = 0;
+        this.equalityComparator = new DoubleEqualsComparator<T>();
     }
     fn _ensureCapacity(capacity: int) {
         if(capacity <= #this.elements) {
@@ -731,7 +756,7 @@ class ArrayList<T> {
             die(strconcat_all(["ArrayList index out of bounds: ", itos(startIndex)]));
         }
         for(let i = startIndex; i < this.length; i++) {
-            if(this.elements[i] == element) {
+            if(this.equalityComparator.areEqual(this.elements[i], element)) {
                 return i;
             }
         }
@@ -749,6 +774,11 @@ class ArrayList<T> {
     fn toArray(start: int, end: int): [T] {
         return arraySlice<T>(this.elements, start, end);
     }
+}
+fn ArrayList.withEqualityComparator<R>(comparator: EqualityComparator<R>): ArrayList<R> {
+    let ret = new ArrayList<R>();
+    ret.equalityComparator = comparator;
+    return ret;
 }
 fn ArrayList.fromArray<R>(list: [R]): ArrayList<R> {
     let ret = new ArrayList<R>();

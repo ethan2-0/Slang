@@ -1,6 +1,6 @@
 using stdlib;
 
-fn test_basic() {
+fn testBasic() {
     let list = new ArrayList<String>();
     for(let i = 0; i < 100; i++) {
         list.add(itos(i));
@@ -31,7 +31,7 @@ fn test_basic() {
         }
     }
 }
-fn test_index_functions() {
+fn testIndexFunctions() {
     let list = new ArrayList<int>();
     for(let i = 0; i < 100; i += 2) {
         list.add(i);
@@ -77,7 +77,7 @@ fn test_index_functions() {
         die("Failed 7");
     }
 }
-fn test_gc() {
+fn testGC() {
     let list = new ArrayList<ArrayList<int>>();
     let outer = 8;
     let inner = 1024 * 256;
@@ -95,8 +95,49 @@ fn test_gc() {
         }
     }
 }
+class IntegerContainer {
+    number: int;
+    ctor(number: int) {
+        this.number = number;
+    }
+    override fn equals(other: Object): bool {
+        if(not (other instanceof IntegerContainer)) {
+            return false;
+        }
+        let otherContainer = other as IntegerContainer;
+        return otherContainer.number == this.number;
+    }
+}
+fn testEqualityComparator() {
+    // Why use Object here? Because why not.
+    let list = ArrayList.withEqualityComparator<Object>(new EqualsMethodComparator<Object>());
+    list.add(new IntegerContainer(0));
+    list.add(new IntegerContainer(1));
+    list.add(new IntegerContainer(2));
+    list.add(new IntegerContainer(0));
+    list.add(new IntegerContainer(1));
+    list.add(new IntegerContainer(2));
+    if(list.indexOf(new IntegerContainer(2)) != 2) {
+        die("Failed 1");
+    }
+    if(list.nextIndexOf(new IntegerContainer(1), 3) != 4) {
+        die("Failed 2");
+    }
+    if(not list.contains(new IntegerContainer(2))) {
+        die("Failed 3");
+    }
+    if(list.contains(new IntegerContainer(-1))) {
+        die("Failed 4");
+    }
+    let list2 = new ArrayList<IntegerContainer>();
+    list2.add(new IntegerContainer(0));
+    if(list2.contains(new IntegerContainer(0))) {
+        die("Failed 5");
+    }
+}
 entrypoint fn main() {
-    test_basic();
-    test_index_functions();
-    test_gc();
+    testBasic();
+    testIndexFunctions();
+    testEqualityComparator();
+    testGC();
 }
